@@ -77,18 +77,13 @@ class Device:
         return self._device.resume(self._pid_of(target))
 
     def attach(self, target):
-        return Process(self._device.attach(self._pid_of(target)))
+        return Session(self._device.attach(self._pid_of(target)))
 
     def on(self, signal, callback):
-        self._device.on(self._signal_name(signal), callback)
+        self._device.on(signal, callback)
 
     def off(self, signal, callback):
-        self._device.off(self._signal_name(signal), callback)
-
-    def _signal_name(self, signal):
-        if signal == 'lost':
-            return 'close'
-        return signal
+        self._device.off(signal, callback)
 
     def _pid_of(self, target):
         if isinstance(target, basestring):
@@ -96,12 +91,12 @@ class Device:
         else:
             return target
 
-class Process:
+class Session:
     def __init__(self, session):
         self._session = session
 
     def detach(self):
-        self._session.close()
+        self._session.detach()
 
     def enumerate_modules(self):
         script = self._session.create_script(
@@ -180,15 +175,10 @@ recv(function(string) {
         return self._exec_script(script, send_data)
 
     def on(self, signal, callback):
-        self._session.on(self._signal_name(signal), callback)
+        self._session.on(signal, callback)
 
     def off(self, signal, callback):
-        self._session.off(self._signal_name(signal), callback)
-
-    def _signal_name(self, signal):
-        if signal == 'detach':
-            return 'close'
-        return signal
+        self._session.off(signal, callback)
 
 class Module:
     def __init__(self, name, address, path, _session):
