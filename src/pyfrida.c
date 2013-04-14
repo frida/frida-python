@@ -21,10 +21,6 @@
 static PyObject * json_loads;
 static PyObject * json_dumps;
 
-static GMainLoop * main_loop;
-static GMainContext * main_context;
-
-
 typedef struct _PyDeviceManager  PyDeviceManager;
 typedef struct _PyDevice         PyDevice;
 typedef struct _PyProcess        PyProcess;
@@ -36,28 +32,28 @@ struct _PyDeviceManager
 {
   PyObject_HEAD
 
-  DeviceManager * handle;
-  GList * on_change;
+  FridaDeviceManager * handle;
+  GList * on_changed;
 };
 
 struct _PyDevice
 {
   PyObject_HEAD
 
-  Device * handle;
+  FridaDevice * handle;
 
   guint id;
   const gchar * name;
   const gchar * kind;
 
-  GList * on_close;
+  GList * on_lost;
 };
 
 struct _PyProcess
 {
   PyObject_HEAD
 
-  ZedHostProcessInfo * handle;
+  FridaProcess * handle;
 
   guint pid;
   const gchar * name;
@@ -77,15 +73,15 @@ struct _PySession
 {
   PyObject_HEAD
 
-  Session * handle;
-  GList * on_close;
+  FridaSession * handle;
+  GList * on_detached;
 };
 
 struct _PyScript
 {
   PyObject_HEAD
 
-  Script * handle;
+  FridaScript * handle;
   GList * on_message;
 };
 
@@ -95,9 +91,9 @@ static PyObject * PyDeviceManager_close (PyDeviceManager * self);
 static PyObject * PyDeviceManager_enumerate_devices (PyDeviceManager * self);
 static PyObject * PyDeviceManager_on (PyDeviceManager * self, PyObject * args);
 static PyObject * PyDeviceManager_off (PyDeviceManager * self, PyObject * args);
-static void PyDeviceManager_on_change (PyDeviceManager * self, DeviceManager * handle);
+static void PyDeviceManager_on_changed (PyDeviceManager * self, FridaDeviceManager * handle);
 
-static PyObject * PyDevice_from_handle (Device * handle);
+static PyObject * PyDevice_from_handle (FridaDevice * handle);
 static int PyDevice_init (PyDevice * self);
 static void PyDevice_dealloc (PyDevice * self);
 static PyObject * PyDevice_repr (PyDevice * self);
@@ -107,30 +103,30 @@ static PyObject * PyDevice_resume (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_attach (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_on (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_off (PyDevice * self, PyObject * args);
-static void PyDevice_on_close (PyDevice * self, Device * handle);
+static void PyDevice_on_lost (PyDevice * self, FridaDevice * handle);
 
-static PyObject * PyProcess_from_handle (ZedHostProcessInfo * handle);
+static PyObject * PyProcess_from_handle (FridaProcess * handle);
 static int PyProcess_init (PyProcess * self);
 static void PyProcess_dealloc (PyProcess * self);
 static PyObject * PyProcess_repr (PyProcess * self);
 static PyObject * PyProcess_get_small_icon (PyProcess * self);
 static PyObject * PyProcess_get_large_icon (PyProcess * self);
 
-static PyObject * PyIcon_from_handle (ZedImageData * handle);
+static PyObject * PyIcon_from_handle (FridaIcon * handle);
 static int PyIcon_init (PyIcon * self);
 static void PyIcon_dealloc (PyIcon * self);
 static PyObject * PyIcon_repr (PyIcon * self);
 
-static PyObject * PySession_from_handle (Session * handle);
+static PyObject * PySession_from_handle (FridaSession * handle);
 static int PySession_init (PySession * self);
 static void PySession_dealloc (PySession * self);
-static PyObject * PySession_close (PySession * self);
+static PyObject * PySession_detach (PySession * self);
 static PyObject * PySession_create_script (PySession * self, PyObject * args);
 static PyObject * PySession_on (PySession * self, PyObject * args);
 static PyObject * PySession_off (PySession * self, PyObject * args);
-static void PySession_on_close (PySession * self, Session * handle);
+static void PySession_on_detached (PySession * self, FridaSession * handle);
 
-static PyObject * PyScript_from_handle (Script * handle);
+static PyObject * PyScript_from_handle (FridaScript * handle);
 static int PyScript_init (PyScript * self);
 static void PyScript_dealloc (PyScript * self);
 static PyObject * PyScript_load (PyScript * self);
@@ -138,7 +134,7 @@ static PyObject * PyScript_unload (PyScript * self);
 static PyObject * PyScript_post_message (PyScript * self, PyObject * args);
 static PyObject * PyScript_on (PyScript * self, PyObject * args);
 static PyObject * PyScript_off (PyScript * self, PyObject * args);
-static void PyScript_on_message (PyScript * self, const gchar * message, const gchar * data, gint data_size, Script * handle);
+static void PyScript_on_message (PyScript * self, const gchar * message, const gchar * data, gint data_size, FridaScript * handle);
 
 static gboolean PyFrida_parse_signal_method_args (PyObject * args, const char ** signal, PyObject ** callback);
 
@@ -195,7 +191,7 @@ static PyMemberDef PyIcon_members[] =
 
 static PyMethodDef PySession_methods[] =
 {
-  { "close", (PyCFunction) PySession_close, METH_NOARGS, "Close the session." },
+  { "detach", (PyCFunction) PySession_detach, METH_NOARGS, "Detach session from the process." },
   { "create_script", (PyCFunction) PySession_create_script, 1, "Create a new script." },
   { "on", (PyCFunction) PySession_on, 2, "Add an event handler." },
   { "off", (PyCFunction) PySession_off, 2, "Remove an event handler." },
@@ -462,8 +458,8 @@ static PyTypeObject PyScriptType =
 static int
 PyDeviceManager_init (PyDeviceManager * self)
 {
-  self->handle = device_manager_new (main_context);
-  self->on_change = NULL;
+  self->handle = frida_device_manager_new ();
+  self->on_changed = NULL;
 
   g_object_set_data (G_OBJECT (self->handle), "pyobject", self);
 
@@ -473,10 +469,10 @@ PyDeviceManager_init (PyDeviceManager * self)
 static void
 PyDeviceManager_dealloc (PyDeviceManager * self)
 {
-  if (self->on_change != NULL)
+  if (self->on_changed != NULL)
   {
-    g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDeviceManager_on_change), self);
-    g_list_free_full (self->on_change, (GDestroyNotify) Py_DecRef);
+    g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDeviceManager_on_changed), self);
+    g_list_free_full (self->on_changed, (GDestroyNotify) Py_DecRef);
   }
 
   if (self->handle != NULL)
@@ -494,7 +490,7 @@ static PyObject *
 PyDeviceManager_close (PyDeviceManager * self)
 {
   Py_BEGIN_ALLOW_THREADS
-  device_manager_close (self->handle);
+  frida_device_manager_close_sync (self->handle);
   Py_END_ALLOW_THREADS
 
   Py_RETURN_NONE;
@@ -504,12 +500,12 @@ static PyObject *
 PyDeviceManager_enumerate_devices (PyDeviceManager * self)
 {
   GError * error = NULL;
-  GeeList * result;
+  FridaDeviceList * result;
   gint result_length, i;
   PyObject * devices;
 
   Py_BEGIN_ALLOW_THREADS
-  result = device_manager_enumerate_devices (self->handle, &error);
+  result = frida_device_manager_enumerate_devices_sync (self->handle, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
   {
@@ -518,11 +514,11 @@ PyDeviceManager_enumerate_devices (PyDeviceManager * self)
     return NULL;
   }
 
-  result_length = gee_collection_get_size (GEE_COLLECTION (result));
+  result_length = frida_device_list_size (result);
   devices = PyList_New (result_length);
   for (i = 0; i != result_length; i++)
   {
-    PyList_SET_ITEM (devices, i, PyDevice_from_handle (DEVICE (gee_list_get (result, i))));
+    PyList_SET_ITEM (devices, i, PyDevice_from_handle (frida_device_list_get (result, i)));
   }
   g_object_unref (result);
 
@@ -538,15 +534,15 @@ PyDeviceManager_on (PyDeviceManager * self, PyObject * args)
   if (!PyFrida_parse_signal_method_args (args, &signal, &callback))
     return NULL;
 
-  if (strcmp (signal, "change") == 0)
+  if (strcmp (signal, "changed") == 0)
   {
-    if (self->on_change == NULL)
+    if (self->on_changed == NULL)
     {
-      g_signal_connect_swapped (self->handle, "changed", G_CALLBACK (PyDeviceManager_on_change), self);
+      g_signal_connect_swapped (self->handle, "changed", G_CALLBACK (PyDeviceManager_on_changed), self);
     }
 
     Py_INCREF (callback);
-    self->on_change = g_list_append (self->on_change, callback);
+    self->on_changed = g_list_append (self->on_changed, callback);
   }
   else
   {
@@ -566,14 +562,14 @@ PyDeviceManager_off (PyDeviceManager * self, PyObject * args)
   if (!PyFrida_parse_signal_method_args (args, &signal, &callback))
     return NULL;
 
-  if (strcmp (signal, "change") == 0)
+  if (strcmp (signal, "changed") == 0)
   {
     GList * entry;
 
-    entry = g_list_find (self->on_change, callback);
+    entry = g_list_find (self->on_changed, callback);
     if (entry != NULL)
     {
-      self->on_change = g_list_delete_link (self->on_change, entry);
+      self->on_changed = g_list_delete_link (self->on_changed, entry);
       Py_DECREF (callback);
     }
     else
@@ -582,9 +578,9 @@ PyDeviceManager_off (PyDeviceManager * self, PyObject * args)
       return NULL;
     }
 
-    if (self->on_change == NULL)
+    if (self->on_changed == NULL)
     {
-      g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDeviceManager_on_change), self);
+      g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDeviceManager_on_changed), self);
     }
   }
   else
@@ -597,7 +593,7 @@ PyDeviceManager_off (PyDeviceManager * self, PyObject * args)
 }
 
 static void
-PyDeviceManager_on_change (PyDeviceManager * self, DeviceManager * handle)
+PyDeviceManager_on_changed (PyDeviceManager * self, FridaDeviceManager * handle)
 {
   PyGILState_STATE gstate;
 
@@ -607,8 +603,8 @@ PyDeviceManager_on_change (PyDeviceManager * self, DeviceManager * handle)
   {
     GList * callbacks, * cur;
 
-    g_list_foreach (self->on_change, (GFunc) Py_IncRef, NULL);
-    callbacks = g_list_copy (self->on_change);
+    g_list_foreach (self->on_changed, (GFunc) Py_IncRef, NULL);
+    callbacks = g_list_copy (self->on_changed);
 
     for (cur = callbacks; cur != NULL; cur = cur->next)
     {
@@ -627,7 +623,7 @@ PyDeviceManager_on_change (PyDeviceManager * self, DeviceManager * handle)
 
 
 static PyObject *
-PyDevice_from_handle (Device * handle)
+PyDevice_from_handle (FridaDevice * handle)
 {
   PyObject * device;
 
@@ -640,9 +636,9 @@ PyDevice_from_handle (Device * handle)
 
     dev = (PyDevice *) device;
     dev->handle = handle;
-    dev->id = device_get_id (handle);
-    dev->name = device_get_name (handle);
-    dev->kind = device_get_kind (handle);
+    dev->id = frida_device_get_id (handle);
+    dev->name = frida_device_get_name (handle);
+    dev->kind = frida_device_get_kind (handle);
 
     g_object_set_data (G_OBJECT (handle), "pyobject", device);
   }
@@ -659,7 +655,7 @@ static int
 PyDevice_init (PyDevice * self)
 {
   self->handle = NULL;
-  self->on_close = NULL;
+  self->on_lost = NULL;
 
   return 0;
 }
@@ -667,10 +663,10 @@ PyDevice_init (PyDevice * self)
 static void
 PyDevice_dealloc (PyDevice * self)
 {
-  if (self->on_close != NULL)
+  if (self->on_lost != NULL)
   {
-    g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_close), self);
-    g_list_free_full (self->on_close, (GDestroyNotify) Py_DecRef);
+    g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_lost), self);
+    g_list_free_full (self->on_lost, (GDestroyNotify) Py_DecRef);
   }
 
   if (self->handle != NULL)
@@ -694,12 +690,12 @@ static PyObject *
 PyDevice_enumerate_processes (PyDevice * self)
 {
   GError * error = NULL;
-  GeeList * result;
+  FridaProcessList * result;
   gint result_length, i;
   PyObject * processes;
 
   Py_BEGIN_ALLOW_THREADS
-  result = device_enumerate_processes (self->handle, &error);
+  result = frida_device_enumerate_processes_sync (self->handle, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
   {
@@ -708,12 +704,11 @@ PyDevice_enumerate_processes (PyDevice * self)
     return NULL;
   }
 
-  result_length = gee_collection_get_size (GEE_COLLECTION (result));
+  result_length = frida_process_list_size (result);
   processes = PyList_New (result_length);
   for (i = 0; i != result_length; i++)
   {
-    ZedHostProcessInfo * handle = (ZedHostProcessInfo *) gee_list_get (result, i);
-    PyList_SET_ITEM (processes, i, PyProcess_from_handle (handle));
+    PyList_SET_ITEM (processes, i, PyProcess_from_handle (frida_process_list_get (result, i)));
   }
   g_object_unref (result);
 
@@ -727,7 +722,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args)
   gint argc;
   gchar ** argv;
   gchar ** envp;
-  int envp_length;
+  gint envp_length;
   GError * error = NULL;
   guint pid;
 
@@ -750,7 +745,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args)
 #endif
 
   Py_BEGIN_ALLOW_THREADS
-  pid = device_spawn (self->handle, argv[0], argv, argc, envp, envp_length, &error);
+  pid = frida_device_spawn_sync (self->handle, argv[0], argv, argc, envp, envp_length, &error);
   Py_END_ALLOW_THREADS
 
   g_strfreev (argv);
@@ -775,7 +770,7 @@ PyDevice_resume (PyDevice * self, PyObject * args)
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  device_resume (self->handle, (guint) pid, &error);
+  frida_device_resume_sync (self->handle, (guint) pid, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
   {
@@ -792,13 +787,13 @@ PyDevice_attach (PyDevice * self, PyObject * args)
 {
   long pid;
   GError * error = NULL;
-  Session * handle;
+  FridaSession * handle;
 
   if (!PyArg_ParseTuple (args, "l", &pid))
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  handle = device_attach (self->handle, (guint) pid, &error);
+  handle = frida_device_attach_sync (self->handle, (guint) pid, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
   {
@@ -819,15 +814,15 @@ PyDevice_on (PyDevice * self, PyObject * args)
   if (!PyFrida_parse_signal_method_args (args, &signal, &callback))
     return NULL;
 
-  if (strcmp (signal, "close") == 0)
+  if (strcmp (signal, "lost") == 0)
   {
-    if (self->on_close == NULL)
+    if (self->on_lost == NULL)
     {
-      g_signal_connect_swapped (self->handle, "closed", G_CALLBACK (PyDevice_on_close), self);
+      g_signal_connect_swapped (self->handle, "lost", G_CALLBACK (PyDevice_on_lost), self);
     }
 
     Py_INCREF (callback);
-    self->on_close = g_list_append (self->on_close, callback);
+    self->on_lost = g_list_append (self->on_lost, callback);
   }
   else
   {
@@ -847,14 +842,14 @@ PyDevice_off (PyDevice * self, PyObject * args)
   if (!PyFrida_parse_signal_method_args (args, &signal, &callback))
     return NULL;
 
-  if (strcmp (signal, "close") == 0)
+  if (strcmp (signal, "lost") == 0)
   {
     GList * entry;
 
-    entry = g_list_find (self->on_close, callback);
+    entry = g_list_find (self->on_lost, callback);
     if (entry != NULL)
     {
-      self->on_close = g_list_delete_link (self->on_close, entry);
+      self->on_lost = g_list_delete_link (self->on_lost, entry);
       Py_DECREF (callback);
     }
     else
@@ -863,9 +858,9 @@ PyDevice_off (PyDevice * self, PyObject * args)
       return NULL;
     }
 
-    if (self->on_close == NULL)
+    if (self->on_lost == NULL)
     {
-      g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_close), self);
+      g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_lost), self);
     }
   }
   else
@@ -878,7 +873,7 @@ PyDevice_off (PyDevice * self, PyObject * args)
 }
 
 static void
-PyDevice_on_close (PyDevice * self, Device * handle)
+PyDevice_on_lost (PyDevice * self, FridaDevice * handle)
 {
   PyGILState_STATE gstate;
 
@@ -888,8 +883,8 @@ PyDevice_on_close (PyDevice * self, Device * handle)
   {
     GList * callbacks, * cur;
 
-    g_list_foreach (self->on_close, (GFunc) Py_IncRef, NULL);
-    callbacks = g_list_copy (self->on_close);
+    g_list_foreach (self->on_lost, (GFunc) Py_IncRef, NULL);
+    callbacks = g_list_copy (self->on_lost);
 
     for (cur = callbacks; cur != NULL; cur = cur->next)
     {
@@ -908,7 +903,7 @@ PyDevice_on_close (PyDevice * self, Device * handle)
 
 
 static PyObject *
-PyProcess_from_handle (ZedHostProcessInfo * handle)
+PyProcess_from_handle (FridaProcess * handle)
 {
   PyObject * result;
   PyProcess * process;
@@ -917,8 +912,8 @@ PyProcess_from_handle (ZedHostProcessInfo * handle)
 
   process = (PyProcess *) result;
   process->handle = handle;
-  process->pid = zed_host_process_info_get_pid (handle);
-  process->name = zed_host_process_info_get_name (handle);
+  process->pid = frida_process_get_pid (handle);
+  process->name = frida_process_get_name (handle);
 
   return result;
 }
@@ -938,7 +933,7 @@ static void
 PyProcess_dealloc (PyProcess * self)
 {
   if (self->handle != NULL)
-    zed_host_process_info_free (self->handle);
+    g_object_unref (self->handle);
 
   self->ob_type->tp_free ((PyObject *) self);
 }
@@ -952,35 +947,34 @@ PyProcess_repr (PyProcess * self)
 static PyObject *
 PyProcess_get_small_icon (PyProcess * self)
 {
-  return PyIcon_from_handle (&self->handle->_small_icon);
+  return PyIcon_from_handle (frida_process_get_small_icon (self->handle));
 }
 
 static PyObject *
 PyProcess_get_large_icon (PyProcess * self)
 {
-  return PyIcon_from_handle (&self->handle->_large_icon);
+  return PyIcon_from_handle (frida_process_get_large_icon (self->handle));
 }
 
 
 static PyObject *
-PyIcon_from_handle (ZedImageData * handle)
+PyIcon_from_handle (FridaIcon * handle)
 {
-  if (zed_image_data_get_width (handle) != 0)
+  if (handle != NULL)
   {
     PyObject * result;
     PyIcon * icon;
-    guchar * pixels;
-    gsize pixels_length;
+    guint8 * pixels;
+    gint pixels_length;
 
     result = PyObject_CallFunction ((PyObject *) &PyIconType, NULL);
 
     icon = (PyIcon *) result;
-    icon->width = zed_image_data_get_width (handle);
-    icon->height = zed_image_data_get_height (handle);
-    icon->rowstride = zed_image_data_get_rowstride (handle);
-    pixels = g_base64_decode (zed_image_data_get_pixels (handle), &pixels_length);
+    icon->width = frida_icon_get_width (handle);
+    icon->height = frida_icon_get_height (handle);
+    icon->rowstride = frida_icon_get_rowstride (handle);
+    pixels = frida_icon_get_pixels (handle, &pixels_length);
     icon->pixels = PyString_FromStringAndSize ((char *) pixels, (Py_ssize_t) pixels_length);
-    g_free (pixels);
 
     return result;
   }
@@ -1015,7 +1009,7 @@ PyIcon_repr (PyIcon * self)
 
 
 static PyObject *
-PySession_from_handle (Session * handle)
+PySession_from_handle (FridaSession * handle)
 {
   PyObject * session;
 
@@ -1039,7 +1033,7 @@ static int
 PySession_init (PySession * self)
 {
   self->handle = NULL;
-  self->on_close = NULL;
+  self->on_detached = NULL;
 
   return 0;
 }
@@ -1047,10 +1041,10 @@ PySession_init (PySession * self)
 static void
 PySession_dealloc (PySession * self)
 {
-  if (self->on_close != NULL)
+  if (self->on_detached != NULL)
   {
-    g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PySession_on_close), self);
-    g_list_free_full (self->on_close, (GDestroyNotify) Py_DecRef);
+    g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PySession_on_detached), self);
+    g_list_free_full (self->on_detached, (GDestroyNotify) Py_DecRef);
   }
 
   if (self->handle != NULL)
@@ -1065,10 +1059,10 @@ PySession_dealloc (PySession * self)
 }
 
 static PyObject *
-PySession_close (PySession * self)
+PySession_detach (PySession * self)
 {
   Py_BEGIN_ALLOW_THREADS
-  session_close (self->handle);
+  frida_session_detach_sync (self->handle);
   Py_END_ALLOW_THREADS
 
   Py_RETURN_NONE;
@@ -1079,13 +1073,13 @@ PySession_create_script (PySession * self, PyObject * args)
 {
   const char * source;
   GError * error = NULL;
-  Script * handle;
+  FridaScript * handle;
 
   if (!PyArg_ParseTuple (args, "s", &source))
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  handle = session_create_script (self->handle, source, &error);
+  handle = frida_session_create_script_sync (self->handle, source, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
   {
@@ -1106,15 +1100,15 @@ PySession_on (PySession * self, PyObject * args)
   if (!PyFrida_parse_signal_method_args (args, &signal, &callback))
     return NULL;
 
-  if (strcmp (signal, "close") == 0)
+  if (strcmp (signal, "detached") == 0)
   {
-    if (self->on_close == NULL)
+    if (self->on_detached == NULL)
     {
-      g_signal_connect_swapped (self->handle, "closed", G_CALLBACK (PySession_on_close), self);
+      g_signal_connect_swapped (self->handle, "detached", G_CALLBACK (PySession_on_detached), self);
     }
 
     Py_INCREF (callback);
-    self->on_close = g_list_append (self->on_close, callback);
+    self->on_detached = g_list_append (self->on_detached, callback);
   }
   else
   {
@@ -1134,14 +1128,14 @@ PySession_off (PySession * self, PyObject * args)
   if (!PyFrida_parse_signal_method_args (args, &signal, &callback))
     return NULL;
 
-  if (strcmp (signal, "close") == 0)
+  if (strcmp (signal, "detached") == 0)
   {
     GList * entry;
 
-    entry = g_list_find (self->on_close, callback);
+    entry = g_list_find (self->on_detached, callback);
     if (entry != NULL)
     {
-      self->on_close = g_list_delete_link (self->on_close, entry);
+      self->on_detached = g_list_delete_link (self->on_detached, entry);
       Py_DECREF (callback);
     }
     else
@@ -1150,9 +1144,9 @@ PySession_off (PySession * self, PyObject * args)
       return NULL;
     }
 
-    if (self->on_close == NULL)
+    if (self->on_detached == NULL)
     {
-      g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PySession_on_close), self);
+      g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PySession_on_detached), self);
     }
   }
   else
@@ -1165,7 +1159,7 @@ PySession_off (PySession * self, PyObject * args)
 }
 
 static void
-PySession_on_close (PySession * self, Session * handle)
+PySession_on_detached (PySession * self, FridaSession * handle)
 {
   PyGILState_STATE gstate;
 
@@ -1175,8 +1169,8 @@ PySession_on_close (PySession * self, Session * handle)
   {
     GList * callbacks, * cur;
 
-    g_list_foreach (self->on_close, (GFunc) Py_IncRef, NULL);
-    callbacks = g_list_copy (self->on_close);
+    g_list_foreach (self->on_detached, (GFunc) Py_IncRef, NULL);
+    callbacks = g_list_copy (self->on_detached);
 
     for (cur = callbacks; cur != NULL; cur = cur->next)
     {
@@ -1195,7 +1189,7 @@ PySession_on_close (PySession * self, Session * handle)
 
 
 static PyObject *
-PyScript_from_handle (Script * handle)
+PyScript_from_handle (FridaScript * handle)
 {
   PyObject * script;
 
@@ -1250,7 +1244,7 @@ PyScript_load (PyScript * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  script_load (self->handle, &error);
+  frida_script_load_sync (self->handle, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
   {
@@ -1268,7 +1262,7 @@ PyScript_unload (PyScript * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  script_unload (self->handle, &error);
+  frida_script_unload_sync (self->handle, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
   {
@@ -1294,7 +1288,7 @@ PyScript_post_message (PyScript * self, PyObject * args)
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  script_post_message (self->handle, PyString_AsString (message), &error);
+  frida_script_post_message_sync (self->handle, PyString_AsString (message), &error);
   Py_END_ALLOW_THREADS
 
   Py_DECREF (message);
@@ -1377,7 +1371,7 @@ PyScript_off (PyScript * self, PyObject * args)
 }
 
 static void
-PyScript_on_message (PyScript * self, const gchar * message, const gchar * data, gint data_size, Script * handle)
+PyScript_on_message (PyScript * self, const gchar * message, const gchar * data, gint data_size, FridaScript * handle)
 {
   PyGILState_STATE gstate;
 
@@ -1430,18 +1424,6 @@ PyFrida_parse_signal_method_args (PyObject * args, const char ** signal, PyObjec
 }
 
 
-static gpointer
-run_main_loop (gpointer data)
-{
-  (void) data;
-
-  g_main_context_push_thread_default (main_context);
-  g_main_loop_run (main_loop);
-  g_main_context_pop_thread_default (main_context);
-
-  return NULL;
-}
-
 PyMODINIT_FUNC
 init_frida (void)
 {
@@ -1455,12 +1437,7 @@ init_frida (void)
   json_dumps = PyObject_GetAttrString (json, "dumps");
   Py_DECREF (json);
 
-  g_type_init ();
-  gum_init_with_features ((GumFeatureFlags) (GUM_FEATURE_ALL & ~GUM_FEATURE_SYMBOL_LOOKUP));
-
-  main_context = g_main_context_new ();
-  main_loop = g_main_loop_new (main_context, FALSE);
-  g_thread_create (run_main_loop, NULL, FALSE, NULL);
+  frida_init ();
 
   PyDeviceManagerType.tp_new = PyType_GenericNew;
   if (PyType_Ready (&PyDeviceManagerType) < 0)
