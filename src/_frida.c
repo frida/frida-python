@@ -1,4 +1,4 @@
-#include <frida.h>
+#include <frida-core.h>
 
 #ifdef _MSC_VER
 # pragma warning (push)
