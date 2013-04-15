@@ -16,7 +16,7 @@ AM_PROG_AR
 AC_PROG_INSTALL
 LT_INIT
 
-AM_PATH_PYTHON([2.7],, [AC_ERROR([Python is required])])
+AM_PATH_PYTHON([2.6],, [AC_ERROR([Python is required])])
 PYTHON_PREFIX=$($PYTHON -c 'import sys; print sys.prefix')
 PYTHON_EXEC_PREFIX=$($PYTHON -c 'import sys; print sys.exec_prefix')
 PYTHON_CFLAGS="-I${PYTHON_PREFIX}/include/python${PYTHON_VERSION}/ -I${PYTHON_EXEC_PREFIX}/include/python${PYTHON_VERSION}/"
