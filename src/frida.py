@@ -66,7 +66,7 @@ class Device:
         if len(matching) == 1:
             return matching[0]
         elif len(matching) > 1:
-            raise ValueError, "ambigious name (matches: %s)" % ", ".join([process.name for process in matching])
+            raise ValueError, "ambiguous name; it matches: %s" % ", ".join(["%s (pid: %d)" % (process.name, process.pid) for process in matching])
         else:
             raise ValueError, "process not found"
 
