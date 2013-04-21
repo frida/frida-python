@@ -44,7 +44,8 @@ struct _PyDevice
 
   guint id;
   const gchar * name;
-  const gchar * kind;
+  PyObject * icon;
+  const gchar * type;
 
   GList * on_lost;
 };
@@ -136,6 +137,7 @@ static PyObject * PyScript_on (PyScript * self, PyObject * args);
 static PyObject * PyScript_off (PyScript * self, PyObject * args);
 static void PyScript_on_message (PyScript * self, const gchar * message, const gchar * data, gint data_size, FridaScript * handle);
 
+static const gchar * PyFrida_device_type_to_string (FridaDeviceType type);
 static gboolean PyFrida_parse_signal_method_args (PyObject * args, const char ** signal, PyObject ** callback);
 
 static PyMethodDef PyDeviceManager_methods[] =
@@ -162,7 +164,7 @@ static PyMemberDef PyDevice_members[] =
 {
   { "id", T_UINT, G_STRUCT_OFFSET (PyDevice, id), READONLY, "Device ID."},
   { "name", T_STRING, G_STRUCT_OFFSET (PyDevice, name), READONLY, "Human-readable device name."},
-  { "kind", T_STRING, G_STRUCT_OFFSET (PyDevice, kind), READONLY, "Device kind. One of: local, tether, remote."},
+  { "type", T_STRING, G_STRUCT_OFFSET (PyDevice, type), READONLY, "Device type. One of: local, tether, remote."},
   { NULL }
 };
 
@@ -638,7 +640,8 @@ PyDevice_from_handle (FridaDevice * handle)
     dev->handle = handle;
     dev->id = frida_device_get_id (handle);
     dev->name = frida_device_get_name (handle);
-    dev->kind = frida_device_get_kind (handle);
+    dev->icon = PyIcon_from_handle (frida_device_get_icon (handle));
+    dev->type = PyFrida_device_type_to_string (frida_device_get_dtype (handle));
 
     g_object_set_data (G_OBJECT (handle), "pyobject", device);
   }
@@ -655,6 +658,12 @@ static int
 PyDevice_init (PyDevice * self)
 {
   self->handle = NULL;
+
+  self->id = 0;
+  self->name = NULL;
+  self->icon = NULL;
+  self->type = NULL;
+
   self->on_lost = NULL;
 
   return 0;
@@ -668,6 +677,8 @@ PyDevice_dealloc (PyDevice * self)
     g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_lost), self);
     g_list_free_full (self->on_lost, (GDestroyNotify) Py_DecRef);
   }
+
+  Py_XDECREF (self->icon);
 
   if (self->handle != NULL)
   {
@@ -683,7 +694,7 @@ PyDevice_dealloc (PyDevice * self)
 static PyObject *
 PyDevice_repr (PyDevice * self)
 {
-  return PyString_FromFormat ("Device(id=%u, name=\"%s\", kind='%s')", self->id, self->name, self->kind);
+  return PyString_FromFormat ("Device(id=%u, name=\"%s\", type='%s')", self->id, self->name, self->type);
 }
 
 static PyObject *
@@ -1407,6 +1418,22 @@ PyScript_on_message (PyScript * self, const gchar * message, const gchar * data,
   PyGILState_Release (gstate);
 }
 
+
+static const gchar *
+PyFrida_device_type_to_string (FridaDeviceType type)
+{
+  switch (type)
+  {
+    case FRIDA_DEVICE_TYPE_LOCAL:
+      return "local";
+    case FRIDA_DEVICE_TYPE_TETHER:
+      return "tether";
+    case FRIDA_DEVICE_TYPE_REMOTE:
+      return "remote";
+    default:
+      g_assert_not_reached ();
+  }
+}
 
 static gboolean
 PyFrida_parse_signal_method_args (PyObject * args, const char ** signal, PyObject ** callback)

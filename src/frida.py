@@ -51,7 +51,8 @@ class Device:
     def __init__(self, device):
         self.id = device.id
         self.name = device.name
-        self.kind = device.kind
+        self.icon = device.icon
+        self.type = device.type
         self._device = device
 
     def __repr__(self):
