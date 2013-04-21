@@ -164,6 +164,7 @@ static PyMemberDef PyDevice_members[] =
 {
   { "id", T_UINT, G_STRUCT_OFFSET (PyDevice, id), READONLY, "Device ID."},
   { "name", T_STRING, G_STRUCT_OFFSET (PyDevice, name), READONLY, "Human-readable device name."},
+  { "icon", T_OBJECT_EX, G_STRUCT_OFFSET (PyDevice, icon), READONLY, "Icon."},
   { "type", T_STRING, G_STRUCT_OFFSET (PyDevice, type), READONLY, "Device type. One of: local, tether, remote."},
   { NULL }
 };
