@@ -63,7 +63,8 @@ class Device:
         return self._device.enumerate_processes()
 
     def get_process(self, process_name):
-        matching = [process for process in self._device.enumerate_processes() if fnmatch.fnmatchcase(process.name, process_name)]
+        process_name_lc = process_name.lower()
+        matching = [process for process in self._device.enumerate_processes() if fnmatch.fnmatchcase(process.name.lower(), process_name_lc)]
         if len(matching) == 1:
             return matching[0]
         elif len(matching) > 1:
