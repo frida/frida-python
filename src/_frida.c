@@ -213,8 +213,7 @@ static PyMethodDef PyScript_methods[] =
 
 static PyTypeObject PyDeviceManagerType =
 {
-  PyObject_HEAD_INIT (NULL)
-  0,                                            /* ob_size           */
+  PyVarObject_HEAD_INIT (NULL, 0)
   "_frida.DeviceManager",                       /* tp_name           */
   sizeof (PyDeviceManager),                     /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
@@ -254,8 +253,7 @@ static PyTypeObject PyDeviceManagerType =
 
 static PyTypeObject PyDeviceType =
 {
-  PyObject_HEAD_INIT (NULL)
-  0,                                            /* ob_size           */
+  PyVarObject_HEAD_INIT (NULL, 0)
   "_frida.Device",                              /* tp_name           */
   sizeof (PyDevice),                            /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
@@ -295,8 +293,7 @@ static PyTypeObject PyDeviceType =
 
 static PyTypeObject PyProcessType =
 {
-  PyObject_HEAD_INIT (NULL)
-  0,                                            /* ob_size           */
+  PyVarObject_HEAD_INIT (NULL, 0)
   "_frida.Process",                             /* tp_name           */
   sizeof (PyProcess),                           /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
@@ -336,8 +333,7 @@ static PyTypeObject PyProcessType =
 
 static PyTypeObject PyIconType =
 {
-  PyObject_HEAD_INIT (NULL)
-  0,                                            /* ob_size           */
+  PyVarObject_HEAD_INIT (NULL, 0)
   "_frida.Icon",                                /* tp_name           */
   sizeof (PyIcon),                              /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
@@ -377,8 +373,7 @@ static PyTypeObject PyIconType =
 
 static PyTypeObject PySessionType =
 {
-  PyObject_HEAD_INIT (NULL)
-  0,                                            /* ob_size           */
+  PyVarObject_HEAD_INIT (NULL, 0)
   "_frida.Session",                             /* tp_name           */
   sizeof (PySession),                           /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
@@ -418,8 +413,7 @@ static PyTypeObject PySessionType =
 
 static PyTypeObject PyScriptType =
 {
-  PyObject_HEAD_INIT (NULL)
-  0,                                            /* ob_size           */
+  PyVarObject_HEAD_INIT (NULL, 0)
   "_frida.Script",                              /* tp_name           */
   sizeof (PyScript),                            /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
