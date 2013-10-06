@@ -16,6 +16,10 @@ AM_PROG_AR
 AC_PROG_INSTALL
 LT_INIT
 
+if echo $CC | grep -q "gcc"; then
+  CFLAGS="$CFLAGS -fno-strict-aliasing"
+fi
+
 AM_PATH_PYTHON([2.6],, [AC_ERROR([Python is required])])
 PYTHON_PREFIX=$($PYTHON -c 'import sys; print sys.prefix')
 PYTHON_EXEC_PREFIX=$($PYTHON -c 'import sys; print sys.exec_prefix')
