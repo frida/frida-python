@@ -105,15 +105,15 @@ class Session:
 """
 var modules = [];
 Process.enumerateModules({
-    onMatch: function(name, address, path) {
-        modules.push({name: name, address: address.toString(), path: path});
+    onMatch: function(name, address, size, path) {
+        modules.push({name: name, address: address.toString(), size: size, path: path});
     },
     onComplete: function() {
         send(modules);
     }
 });
 """)
-        return [Module(data['name'], int(data['address']), data['path'], self._session) for data in _execute_script(script)]
+        return [Module(data['name'], int(data['address']), data['size'], data['path'], self._session) for data in _execute_script(script)]
 
     """
       @param protection example '--x'
@@ -183,14 +183,15 @@ recv(function(string) {
         self._session.off(signal, callback)
 
 class Module:
-    def __init__(self, name, address, path, _session):
+    def __init__(self, name, address, size, path, _session):
         self.name = name
         self.address = address
+        self.size = size
         self.path = path
         self._session = _session
 
     def __repr__(self):
-        return "Module(name=\"%s\", address=%s, path=\"%s\")" % (self.name, self.address, self.path)
+        return "Module(name=\"%s\", address=0x%x, size=%d, path=\"%s\")" % (self.name, self.address, self.size, self.path)
 
     def enumerate_exports(self):
         script = self._session.create_script(
