@@ -607,7 +607,7 @@ PyDeviceManager_on_changed (PyDeviceManager * self, FridaDeviceManager * handle)
     {
       PyObject * result = PyObject_CallFunction ((PyObject *) cur->data, NULL);
       if (result == NULL)
-        PyErr_Clear ();
+        PyErr_Print ();
       else
         Py_DECREF (result);
     }
@@ -896,7 +896,7 @@ PyDevice_on_lost (PyDevice * self, FridaDevice * handle)
     {
       PyObject * result = PyObject_CallFunction ((PyObject *) cur->data, NULL);
       if (result == NULL)
-        PyErr_Clear ();
+        PyErr_Print ();
       else
         Py_DECREF (result);
     }
@@ -1182,7 +1182,7 @@ PySession_on_detached (PySession * self, FridaSession * handle)
     {
       PyObject * result = PyObject_CallFunction ((PyObject *) cur->data, NULL);
       if (result == NULL)
-        PyErr_Clear ();
+        PyErr_Print ();
       else
         Py_DECREF (result);
     }
@@ -1400,7 +1400,7 @@ PyScript_on_message (PyScript * self, const gchar * message, const gchar * data,
     {
       PyObject * result = PyObject_CallObject ((PyObject *) cur->data, args);
       if (result == NULL)
-        PyErr_Clear ();
+        PyErr_Print ();
       else
         Py_DECREF (result);
     }
