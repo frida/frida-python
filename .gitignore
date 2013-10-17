@@ -1,6 +1,7 @@
 *.la
 *.lo
 *.o
+*.pyc
 *.swp
 *.user
 *~
@@ -18,6 +19,8 @@
 /config.log
 /config.status
 /configure
+/examples/cpushark/build/
+/examples/cpushark/dist/
 /libtool
 /m4/libtool.m4
 /m4/lt*.m4
