@@ -1,5 +1,5 @@
 import frida
-from Capture import Capture, CaptureState
+from Capture import Capture, CaptureState, TargetFunction
 from Cocoa import NSRunCriticalAlertPanel, NSUserDefaults, NSWindowController, objc
 from ProcessList import ProcessList
 
@@ -80,6 +80,17 @@ class MainWindowController(NSWindowController):
         self.capture.detach()
 
     @objc.IBAction
+    def toggleTracing_(self, sender):
+        item = sender.itemAtRow_(sender.selectedRow())
+        if isinstance(item, TargetFunction):
+            func = item
+            if func.hasProbe:
+                self.capture.calls.removeProbe_(func)
+            else:
+                self.capture.calls.addProbe_(func)
+            func.hasProbe = not func.hasProbe
+            self.callTableView.reloadItem_(func)
+
     def updateAttachForm_(self, sender):
         isDetached = self.capture.state == CaptureState.DETACHED
         hasProcess = self.selectedProcess() is not None
@@ -109,4 +120,7 @@ class MainWindowController(NSWindowController):
 
     def callsDidChange(self):
         self.callTableView.reloadData()
+
+    def callItemDidChange_(self, item):
+        self.callTableView.reloadItem_reloadChildren_(item, True)
 
