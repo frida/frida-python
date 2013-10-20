@@ -118,8 +118,8 @@ class Capture(NSObject):
             name = stanza['name']
             if fromAddress == "/process/modules" and name == '+sync':
                 self.modules._sync(stanza['payload'])
-            elif fromAddress == "/stalker/events" and name == '+add':
-                self.calls._add_(data)
+            elif fromAddress == "/stalker/calls" and name == '+add':
+                self.calls._add_(stanza['payload'])
             elif fromAddress == "/interceptor/functions" and name == '+add':
                 pass
             else:
@@ -211,13 +211,14 @@ class Calls(NSObject):
 
     def _add_(self, data):
         modules = self.capture.modules
-        for offset in range(0, len(data), 16):
-            [t, location, target, depth] = struct.unpack("IIII", data[offset:offset + 16])
+        for rawTarget, count in data['summary'].items():
+            target = int(rawTarget, 16)
             tm = self.getTargetModuleByModule_(modules.lookup(target))
             if tm is not None:
-                tm.total += 1
+                tm.total += count
                 tf = tm.getTargetFunctionByAddress_(target)
-                tf.total += 1
+                tf.total += count
+
         self.targetModules.sort(key=lambda tm: tm.total, reverse=True)
         for tm in self.targetModules:
             tm.functions.sort(self._compareFunctions)
@@ -361,7 +362,7 @@ var probes = Object.create(null);
 var initialize = function initialize() {
     Stalker.trustThreshold = 2000;
     Stalker.queueCapacity = 1000000;
-    Stalker.queueDrainInterval = 50;
+    Stalker.queueDrainInterval = 250;
 
     sendModules(function () {
         interceptReadFunction('recv');
@@ -436,8 +437,8 @@ var interceptReadFunction = function interceptReadFunction(functionName) {
                             events: {
                                 call: true
                             },
-                            onReceive: function onReceive(events) {
-                                send({ name: '+add', from: "/stalker/events", payload: { size: events.length } }, events);
+                            onCallSummary: function onCallSummary(summary) {
+                                send({ name: '+add', from: "/stalker/calls", payload: { summary: summary } });
                             }
                         });
                     }
