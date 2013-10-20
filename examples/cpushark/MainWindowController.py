@@ -9,6 +9,7 @@ class MainWindowController(NSWindowController):
     attachProgress = objc.IBOutlet()
     attachButton = objc.IBOutlet()
     detachButton = objc.IBOutlet()
+    recvTotalLabel = objc.IBOutlet()
     callTableView = objc.IBOutlet()
 
     def __new__(cls):
@@ -117,6 +118,9 @@ class MainWindowController(NSWindowController):
 
     def captureFailedToAttachWithError_(self, error):
         NSRunCriticalAlertPanel("Error", "Failed to attach: %s" % error, None, None, None)
+
+    def captureRecvTotalDidChange(self):
+        self.recvTotalLabel.setStringValue_(self.capture.recvTotal)
 
     def callsDidChange(self):
         self.callTableView.reloadData()

@@ -18,6 +18,7 @@ class Capture(NSObject):
         self.session = None
         self.script = None
         self.modules = Modules()
+        self.recvTotal = 0
         self.calls = Calls(self)
         return self
 
@@ -104,7 +105,7 @@ class Capture(NSObject):
                 self._updateState_(CaptureState.ATTACHED)
             else:
                 self._updateState_(CaptureState.DETACHED)
-                self.delegate.captureFailedToAttachWithError_(error)
+                self._delegate.captureFailedToAttachWithError_(error)
 
     def _sessionDidDetach(self):
         if self.state == CaptureState.ATTACHING or self.state == CaptureState.ATTACHED:
@@ -121,7 +122,8 @@ class Capture(NSObject):
             elif fromAddress == "/stalker/calls" and name == '+add':
                 self.calls._add_(stanza['payload'])
             elif fromAddress == "/interceptor/functions" and name == '+add':
-                pass
+                self.recvTotal += 1
+                self._delegate.captureRecvTotalDidChange()
             else:
                 if not self.calls._handleStanza_(stanza):
                     print "Woot! Got stanza: %s from=%s" % (stanza['name'], stanza['from'])
