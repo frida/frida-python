@@ -24,7 +24,7 @@ AM_PATH_PYTHON([2.6],, [AC_ERROR([Python is required])])
 PYTHON_PREFIX=$($PYTHON -c 'import sys; print sys.prefix')
 PYTHON_EXEC_PREFIX=$($PYTHON -c 'import sys; print sys.exec_prefix')
 PYTHON_CFLAGS="-I${PYTHON_PREFIX}/include/python${PYTHON_VERSION}/ -I${PYTHON_EXEC_PREFIX}/include/python${PYTHON_VERSION}/"
-PYTHON_LDFLAGS="-L${PYTHON_PREFIX}/lib/ -L${PYTHON_EXEC_PREFIX}/lib/"
+PYTHON_LDFLAGS="-L${PYTHON_PREFIX}/lib/ -L${PYTHON_PREFIX}/lib/python${PYTHON_VERSION}/config/ -L${PYTHON_EXEC_PREFIX}/lib/ -L${PYTHON_EXEC_PREFIX}/lib/python${PYTHON_VERSION}/config/"
 PYTHON_LIBS="-lpython${PYTHON_VERSION}"
 AC_SUBST(PYTHON_CFLAGS)
 AC_SUBST(PYTHON_LDFLAGS)
