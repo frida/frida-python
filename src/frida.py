@@ -113,7 +113,7 @@ Process.enumerateModules({
     }
 });
 """)
-        return [Module(data['name'], int(data['address']), data['size'], data['path'], self._session) for data in _execute_script(script)]
+        return [Module(data['name'], int(data['address'], 16), data['size'], data['path'], self._session) for data in _execute_script(script)]
 
     """
       @param protection example '--x'
@@ -131,7 +131,7 @@ Process.enumerateRanges(\"%s\", {
     }
 });
 """ % protection)
-        return [Range(int(data['address']), data['size'], data['protection']) for data in _execute_script(script)]
+        return [Range(int(data['address'], 16), data['size'], data['protection']) for data in _execute_script(script)]
 
     def _exec_script(self, script_source, post_hook = None):
         script = self._session.create_script(script_source)
@@ -206,7 +206,7 @@ Module.enumerateExports(\"%s\", {
     }
 });
 """ % self.name)
-        return [Export(export["name"], int(export["address"])) for export in _execute_script(script)]
+        return [Export(export["name"], int(export["address"]), 16) for export in _execute_script(script)]
 
     """
       @param protection example '--x'
@@ -224,7 +224,7 @@ Module.enumerateRanges(\"%s\", \"%s\", {
     }
 });
 """ % (self.name, protection))
-        return [Range(int(data['address']), data['size'], data['protection']) for data in _execute_script(script)]
+        return [Range(int(data['address'], 16), data['size'], data['protection']) for data in _execute_script(script)]
 
 class Export:
     def __init__(self, name, address):
