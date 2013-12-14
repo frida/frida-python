@@ -206,7 +206,7 @@ Module.enumerateExports(\"%s\", {
     }
 });
 """ % self.name)
-        return [Export(export["name"], int(export["address"]), 16) for export in _execute_script(script)]
+        return [Export(export["name"], int(export["address"], 16)) for export in _execute_script(script)]
 
     """
       @param protection example '--x'
