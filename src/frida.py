@@ -105,10 +105,10 @@ class Session:
 """
 var modules = [];
 Process.enumerateModules({
-    onMatch: function(name, address, size, path) {
+    onMatch: function (name, address, size, path) {
         modules.push({name: name, address: address.toString(), size: size, path: path});
     },
-    onComplete: function() {
+    onComplete: function () {
         send(modules);
     }
 });
@@ -123,10 +123,10 @@ Process.enumerateModules({
 """
 var ranges = [];
 Process.enumerateRanges(\"%s\", {
-    onMatch: function(address, size, protection) {
+    onMatch: function (address, size, protection) {
         ranges.push({address: address.toString(), size: size, protection: protection});
     },
-    onComplete: function() {
+    onComplete: function () {
         send(ranges);
     }
 });
@@ -149,7 +149,7 @@ Process.enumerateRanges(\"%s\", {
     def write_bytes(self, address, bytes):
         script = \
 """
-recv(function(bytes) {
+recv(function (bytes) {
     var base = ptr("%u");
     for (var i = 0; i < bytes.length; i++)
         Memory.writeU8(base.add(i), bytes[i]);
@@ -165,7 +165,7 @@ recv(function(bytes) {
     def write_utf8(self, address, string):
         script = \
 """
-recv(function(string) {
+recv(function (string) {
     Memory.writeUtf8String(ptr("%u"), string);
     send(true);
 });
@@ -231,10 +231,10 @@ Module.enumerateExports(\"%s\", {
 """
 var ranges = [];
 Module.enumerateRanges(\"%s\", \"%s\", {
-    onMatch: function(address, size, protection) {
+    onMatch: function (address, size, protection) {
         ranges.push({address: address.toString(), size: size, protection: protection});
     },
-    onComplete: function() {
+    onComplete: function () {
         send(ranges);
     }
 });
