@@ -193,6 +193,18 @@ class Module:
     def __repr__(self):
         return "Module(name=\"%s\", address=0x%x, size=%d, path=\"%s\")" % (self.name, self.address, self.size, self.path)
 
+    def __hash__(self):
+        return self.address.__hash__()
+
+    def __cmp__(self, other):
+        return self.address.__cmp__(other.address)
+
+    def __eq__(self, other):
+        return self.address == other.address
+
+    def __ne__(self, other):
+        return self.address != other.address
+
     def enumerate_exports(self):
         script = self._session.create_script(
 """
@@ -233,6 +245,18 @@ class Export:
 
     def __repr__(self):
         return "Export(name=\"%s\", address=%s)" % (self.name, self.address)
+
+    def __hash__(self):
+        return self.address.__hash__()
+
+    def __cmp__(self, other):
+        return self.address.__cmp__(other.address)
+
+    def __eq__(self, other):
+        return self.address == other.address
+
+    def __ne__(self, other):
+        return self.address != other.address
 
 class Range:
     def __init__(self, address, size, protection):
