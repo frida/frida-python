@@ -89,21 +89,49 @@ class Tracer(object):
             sink.on_update([ message['payload'] ])
 
         working_set = self._profile.resolve(process)
-        source = self._create_trace_script(working_set)
+        source = self._create_trace_script()
         self._script = process._session.create_script(source)
         self._script.on("message", on_message)
         self._script.load()
-
-    def _create_trace_script(self, working_set):
-        r = []
         for module, export in working_set:
-            r.append("""
-Interceptor.attach(ptr("0x%x"), {
-    onEnter: function onEnter(args) {
-        send("%s");
+            self._script.post_message([{ 'address': hex(export.address), 'name': export.name }])
+
+    def _create_trace_script(self):
+        return """
+var pending = [];
+var timer = null;
+function processNext() {
+    timer = null;
+
+    if (pending.length > 0) {
+        var work = pending.shift();
+        work();
+        scheduleNext();
     }
-});""" % (export.address, export.name))
-        return "\n".join(r)
+};
+function scheduleNext() {
+    if (timer === null) {
+        timer = setTimeout(processNext, 0);
+    }
+};
+function onStanza(targets) {
+    for (var i = 0; i !== targets.length; i++) {
+        var target = targets[i];
+        pending.push(function () {
+            Interceptor.attach(ptr(target.address), {
+                onEnter: function onEnter(args) {
+                    send(target.name);
+                }
+            });
+        });
+    }
+
+    scheduleNext();
+
+    recv(onStanza);
+};
+recv(onStanza);
+"""
 
     def end_trace(self):
         pass
