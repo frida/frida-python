@@ -189,6 +189,7 @@ class Module:
         self.size = size
         self.path = path
         self._session = _session
+        self._exports = None
 
     def __repr__(self):
         return "Module(name=\"%s\", address=0x%x, size=%d, path=\"%s\")" % (self.name, self.address, self.size, self.path)
@@ -206,19 +207,21 @@ class Module:
         return self.address != other.address
 
     def enumerate_exports(self):
-        script = self._session.create_script(
+        if self._exports is None:
+            script = self._session.create_script(
 """
 var exports = [];
 Module.enumerateExports(\"%s\", {
-    onMatch: function(name, address) {
+    onMatch: function (name, address) {
         exports.push({name: name, address: address.toString()});
     },
-    onComplete: function() {
+    onComplete: function () {
         send(exports);
     }
 });
 """ % self.name)
-        return [Export(export["name"], int(export["address"], 16)) for export in _execute_script(script)]
+            self._exports = [Export(export["name"], int(export["address"], 16)) for export in _execute_script(script)]
+        return self._exports
 
     """
       @param protection example '--x'
