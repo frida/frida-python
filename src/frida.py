@@ -220,7 +220,7 @@ Module.enumerateExports(\"%s\", {
     }
 });
 """ % self.name)
-            self._exports = [Export(export["name"], int(export["address"], 16)) for export in _execute_script(script)]
+            self._exports = [Export(self, export["name"], int(export["address"], 16)) for export in _execute_script(script)]
         return self._exports
 
     """
@@ -242,7 +242,8 @@ Module.enumerateRanges(\"%s\", \"%s\", {
         return [Range(int(data['address'], 16), data['size'], data['protection']) for data in _execute_script(script)]
 
 class Export:
-    def __init__(self, name, address):
+    def __init__(self, module, name, address):
+        self.module = module
         self.name = name
         self.address = address
 
