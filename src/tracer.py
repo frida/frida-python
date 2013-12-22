@@ -93,8 +93,9 @@ class Tracer(object):
         self._script = process._session.create_script(source)
         self._script.on("message", on_message)
         self._script.load()
-        for module, export in working_set:
-            self._script.post_message([{ 'address': hex(export.address), 'name': export.name }])
+        for chunk in [working_set[i:i+1000] for i in range(0, len(working_set), 1000)]:
+            targets = [{ 'address': hex(export.address), 'name': export.name } for export in chunk]
+            self._script.post_message(targets)
 
     def _create_trace_script(self):
         return """
