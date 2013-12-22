@@ -34,7 +34,7 @@ class TracerProfile(object):
 
     def resolve(self, process):
         all_modules = process.enumerate_modules()
-        working_set = set() # (module, export)
+        working_set = set()
         for (operation, scope, glob) in self._spec:
             if scope == "module":
                 if operation == "include":
@@ -46,36 +46,36 @@ class TracerProfile(object):
                     working_set = working_set.union(self._include_function(glob, all_modules))
                 elif operation == "exclude":
                     working_set = self._exclude_function(glob, working_set)
-        return working_set
+        return list(working_set)
 
     def _include_module(self, glob, all_modules):
         r = []
-        for m in all_modules:
-            if fnmatch.fnmatchcase(m.name, glob):
-                for f in m.enumerate_exports():
-                    r.append((m, f))
+        for module in all_modules:
+            if fnmatch.fnmatchcase(module.name, glob):
+                for export in module.enumerate_exports():
+                    r.append(export)
         return r
 
     def _exclude_module(self, glob, working_set):
         r = []
-        for module, export in working_set:
-            if not fnmatch.fnmatchcase(module.name, glob):
-                r.append((module, export))
+        for export in working_set:
+            if not fnmatch.fnmatchcase(export.module.name, glob):
+                r.append(export)
         return set(r)
 
     def _include_function(self, glob, all_modules):
         r = []
-        for m in all_modules:
-            for f in m.enumerate_exports():
-                if fnmatch.fnmatchcase(f.name, glob):
-                    r.append((m, f))
+        for module in all_modules:
+            for export in module.enumerate_exports():
+                if fnmatch.fnmatchcase(export.name, glob):
+                    r.append(export)
         return r
 
     def _exclude_function(self, glob, working_set):
         r = []
-        for module, export in working_set:
+        for export in working_set:
             if not fnmatch.fnmatchcase(export.name, glob):
-                r.append((module, export))
+                r.append(export)
         return set(r)
 
 
