@@ -116,8 +116,7 @@ function scheduleNext() {
     }
 };
 function onStanza(targets) {
-    for (var i = 0; i !== targets.length; i++) {
-        var target = targets[i];
+    targets.forEach(function (target) {
         pending.push(function () {
             Interceptor.attach(ptr(target.address), {
                 onEnter: function onEnter(args) {
@@ -125,7 +124,7 @@ function onStanza(targets) {
                 }
             });
         });
-    }
+    });
 
     scheduleNext();
 
