@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from distutils.core import Extension, setup
-from distutils.command.build_ext import build_ext
+from setuptools import setup
+from setuptools.command.build_ext import build_ext
+from setuptools.extension import Extension
 import os
 import re
 import shutil

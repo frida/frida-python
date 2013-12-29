@@ -26,6 +26,9 @@
 /m4/lt*.m4
 /src/Makefile
 /src/Makefile.in
+/src/build/
+/src/dist/
+/src/frida.egg-info/
 /src/frida/Makefile
 /src/frida/Makefile.in
 /stamp-h1
