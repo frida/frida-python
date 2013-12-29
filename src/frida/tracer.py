@@ -98,6 +98,16 @@ class Tracer(object):
             targets = [{ 'address': hex(export.address), 'name': export.name } for export in chunk]
             self._script.post_message(targets)
 
+        return working_set
+
+    def stop(self):
+        if self._script is not None:
+            try:
+                self._script.unload()
+            except:
+                pass
+            self._script = None
+
     def _create_trace_script(self):
         return """
 var pending = [];
@@ -151,18 +161,46 @@ STDERR_SINK = IOSink(sys.stderr)
 
 def main():
     import frida
+    from optparse import OptionParser
 
-    if len(sys.argv) != 2:
-        print "Usage: %s <process name>" % sys.argv[0]
-        sys.exit(1)
+    tp = TracerProfileBuilder()
+    def process_builder_arg(option, opt_str, value, parser, method, **kwargs):
+        method(value)
 
-    tp = TracerProfileBuilder().include_modules("libSystem*").exclude("malloc", "calloc", "realloc", "free").build()
-    t = Tracer(tp)
+    usage = "usage: %prog [options] process-name-or-id"
+    parser = OptionParser(usage=usage)
+    parser.add_option("-I", "--include-module=MODULE", help="include MODULE", metavar="MODULE",
+            action='callback', type='string', callback=process_builder_arg, callback_args=(tp.include_modules,))
+    parser.add_option("-X", "--exclude-module=MODULE", help="exclude MODULE", metavar="MODULE",
+            action='callback', type='string', callback=process_builder_arg, callback_args=(tp.exclude_modules,))
+    parser.add_option("-i", "--include=FUNCTION", help="include FUNCTION", metavar="FUNCTION",
+            action='callback', type='string', callback=process_builder_arg, callback_args=(tp.include,))
+    parser.add_option("-x", "--exclude=FUNCTION", help="exclude FUNCTION", metavar="FUNCTION",
+            action='callback', type='string', callback=process_builder_arg, callback_args=(tp.exclude,))
+    (options, args) = parser.parse_args()
+    if len(args) != 1:
+        parser.error("process name or id must be specified")
+
+    t = Tracer(tp.build())
     try:
-        target = int(sys.argv[1])
+        target = int(args[0])
     except:
-        target = sys.argv[1]
-    p = frida.attach(target)
-    t.start_trace(p, STDOUT_SINK)
-    sys.stdin.read()
+        target = args[0]
+    try:
+        p = frida.attach(target)
+    except Exception, e:
+        print >> sys.stderr, "Failed to attach: %s" % e
+        sys.exit(1)
+    targets = t.start_trace(p, STDOUT_SINK)
+    print "Started tracing %d functions" % len(targets)
+    print "Press ENTER to stop"
+    raw_input()
+    print "Stopping..."
+    t.stop()
+    p.detach()
+    frida.shutdown()
     sys.exit(0)
+
+
+if __name__ == '__main__':
+    main()
