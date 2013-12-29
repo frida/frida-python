@@ -171,13 +171,13 @@ def main():
     usage = "usage: %prog [options] process-name-or-id"
     parser = OptionParser(usage=usage)
     parser.add_option("-I", "--include-module=MODULE", help="include MODULE", metavar="MODULE",
-            action='callback', type='string', callback=process_builder_arg, callback_args=(tp.include_modules,))
+            type='string', action='callback', callback=process_builder_arg, callback_args=(tp.include_modules,))
     parser.add_option("-X", "--exclude-module=MODULE", help="exclude MODULE", metavar="MODULE",
-            action='callback', type='string', callback=process_builder_arg, callback_args=(tp.exclude_modules,))
+            type='string', action='callback', callback=process_builder_arg, callback_args=(tp.exclude_modules,))
     parser.add_option("-i", "--include=FUNCTION", help="include FUNCTION", metavar="FUNCTION",
-            action='callback', type='string', callback=process_builder_arg, callback_args=(tp.include,))
+            type='string', action='callback', callback=process_builder_arg, callback_args=(tp.include,))
     parser.add_option("-x", "--exclude=FUNCTION", help="exclude FUNCTION", metavar="FUNCTION",
-            action='callback', type='string', callback=process_builder_arg, callback_args=(tp.exclude,))
+            type='string', action='callback', callback=process_builder_arg, callback_args=(tp.exclude,))
     (options, args) = parser.parse_args()
     if len(args) != 1:
         parser.error("process name or id must be specified")
