@@ -39,6 +39,5 @@ AC_CONFIG_FILES([
   Makefile
   src/Makefile
   src/frida/Makefile
-  src/setup.py
 ])
 AC_OUTPUT
