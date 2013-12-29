@@ -9,7 +9,7 @@ import shutil
 root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 version = os.environ['FRIDA_VERSION']
 long_description = open(os.path.join(root_dir, "README.md")).read()
-prebuilt_frida_extension = os.environ['PREBUILT_FRIDA_EXTENSION']
+frida_extension = os.environ['FRIDA_EXTENSION']
 
 class FridaPrebuiltExt(build_ext):
     def build_extension(self, ext):
@@ -18,7 +18,7 @@ class FridaPrebuiltExt(build_ext):
             os.makedirs(os.path.dirname(target))
         except Exception, e:
             pass
-        shutil.copyfile(prebuilt_frida_extension, target)
+        shutil.copyfile(frida_extension, target)
 
 setup(
     name='frida',
