@@ -132,21 +132,9 @@
     <ClCompile Include="src\_frida.c" />
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="src\frida.py">
-      <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">copy /B /Y "$(ProjectDir)src\frida.py" "$(OutDir)"</Command>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Copying frida.py to output directory</Message>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\frida.py</Outputs>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">copy /B /Y "$(ProjectDir)src\frida.py" "$(OutDir)"</Command>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Copying frida.py to output directory</Message>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\frida.py</Outputs>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">copy /B /Y "$(ProjectDir)src\frida.py" "$(OutDir)"</Command>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Copying frida.py to output directory</Message>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\frida.py</Outputs>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">copy /B /Y "$(ProjectDir)src\frida.py" "$(OutDir)"</Command>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Copying frida.py to output directory</Message>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\frida.py</Outputs>
-    </CustomBuild>
+    <None Include="src\frida\__init__.py" />
+    <None Include="src\frida\core.py" />
+    <None Include="src\frida\tracer.py" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
