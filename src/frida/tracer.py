@@ -147,3 +147,19 @@ class IOSink(object):
 
 STDOUT_SINK = IOSink(sys.stdout)
 STDERR_SINK = IOSink(sys.stderr)
+
+
+def main():
+    if len(sys.argv) != 2:
+        print "Usage: %s <process name>" % sys.argv[0]
+        sys.exit(1)
+    tp = TracerProfileBuilder().include_modules("libSystem*").exclude("malloc", "calloc", "realloc", "free").build()
+    t = Tracer(tp)
+    try:
+        target = int(sys.argv[1])
+    except:
+        target = sys.argv[1]
+    p = frida.attach(target)
+    t.start_trace(p, tracer.STDOUT_SINK)
+    sys.stdin.read()
+    sys.exit(0)

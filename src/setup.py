@@ -30,6 +30,11 @@ setup(
     url="http://frida.github.io",
     author="Frida Developers",
     author_email="ole.andre.ravnas@tillitech.com",
+    entry_points={
+        'console_scripts': [
+            'frida-trace = frida.tracer:main'
+        ]
+    },
     ext_modules=[Extension('_frida', [])],
     cmdclass={
         'build_ext': FridaPrebuiltExt
