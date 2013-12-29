@@ -7,7 +7,7 @@ import re
 import shutil
 
 root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-version = re.match(r"AC_INIT\(.*?, \[(.*?)\]\)", open(os.path.join(root_dir, "configure.ac")).read()).group(1)
+version = os.environ['FRIDA_VERSION']
 long_description = open(os.path.join(root_dir, "README.md")).read()
 prebuilt_frida_extension = os.environ['PREBUILT_FRIDA_EXTENSION']
 
