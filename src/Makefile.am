@@ -1,5 +1,17 @@
 SUBDIRS = frida
 
+bin_SCRIPTS = frida-trace
+CLEANFILES = $(bin_SCRIPTS)
+EXTRA_DIST = frida-trace.in
+
+do_substitution = sed -e 's,[@]pythondir[@],$(pythondir),g' \
+	-e 's,[@]PACKAGE[@],$(PACKAGE),g' \
+	-e 's,[@]VERSION[@],$(VERSION),g'
+
+frida-trace: frida-trace.in Makefile
+	$(do_substitution) < $(srcdir)/frida-trace.in > $@
+	chmod +x $@
+
 pyexec_LTLIBRARIES = _frida.la
 
 _frida_la_SOURCES = \
