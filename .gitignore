@@ -26,4 +26,6 @@
 /m4/lt*.m4
 /src/Makefile
 /src/Makefile.in
+/src/frida/Makefile
+/src/frida/Makefile.in
 /stamp-h1

@@ -1,4 +1,5 @@
-pyexec_DATA = frida.py
+SUBDIRS = frida
+
 pyexec_LTLIBRARIES = _frida.la
 
 _frida_la_SOURCES = \

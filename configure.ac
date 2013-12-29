@@ -38,5 +38,6 @@ AC_SUBST(PYFRIDA_LIBS)
 AC_CONFIG_FILES([
   Makefile
   src/Makefile
+  src/frida/Makefile
 ])
 AC_OUTPUT

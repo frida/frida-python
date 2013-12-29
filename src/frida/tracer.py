@@ -1,6 +1,7 @@
 import fnmatch
 import sys
 
+
 class TracerProfileBuilder(object):
     def __init__(self):
         self._spec = []
