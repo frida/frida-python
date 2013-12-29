@@ -7,6 +7,9 @@ def resume(target, device_id = None):
 def attach(target, device_id = None):
     return get_device_manager().get_device(device_id).attach(target)
 
+def shutdown():
+    get_device_manager()._manager.close()
+
 
 global _device_manager
 _device_manager = None
