@@ -110,6 +110,7 @@ class Tracer(object):
 
     def _create_trace_script(self):
         return """
+var started = new Date();
 var pending = [];
 var timer = null;
 function processNext() {
@@ -131,7 +132,7 @@ function onStanza(targets) {
         pending.push(function () {
             Interceptor.attach(ptr(target.address), {
                 onEnter: function onEnter(args) {
-                    send(target.name);
+                    send([new Date().getTime() - started.getTime(), target.name]);
                 }
             });
         });
@@ -152,8 +153,8 @@ class IOSink(object):
         self._stream = stream
 
     def on_update(self, invocation_events):
-        for ev in invocation_events:
-            self._stream.write(repr(ev) + "\n")
+        for timestamp, function_name in invocation_events:
+            self._stream.write("%6d ms\t%s\n" % (timestamp, function_name))
 
 STDOUT_SINK = IOSink(sys.stdout)
 STDERR_SINK = IOSink(sys.stderr)
