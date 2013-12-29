@@ -150,9 +150,12 @@ STDERR_SINK = IOSink(sys.stderr)
 
 
 def main():
+    import frida
+
     if len(sys.argv) != 2:
         print "Usage: %s <process name>" % sys.argv[0]
         sys.exit(1)
+
     tp = TracerProfileBuilder().include_modules("libSystem*").exclude("malloc", "calloc", "realloc", "free").build()
     t = Tracer(tp)
     try:
@@ -160,6 +163,6 @@ def main():
     except:
         target = sys.argv[1]
     p = frida.attach(target)
-    t.start_trace(p, tracer.STDOUT_SINK)
+    t.start_trace(p, STDOUT_SINK)
     sys.stdin.read()
     sys.exit(0)
