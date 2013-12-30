@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Source Files\frida">
+      <UniqueIdentifier>{0dbc700d-bd74-4281-8f9c-50da39a8b523}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\_frida.c">
@@ -20,8 +23,16 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="src\frida.py">
-      <Filter>Source Files</Filter>
+    <None Include="src\frida\tracer.py">
+      <Filter>Source Files\frida</Filter>
+    </None>
+    <None Include="src\frida\core.py">
+      <Filter>Source Files\frida</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="src\frida\__init__.py">
+      <Filter>Source Files\frida</Filter>
     </CustomBuild>
   </ItemGroup>
 </Project>
