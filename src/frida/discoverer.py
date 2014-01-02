@@ -32,9 +32,6 @@ Process.enumerateThreads({
             return thread.id !== currentThreadId;
         });
         var processNext = function processNext() {
-            if (pending.length === 0) {
-                return;
-            }
             active.forEach(function (thread) {
                 send("unfollow(" + thread.id + ")");
                 Stalker.unfollow(thread.id);
@@ -49,7 +46,10 @@ Process.enumerateThreads({
                     }
                 });
             });
-            setTimeout(processNext, 2000);
+            if (active.length > 0) {
+                setTimeout(processNext, 2000);
+                setTimeout(Stalker.garbageCollect, 2100);
+            }
         };
         setTimeout(processNext, 0);
     }
