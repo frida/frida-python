@@ -8,6 +8,10 @@ do_substitution = sed -e 's,[@]pythondir[@],$(pythondir),g' \
 	-e 's,[@]PACKAGE[@],$(PACKAGE),g' \
 	-e 's,[@]VERSION[@],$(VERSION),g'
 
+frida-discover: frida-discover.in Makefile
+	$(do_substitution) < $(srcdir)/frida-discover.in > $@
+	chmod +x $@
+
 frida-trace: frida-trace.in Makefile
 	$(do_substitution) < $(srcdir)/frida-trace.in > $@
 	chmod +x $@

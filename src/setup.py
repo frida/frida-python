@@ -33,6 +33,7 @@ setup(
     author_email="ole.andre.ravnas@tillitech.com",
     entry_points={
         'console_scripts': [
+            'frida-discover = frida.discoverer:main',
             'frida-trace = frida.tracer:main'
         ]
     },

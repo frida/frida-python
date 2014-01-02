@@ -1,0 +1,10 @@
+#!/usr/bin/env python
+
+import sys
+sys.path.insert(1, '@pythondir@')
+
+import frida
+import frida.discoverer
+
+if __name__ == '__main__':
+    frida.discoverer.main()
