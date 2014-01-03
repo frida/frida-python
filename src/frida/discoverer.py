@@ -126,9 +126,9 @@ sampler = new Sampler();
                             functions = module_functions.get(function.module, [])
                             if len(functions) == 0:
                                 module_functions[function.module] = functions
-                            functions.append(function)
+                            functions.append((function, rate))
                         else:
-                            dynamic_functions.append(function)
+                            dynamic_functions.append((function, rate))
                     ui.on_sample_result(module_functions, dynamic_functions)
                 else:
                     print message, data
@@ -180,18 +180,18 @@ def main():
             self.update_status("Sampling %d threads: %d through %d..." % (total, begin, end))
 
         def on_sample_result(self, module_functions, dynamic_functions):
-            print "Module functions:"
             for module, functions in module_functions.iteritems():
-                print "\t%s" % module.name
-                for function in functions:
-                    print "\t\t%s" % function
-
-            if len(dynamic_functions) > 0:
+                print module.name
+                print "\t%-10s\t%s" % ("Rate", "Function")
+                for function, rate in sorted(functions, key=lambda item: item[1], reverse=True):
+                    print "\t%-10d\t%s" % (rate, function)
                 print
 
+            if len(dynamic_functions) > 0:
                 print "Dynamic functions:"
-                for function in dynamic_functions:
-                    print "\t%s" % function
+                print "\t%-10s\t%s" % ("Rate", "Function")
+                for function, rate in sorted(dynamic_functions, key=lambda item: item[1], reverse=True):
+                    print "\t%-10d\t%s" % (rate, function)
 
             reactor.stop()
 
