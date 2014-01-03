@@ -6,7 +6,7 @@ class Discoverer(object):
         def on_message(message, data):
             print message, data
         source = self._create_discover_script()
-        self._script = process._session.create_script(source)
+        self._script = process.session.create_script(source)
         self._script.on("message", on_message)
         self._script.load()
 

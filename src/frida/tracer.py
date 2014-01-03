@@ -91,7 +91,7 @@ class Tracer(object):
 
         working_set = self._profile.resolve(process)
         source = self._create_trace_script()
-        self._script = process._session.create_script(source)
+        self._script = process.session.create_script(source)
         self._script.on("message", on_message)
         self._script.load()
         for chunk in [working_set[i:i+1000] for i in range(0, len(working_set), 1000)]:

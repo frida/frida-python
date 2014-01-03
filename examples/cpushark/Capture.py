@@ -58,7 +58,7 @@ class Capture(NSObject):
         try:
             session = self.device.attach(pid)
             session.on('detached', self._onSessionDetached)
-            script = session._session.create_script(SCRIPT_TEMPLATE % {
+            script = session.session.create_script(SCRIPT_TEMPLATE % {
                 'trigger_port': triggerPort
             })
             script.on('message', self._onScriptMessage)

@@ -1,8 +1,43 @@
+import bisect
+from collections import deque
 import fnmatch
+import thread
 import threading
 
 
-class DeviceManager:
+class Reactor(object):
+    def __init__(self, run_until_return):
+        self._running = False
+        self._run_until_return = run_until_return
+        self._pending = deque([])
+        self._lock = threading.RLock()
+        self._cond = threading.Condition(self._lock)
+
+    def run(self):
+        def termination_watcher():
+            self._run_until_return()
+            self.stop()
+        with self._lock:
+            self._running = True
+            thread.start_new_thread(termination_watcher, ())
+            while self._running:
+                while len(self._pending) > 0:
+                    work = self._pending.popleft()
+                    work()
+                if self._running:
+                    self._cond.wait()
+
+    def stop(self):
+        with self._lock:
+            self._running = False
+            self._cond.notify()
+
+    def schedule(self, f):
+        with self._lock:
+            self._pending.append(f)
+            self._cond.notify()
+
+class DeviceManager(object):
     def __init__(self, manager):
         self._manager = manager
 
@@ -27,7 +62,7 @@ class DeviceManager:
     def off(self, signal, callback):
         self._manager.off(signal, callback)
 
-class Device:
+class Device(object):
     def __init__(self, device):
         self.id = device.id
         self.name = device.name
@@ -58,7 +93,7 @@ class Device:
         return self._device.resume(self._pid_of(target))
 
     def attach(self, target):
-        return Session(self._device.attach(self._pid_of(target)))
+        return Process(self._device.attach(self._pid_of(target)))
 
     def on(self, signal, callback):
         self._device.on(signal, callback)
@@ -72,33 +107,51 @@ class Device:
         else:
             return target
 
-class Session:
+class FunctionContainer(object):
+    def __init__(self):
+        self._functions = {}
+
+    """
+    @param address is relative to container
+    """
+    def ensure_function(self, address):
+        f = self._functions.get(address)
+        if f is not None:
+            return f
+        return self._do_ensure_function(address)
+
+class Process(FunctionContainer):
     def __init__(self, session):
-        self._session = session
+        super(Process, self).__init__()
+        self.session = session
+        self._modules = None
+        self._module_map = None
 
     def detach(self):
-        self._session.detach()
+        self.session.detach()
 
     def enumerate_modules(self):
-        script = self._session.create_script(
-"""
-var modules = [];
-Process.enumerateModules({
-    onMatch: function (name, address, size, path) {
-        modules.push({name: name, address: address.toString(), size: size, path: path});
-    },
-    onComplete: function () {
-        send(modules);
-    }
-});
-""")
-        return [Module(data['name'], int(data['address'], 16), data['size'], data['path'], self._session) for data in _execute_script(script)]
+        if self._modules is None:
+            script = self.session.create_script(
+    """
+    var modules = [];
+    Process.enumerateModules({
+        onMatch: function (name, address, size, path) {
+            modules.push({name: name, address: address.toString(), size: size, path: path});
+        },
+        onComplete: function () {
+            send(modules);
+        }
+    });
+    """)
+            self._modules = [Module(data['name'], int(data['address'], 16), data['size'], data['path'], self.session) for data in _execute_script(script)]
+        return self._modules
 
     """
       @param protection example '--x'
     """
     def enumerate_ranges(self, protection):
-        script = self._session.create_script(
+        script = self.session.create_script(
 """
 var ranges = [];
 Process.enumerateRanges(\"%s\", {
@@ -113,7 +166,7 @@ Process.enumerateRanges(\"%s\", {
         return [Range(int(data['address'], 16), data['size'], data['protection']) for data in _execute_script(script)]
 
     def _exec_script(self, script_source, post_hook = None):
-        script = self._session.create_script(script_source)
+        script = self.session.create_script(script_source)
         return _execute_script(script, post_hook)
 
     def find_base_address(self, module_name):
@@ -156,34 +209,46 @@ recv(function (string) {
         return self._exec_script(script, send_data)
 
     def on(self, signal, callback):
-        self._session.on(signal, callback)
+        self.session.on(signal, callback)
 
     def off(self, signal, callback):
-        self._session.off(signal, callback)
+        self.session.off(signal, callback)
 
-class Module:
-    def __init__(self, name, address, size, path, _session):
+    def _do_ensure_function(self, absolute_address):
+        if self._module_map is None:
+            self._module_map = ModuleMap(self.enumerate_modules())
+        m = self._module_map.lookup(absolute_address)
+        if m is not None:
+            f = m.ensure_function(absolute_address - m.base_address)
+        else:
+            f = Function("dsub_%x" % absolute_address, absolute_address)
+            self._functions[absolute_address] = f
+        return f
+
+class Module(FunctionContainer):
+    def __init__(self, name, base_address, size, path, session):
+        super(Module, self).__init__()
         self.name = name
-        self.address = address
+        self.base_address = base_address
         self.size = size
         self.path = path
-        self._session = _session
         self._exports = None
+        self._session = session
 
     def __repr__(self):
-        return "Module(name=\"%s\", address=0x%x, size=%d, path=\"%s\")" % (self.name, self.address, self.size, self.path)
+        return "Module(name=\"%s\", base_address=0x%x, size=%d, path=\"%s\")" % (self.name, self.base_address, self.size, self.path)
 
     def __hash__(self):
-        return self.address.__hash__()
+        return self.base_address.__hash__()
 
     def __cmp__(self, other):
-        return self.address.__cmp__(other.address)
+        return self.base_address.__cmp__(other.base_address)
 
     def __eq__(self, other):
-        return self.address == other.address
+        return self.base_address == other.base_address
 
     def __ne__(self, other):
-        return self.address != other.address
+        return self.base_address != other.base_address
 
     def enumerate_exports(self):
         if self._exports is None:
@@ -199,7 +264,11 @@ Module.enumerateExports(\"%s\", {
     }
 });
 """ % self.name)
-            self._exports = [Export(self, export["name"], int(export["address"], 16)) for export in _execute_script(script)]
+            self._exports = []
+            for export in _execute_script(script):
+                relative_address = int(export["address"], 16) - self.base_address
+                mf = ModuleFunction(self, export["name"], relative_address, True)
+                self._exports.append(mf)
         return self._exports
 
     """
@@ -220,28 +289,50 @@ Module.enumerateRanges(\"%s\", \"%s\", {
 """ % (self.name, protection))
         return [Range(int(data['address'], 16), data['size'], data['protection']) for data in _execute_script(script)]
 
-class Export:
-    def __init__(self, module, name, address):
-        self.module = module
+    def _do_ensure_function(self, relative_address):
+        if self._exports is None:
+            for mf in self.enumerate_exports():
+                self._functions[mf.relative_address] = mf
+        mf = self._functions.get(relative_address)
+        if mf is None:
+            mf = ModuleFunction(self, "sub_%x" % relative_address, relative_address, False)
+            self._functions[relative_address] = mf
+        return mf
+
+class Function(object):
+    def __init__(self, name, absolute_address):
         self.name = name
-        self.address = address
+        self.absolute_address = absolute_address
+
+    def __str__(self):
+        return self.name
 
     def __repr__(self):
-        return "Export(name=\"%s\", address=%s)" % (self.name, self.address)
+        return "Function(name=\"%s\", absolute_address=%s)" % (self.name, self.absolute_address)
 
     def __hash__(self):
-        return self.address.__hash__()
+        return self.absolute_address.__hash__()
 
     def __cmp__(self, other):
-        return self.address.__cmp__(other.address)
+        return self.absolute_address.__cmp__(other.absolute_address)
 
     def __eq__(self, other):
-        return self.address == other.address
+        return self.absolute_address == other.absolute_address
 
     def __ne__(self, other):
-        return self.address != other.address
+        return self.absolute_address != other.absolute_address
 
-class Range:
+class ModuleFunction(Function):
+    def __init__(self, module, name, relative_address, exported):
+        super(ModuleFunction, self).__init__(name, module.base_address + relative_address)
+        self.module = module
+        self.relative_address = relative_address
+        self.exported = exported
+
+    def __repr__(self):
+        return "ModuleFunction(module=\"%s\", name=\"%s\", address=%s)" % (self.module.name, self.name, self.address)
+
+class Range(object):
     def __init__(self, address, size, protection):
         self.address = address
         self.size = size
@@ -252,6 +343,30 @@ class Range:
 
 class Error(Exception):
     pass
+
+class AddressMap(object):
+    def __init__(self, items, get_address, get_size):
+        self._items = sorted(items, key=get_address)
+        self._indices = [ get_address(item) for item in self._items ]
+        self._get_address = get_address
+        self._get_size = get_size
+
+    def lookup(self, address):
+        index = bisect.bisect(self._indices, address)
+        if index == 0:
+            return None
+        item = self._items[index - 1]
+        if address >= self._get_address(item) + self._get_size(item):
+            return None
+        return item
+
+class ModuleMap(AddressMap):
+    def __init__(self, modules):
+        super(ModuleMap, self).__init__(modules, lambda m: m.base_address, lambda m: m.size)
+
+class FunctionMap(AddressMap):
+    def __init__(self, functions, get_address = lambda f: f.absolute_address):
+        super(FunctionMap, self).__init__(functions, get_address, lambda f: 1)
 
 def _execute_script(script, post_hook = None):
     def msg(message, data):
