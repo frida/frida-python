@@ -40,5 +40,8 @@ setup(
     ext_modules=[Extension('_frida', [])],
     cmdclass={
         'build_ext': FridaPrebuiltExt
-    }
+    },
+    install_requires=[
+        "colorama >= 0.2.7"
+    ]
 )
