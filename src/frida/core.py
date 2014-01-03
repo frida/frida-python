@@ -136,15 +136,15 @@ class Process(FunctionContainer):
     """
     var modules = [];
     Process.enumerateModules({
-        onMatch: function (name, address, size, path) {
-            modules.push({name: name, address: address.toString(), size: size, path: path});
+        onMatch: function (name, baseAddress, size, path) {
+            modules.push({name: name, base_address: baseAddress.toString(), size: size, path: path});
         },
         onComplete: function () {
             send(modules);
         }
     });
     """)
-            self._modules = [Module(data['name'], int(data['address'], 16), data['size'], data['path'], self.session) for data in _execute_script(script)]
+            self._modules = [Module(data['name'], int(data['base_address'], 16), data['size'], data['path'], self.session) for data in _execute_script(script)]
         return self._modules
 
     """
@@ -155,22 +155,22 @@ class Process(FunctionContainer):
 """
 var ranges = [];
 Process.enumerateRanges(\"%s\", {
-    onMatch: function (address, size, protection) {
-        ranges.push({address: address.toString(), size: size, protection: protection});
+    onMatch: function (baseAddress, size, protection) {
+        ranges.push({base_address: baseAddress.toString(), size: size, protection: protection});
     },
     onComplete: function () {
         send(ranges);
     }
 });
 """ % protection)
-        return [Range(int(data['address'], 16), data['size'], data['protection']) for data in _execute_script(script)]
+        return [Range(int(data['base_address'], 16), data['size'], data['protection']) for data in _execute_script(script)]
 
     def _exec_script(self, script_source, post_hook = None):
         script = self.session.create_script(script_source)
         return _execute_script(script, post_hook)
 
     def find_base_address(self, module_name):
-        return int(self._exec_script("send(Module.findBaseAddress(\"%s\").toString());" % module_name))
+        return int(self._exec_script("send(Module.findBaseAddress(\"%s\").toString());" % module_name), 16)
 
     def read_bytes(self, address, length):
         return self._exec_script("send(null, Memory.readByteArray(ptr(\"%u\"), %u));" % (address, length))
@@ -279,15 +279,15 @@ Module.enumerateExports(\"%s\", {
 """
 var ranges = [];
 Module.enumerateRanges(\"%s\", \"%s\", {
-    onMatch: function (address, size, protection) {
-        ranges.push({address: address.toString(), size: size, protection: protection});
+    onMatch: function (baseAddress, size, protection) {
+        ranges.push({base_address: baseAddress.toString(), size: size, protection: protection});
     },
     onComplete: function () {
         send(ranges);
     }
 });
 """ % (self.name, protection))
-        return [Range(int(data['address'], 16), data['size'], data['protection']) for data in _execute_script(script)]
+        return [Range(int(data['base_address'], 16), data['size'], data['protection']) for data in _execute_script(script)]
 
     def _do_ensure_function(self, relative_address):
         if self._exports is None:
@@ -308,7 +308,7 @@ class Function(object):
         return self.name
 
     def __repr__(self):
-        return "Function(name=\"%s\", absolute_address=%s)" % (self.name, self.absolute_address)
+        return "Function(name=\"%s\", absolute_address=0x%x)" % (self.name, self.absolute_address)
 
     def __hash__(self):
         return self.absolute_address.__hash__()
@@ -330,16 +330,16 @@ class ModuleFunction(Function):
         self.exported = exported
 
     def __repr__(self):
-        return "ModuleFunction(module=\"%s\", name=\"%s\", address=%s)" % (self.module.name, self.name, self.address)
+        return "ModuleFunction(module=\"%s\", name=\"%s\", relative_address=0x%x)" % (self.module.name, self.name, self.relative_address)
 
 class Range(object):
-    def __init__(self, address, size, protection):
-        self.address = address
+    def __init__(self, base_address, size, protection):
+        self.base_address = base_address
         self.size = size
         self.protection = protection
 
     def __repr__(self):
-        return "Range(address=%s, size=%s, protection='%s')" % (self.address, self.size, self.protection)
+        return "Range(base_address=0x%x, size=%s, protection='%s')" % (self.base_address, self.size, self.protection)
 
 class Error(Exception):
     pass

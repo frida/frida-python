@@ -95,7 +95,7 @@ class Tracer(object):
         self._script.on("message", on_message)
         self._script.load()
         for chunk in [working_set[i:i+1000] for i in range(0, len(working_set), 1000)]:
-            targets = [{ 'address': hex(export.address), 'name': export.name } for export in chunk]
+            targets = [{ 'absolute_address': hex(export.absolute_address), 'name': export.name } for export in chunk]
             self._script.post_message(targets)
 
         return working_set
@@ -130,7 +130,7 @@ function scheduleNext() {
 function onStanza(targets) {
     targets.forEach(function (target) {
         pending.push(function () {
-            Interceptor.attach(ptr(target.address), {
+            Interceptor.attach(ptr(target.absolute_address), {
                 onEnter: function onEnter(args) {
                     send([new Date().getTime() - started.getTime(), target.name]);
                 }
