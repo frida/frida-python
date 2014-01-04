@@ -23,10 +23,13 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="src\frida\tracer.py">
+    <None Include="src\frida\core.py">
       <Filter>Source Files\frida</Filter>
     </None>
-    <None Include="src\frida\core.py">
+    <None Include="src\frida\discoverer.py">
+      <Filter>Source Files\frida</Filter>
+    </None>
+    <None Include="src\frida\tracer.py">
       <Filter>Source Files\frida</Filter>
     </None>
   </ItemGroup>
