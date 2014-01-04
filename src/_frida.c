@@ -28,7 +28,7 @@
 # define MOD_ERROR_VAL NULL
 # define PyRepr_FromFormat PyUnicode_FromFormat
 #else
-# define MOD_INIT(name) void init##name (void)
+# define MOD_INIT(name) PyMODINIT_FUNC init##name (void)
 # define MOD_DEF(ob, name, doc, methods) \
   ob = Py_InitModule3 (name, methods, doc);
 # define MOD_SUCCESS_VAL(val)
