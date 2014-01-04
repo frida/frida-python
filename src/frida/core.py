@@ -1,7 +1,8 @@
 import bisect
-from collections import deque
+import collections
 import fnmatch
-import thread
+import numbers
+import sys
 import threading
 
 
@@ -9,7 +10,7 @@ class Reactor(object):
     def __init__(self, run_until_return):
         self._running = False
         self._run_until_return = run_until_return
-        self._pending = deque([])
+        self._pending = collections.deque([])
         self._lock = threading.RLock()
         self._cond = threading.Condition(self._lock)
 
@@ -19,7 +20,7 @@ class Reactor(object):
             self.stop()
         with self._lock:
             self._running = True
-            thread.start_new_thread(termination_watcher, ())
+            threading.Thread(target=termination_watcher).start()
             while self._running:
                 while len(self._pending) > 0:
                     work = self._pending.popleft()
@@ -54,7 +55,7 @@ class DeviceManager(object):
         for device in devices:
             if device.id == device_id:
                 return Device(device)
-        raise ValueError, "device not found"
+        raise ValueError("device not found")
 
     def on(self, signal, callback):
         self._manager.on(signal, callback)
@@ -82,9 +83,9 @@ class Device(object):
         if len(matching) == 1:
             return matching[0]
         elif len(matching) > 1:
-            raise ValueError, "ambiguous name; it matches: %s" % ", ".join(["%s (pid: %d)" % (process.name, process.pid) for process in matching])
+            raise ValueError("ambiguous name; it matches: %s" % ", ".join(["%s (pid: %d)" % (process.name, process.pid) for process in matching]))
         else:
-            raise ValueError, "process not found"
+            raise ValueError("process not found")
 
     def spawn(self, command_line):
         return self._device.spawn(command_line)
@@ -102,10 +103,10 @@ class Device(object):
         self._device.off(signal, callback)
 
     def _pid_of(self, target):
-        if isinstance(target, basestring):
-            return self.get_process(target).pid
-        else:
+        if isinstance(target, numbers.Number):
             return target
+        else:
+            return self.get_process(target).pid
 
 class FunctionContainer(object):
     def __init__(self):
@@ -170,7 +171,7 @@ Process.enumerateRanges(\"%s\", {
         return _execute_script(script, post_hook)
 
     def find_base_address(self, module_name):
-        return int(self._exec_script("send(Module.findBaseAddress(\"%s\").toString());" % module_name), 16)
+        return int(self._exec_script("var p = Module.findBaseAddress(\"%s\"); send(p !== null ? p.toString() : \"0\");" % module_name), 16)
 
     def read_bytes(self, address, length):
         return self._exec_script("send(null, Memory.readByteArray(ptr(\"%u\"), %u));" % (address, length))
@@ -178,21 +179,21 @@ Process.enumerateRanges(\"%s\", {
     def read_utf8(self, address, length = -1):
         return self._exec_script("send(Memory.readUtf8String(ptr(\"%u\"), %u));" % (address, length))
 
-    def write_bytes(self, address, bytes):
+    def write_bytes(self, address, data):
         script = \
 """
-recv(function (bytes) {
+recv(function (data) {
     var base = ptr("%u");
-    for (var i = 0; i < bytes.length; i++)
-        Memory.writeU8(base.add(i), bytes[i]);
+    for (var i = 0; i !== data.length; i++)
+        Memory.writeU8(base.add(i), data[i]);
     send(true);
 });
 """ % address
 
         def send_data(script):
-            script.post_message([ord(x) for x in bytes])
+            script.post_message([x for x in iterbytes(data)])
 
-        return self._exec_script(script, send_data)
+        self._exec_script(script, send_data)
 
     def write_utf8(self, address, string):
         script = \
@@ -206,7 +207,7 @@ recv(function (string) {
         def send_data(script):
             script.post_message(string)
 
-        return self._exec_script(script, send_data)
+        self._exec_script(script, send_data)
 
     def on(self, signal, callback):
         self.session.on(signal, callback)
@@ -369,7 +370,7 @@ class FunctionMap(AddressMap):
         super(FunctionMap, self).__init__(functions, get_address, lambda f: 1)
 
 def _execute_script(script, post_hook = None):
-    def msg(message, data):
+    def on_message(message, data):
         if message['type'] == 'send':
             if data is not None:
                 result['data'] = data
@@ -382,14 +383,21 @@ def _execute_script(script, post_hook = None):
     result = {}
     event = threading.Event()
 
-    script.on('message', msg)
+    script.on('message', on_message)
     script.load()
     if post_hook:
         post_hook(script)
     event.wait()
     script.unload()
+    script.off('message', on_message)
 
     if 'error' in result:
-        raise Error, result['error']
+        raise Error(result['error'])
 
     return result['data']
+
+if sys.version_info[0] >= 3:
+    iterbytes = lambda x: iter(x)
+else:
+    def iterbytes(data):
+        return (ord(char) for char in data)

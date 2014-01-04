@@ -21,7 +21,7 @@ pyexec_LTLIBRARIES = _frida.la
 _frida_la_SOURCES = \
 	_frida.c
 _frida_la_LDFLAGS = \
-	-export-symbols-regex "^init_frida$$" \
+	-export-symbols-regex "^(PyInit__frida|init_frida)$$" \
 	-module -avoid-version -shared \
 	$(PYTHON_LDFLAGS) \
 	$(PYFRIDA_LDFLAGS)

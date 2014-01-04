@@ -119,7 +119,7 @@ sampler = new Sampler();
                 elif name == '+result':
                     module_functions = {}
                     dynamic_functions = []
-                    for address, rate in payload['samples'].iteritems():
+                    for address, rate in payload['samples'].items():
                         address = int(address, 16)
                         function = process.ensure_function(address)
                         if isinstance(function, ModuleFunction):
@@ -131,12 +131,11 @@ sampler = new Sampler();
                             dynamic_functions.append((function, rate))
                     ui.on_sample_result(module_functions, dynamic_functions)
                 else:
-                    print message, data
+                    print(message, data)
             else:
-                print message, data
+                print(message, data)
         else:
-            print message, data
-
+            print(message, data)
 
 class UI(object):
     def on_sample_progress(self, begin, end, total):
@@ -180,18 +179,18 @@ def main():
             self.update_status("Sampling %d threads: %d through %d..." % (total, begin, end))
 
         def on_sample_result(self, module_functions, dynamic_functions):
-            for module, functions in module_functions.iteritems():
-                print module.name
-                print "\t%-10s\t%s" % ("Rate", "Function")
+            for module, functions in module_functions.items():
+                print(module.name)
+                print("\t%-10s\t%s" % ("Rate", "Function"))
                 for function, rate in sorted(functions, key=lambda item: item[1], reverse=True):
-                    print "\t%-10d\t%s" % (rate, function)
-                print
+                    print("\t%-10d\t%s" % (rate, function))
+                print("")
 
             if len(dynamic_functions) > 0:
-                print "Dynamic functions:"
-                print "\t%-10s\t%s" % ("Rate", "Function")
+                print("Dynamic functions:")
+                print("\t%-10s\t%s" % ("Rate", "Function"))
                 for function, rate in sorted(dynamic_functions, key=lambda item: item[1], reverse=True):
-                    print "\t%-10d\t%s" % (rate, function)
+                    print("\t%-10d\t%s" % (rate, function))
 
             reactor.stop()
 
@@ -204,7 +203,7 @@ def main():
     try:
         ui.update_status("Attaching...")
         process = frida.attach(target)
-    except Exception, e:
+    except Exception as e:
         ui.update_status("Failed to attach: %s" % e)
         sys.exit(1)
 
@@ -213,7 +212,7 @@ def main():
     d = Discoverer(reactor)
     d.start(process, ui)
     reactor.run()
-    print "Stopping..."
+    print("Stopping...")
     d.stop()
     process.detach()
     frida.shutdown()

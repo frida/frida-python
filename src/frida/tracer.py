@@ -189,14 +189,14 @@ def main():
         target = args[0]
     try:
         p = frida.attach(target)
-    except Exception, e:
+    except Exception as e:
         print >> sys.stderr, "Failed to attach: %s" % e
         sys.exit(1)
     targets = t.start_trace(p, STDOUT_SINK)
-    print "Started tracing %d functions" % len(targets)
-    print "Press ENTER to stop"
+    print("Started tracing %d functions" % len(targets))
+    print("Press ENTER to stop")
     raw_input()
-    print "Stopping..."
+    print("Stopping...")
     t.stop()
     p.detach()
     frida.shutdown()

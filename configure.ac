@@ -21,11 +21,34 @@ if echo $CC | grep -q "gcc"; then
 fi
 
 AM_PATH_PYTHON([2.6],, [AC_ERROR([Python is required])])
-PYTHON_PREFIX=$($PYTHON -c 'import sys; print sys.prefix')
-PYTHON_EXEC_PREFIX=$($PYTHON -c 'import sys; print sys.exec_prefix')
-PYTHON_CFLAGS="-I${PYTHON_PREFIX}/include/python${PYTHON_VERSION}/ -I${PYTHON_EXEC_PREFIX}/include/python${PYTHON_VERSION}/"
-PYTHON_LDFLAGS="-L${PYTHON_PREFIX}/lib/ -L${PYTHON_PREFIX}/lib/python${PYTHON_VERSION}/config/ -L${PYTHON_EXEC_PREFIX}/lib/ -L${PYTHON_EXEC_PREFIX}/lib/python${PYTHON_VERSION}/config/"
-PYTHON_LIBS="-lpython${PYTHON_VERSION}"
+PYTHON_PREFIX=$($PYTHON -c 'import sys; print(sys.prefix)')
+PYTHON_EXEC_PREFIX=$($PYTHON -c 'import sys; print(sys.exec_prefix)')
+PYTHON_ABIFLAGS=$($PYTHON -c 'import sys; print(getattr(sys, "abiflags", ""))')
+PYTHON_CFLAGS=""
+PYTHON_LDFLAGS=""
+PYTHON_LIBS=""
+AC_DEFUN([ADD_PYTHON_INCDIR], [
+if [[ -d "$1" ]]; then
+    PYTHON_CFLAGS="-I\"$1\" $PYTHON_CFLAGS"
+fi
+])
+AC_DEFUN([ADD_PYTHON_LIBDIR], [
+if [[ -d "$1" ]]; then
+    PYTHON_LDFLAGS="-L\"$1\" $PYTHON_LDFLAGS"
+fi
+])
+ADD_PYTHON_INCDIR([${PYTHON_PREFIX}/include/python${PYTHON_VERSION}${PYTHON_ABIFLAGS}/])
+ADD_PYTHON_LIBDIR([${PYTHON_PREFIX}/lib/])
+ADD_PYTHON_LIBDIR([${PYTHON_PREFIX}/lib/python${PYTHON_VERSION}/config/])
+ADD_PYTHON_LIBDIR([${PYTHON_PREFIX}/lib/python${PYTHON_VERSION}/config-${PYTHON_VERSION}${PYTHON_ABIFLAGS}/])
+if [[ "$PYTHON_EXEC_PREFIX" != "$PYTHON_PREFIX" ]]; then
+  ADD_PYTHON_INCDIR([${PYTHON_EXEC_PREFIX}/include/python${PYTHON_VERSION}${PYTHON_ABIFLAGS}/])
+  ADD_PYTHON_LIBDIR([${PYTHON_EXEC_PREFIX}/lib/])
+  ADD_PYTHON_LIBDIR([${PYTHON_EXEC_PREFIX}/lib/python${PYTHON_VERSION}/config/])
+  ADD_PYTHON_LIBDIR([${PYTHON_EXEC_PREFIX}/lib/python${PYTHON_VERSION}/config-${PYTHON_VERSION}${PYTHON_ABIFLAGS}/])
+fi
+PYTHON_LIBS="-lpython${PYTHON_VERSION}${PYTHON_ABIFLAGS}"
+
 AC_SUBST(PYTHON_CFLAGS)
 AC_SUBST(PYTHON_LDFLAGS)
 AC_SUBST(PYTHON_LIBS)

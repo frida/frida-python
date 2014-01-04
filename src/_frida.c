@@ -16,6 +16,26 @@
 # include <crt_externs.h>
 #endif
 
+#if PY_MAJOR_VERSION >= 3
+# define MOD_INIT(name) PyMODINIT_FUNC PyInit_##name (void)
+# define MOD_DEF(ob, name, doc, methods) \
+  { \
+    static struct PyModuleDef moduledef = { \
+        PyModuleDef_HEAD_INIT, name, doc, -1, methods, }; \
+    ob = PyModule_Create (&moduledef); \
+  }
+# define MOD_SUCCESS_VAL(val) val
+# define MOD_ERROR_VAL NULL
+# define PyRepr_FromFormat PyUnicode_FromFormat
+#else
+# define MOD_INIT(name) void init##name (void)
+# define MOD_DEF(ob, name, doc, methods) \
+  ob = Py_InitModule3 (name, methods, doc);
+# define MOD_SUCCESS_VAL(val)
+# define MOD_ERROR_VAL
+# define PyRepr_FromFormat PyString_FromFormat
+#endif
+
 #define FRIDA_FUNCPTR_TO_POINTER(f) (GSIZE_TO_POINTER (f))
 
 static PyObject * json_loads;
@@ -144,19 +164,19 @@ static PyMethodDef PyDeviceManager_methods[] =
 {
   { "close", (PyCFunction) PyDeviceManager_close, METH_NOARGS, "Close the device manager." },
   { "enumerate_devices", (PyCFunction) PyDeviceManager_enumerate_devices, METH_NOARGS, "Enumerate devices." },
-  { "on", (PyCFunction) PyDeviceManager_on, 2, "Add an event handler." },
-  { "off", (PyCFunction) PyDeviceManager_off, 2, "Remove an event handler." },
+  { "on", (PyCFunction) PyDeviceManager_on, METH_VARARGS, "Add an event handler." },
+  { "off", (PyCFunction) PyDeviceManager_off, METH_VARARGS, "Remove an event handler." },
   { NULL }
 };
 
 static PyMethodDef PyDevice_methods[] =
 {
   { "enumerate_processes", (PyCFunction) PyDevice_enumerate_processes, METH_NOARGS, "Enumerate processes." },
-  { "spawn", (PyCFunction) PyDevice_spawn, 1, "Spawn a process into an attachable state." },
-  { "resume", (PyCFunction) PyDevice_resume, 1, "Resume a process from the attachable state." },
-  { "attach", (PyCFunction) PyDevice_attach, 1, "Attach to a PID." },
-  { "on", (PyCFunction) PyDevice_on, 2, "Add an event handler." },
-  { "off", (PyCFunction) PyDevice_off, 2, "Remove an event handler." },
+  { "spawn", (PyCFunction) PyDevice_spawn, METH_VARARGS, "Spawn a process into an attachable state." },
+  { "resume", (PyCFunction) PyDevice_resume, METH_VARARGS, "Resume a process from the attachable state." },
+  { "attach", (PyCFunction) PyDevice_attach, METH_VARARGS, "Attach to a PID." },
+  { "on", (PyCFunction) PyDevice_on, METH_VARARGS, "Add an event handler." },
+  { "off", (PyCFunction) PyDevice_off, METH_VARARGS, "Remove an event handler." },
   { NULL }
 };
 
@@ -195,9 +215,9 @@ static PyMemberDef PyIcon_members[] =
 static PyMethodDef PySession_methods[] =
 {
   { "detach", (PyCFunction) PySession_detach, METH_NOARGS, "Detach session from the process." },
-  { "create_script", (PyCFunction) PySession_create_script, 1, "Create a new script." },
-  { "on", (PyCFunction) PySession_on, 2, "Add an event handler." },
-  { "off", (PyCFunction) PySession_off, 2, "Remove an event handler." },
+  { "create_script", (PyCFunction) PySession_create_script, METH_VARARGS, "Create a new script." },
+  { "on", (PyCFunction) PySession_on, METH_VARARGS, "Add an event handler." },
+  { "off", (PyCFunction) PySession_off, METH_VARARGS, "Remove an event handler." },
   { NULL }
 };
 
@@ -205,9 +225,9 @@ static PyMethodDef PyScript_methods[] =
 {
   { "load", (PyCFunction) PyScript_load, METH_NOARGS, "Load the script." },
   { "unload", (PyCFunction) PyScript_unload, METH_NOARGS, "Unload the script." },
-  { "post_message", (PyCFunction) PyScript_post_message, 1, "Post a JSON-formatted message to the script." },
-  { "on", (PyCFunction) PyScript_on, 2, "Add an event handler." },
-  { "off", (PyCFunction) PyScript_off, 2, "Remove an event handler." },
+  { "post_message", (PyCFunction) PyScript_post_message, METH_VARARGS, "Post a JSON-formatted message to the script." },
+  { "on", (PyCFunction) PyScript_on, METH_VARARGS, "Add an event handler." },
+  { "off", (PyCFunction) PyScript_off, METH_VARARGS, "Remove an event handler." },
   { NULL }
 };
 
@@ -480,7 +500,7 @@ PyDeviceManager_dealloc (PyDeviceManager * self)
     Py_END_ALLOW_THREADS
   }
 
-  self->ob_type->tp_free ((PyObject *) self);
+  Py_TYPE (self)->tp_free ((PyObject *) self);
 }
 
 static PyObject *
@@ -683,13 +703,13 @@ PyDevice_dealloc (PyDevice * self)
     Py_END_ALLOW_THREADS
   }
 
-  self->ob_type->tp_free ((PyObject *) self);
+  Py_TYPE (self)->tp_free ((PyObject *) self);
 }
 
 static PyObject *
 PyDevice_repr (PyDevice * self)
 {
-  return PyString_FromFormat ("Device(id=%u, name=\"%s\", type='%s')", self->id, self->name, self->type);
+  return PyRepr_FromFormat ("Device(id=%u, name=\"%s\", type='%s')", self->id, self->name, self->type);
 }
 
 static PyObject *
@@ -763,7 +783,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args)
     return NULL;
   }
 
-  return PyInt_FromLong (pid);
+  return PyLong_FromLong (pid);
 }
 
 static PyObject *
@@ -941,13 +961,13 @@ PyProcess_dealloc (PyProcess * self)
   if (self->handle != NULL)
     g_object_unref (self->handle);
 
-  self->ob_type->tp_free ((PyObject *) self);
+  Py_TYPE (self)->tp_free ((PyObject *) self);
 }
 
 static PyObject *
 PyProcess_repr (PyProcess * self)
 {
-  return PyString_FromFormat ("Process(pid=%u, name=\"%s\")", self->pid, self->name);
+  return PyRepr_FromFormat ("Process(pid=%u, name=\"%s\")", self->pid, self->name);
 }
 
 static PyObject *
@@ -980,7 +1000,7 @@ PyIcon_from_handle (FridaIcon * handle)
     icon->height = frida_icon_get_height (handle);
     icon->rowstride = frida_icon_get_rowstride (handle);
     pixels = frida_icon_get_pixels (handle, &pixels_length);
-    icon->pixels = PyString_FromStringAndSize ((char *) pixels, (Py_ssize_t) pixels_length);
+    icon->pixels = PyBytes_FromStringAndSize ((char *) pixels, (Py_ssize_t) pixels_length);
 
     return result;
   }
@@ -1004,13 +1024,13 @@ PyIcon_dealloc (PyIcon * self)
 {
   Py_XDECREF (self->pixels);
 
-  self->ob_type->tp_free ((PyObject *) self);
+  Py_TYPE (self)->tp_free ((PyObject *) self);
 }
 
 static PyObject *
 PyIcon_repr (PyIcon * self)
 {
-  return PyString_FromFormat ("Icon(width=%d, height=%d, rowstride=%d, pixels=<%zd bytes>)", self->width, self->height, self->rowstride, PyString_GET_SIZE (self->pixels));
+  return PyRepr_FromFormat ("Icon(width=%d, height=%d, rowstride=%d, pixels=<%zd bytes>)", self->width, self->height, self->rowstride, PyBytes_Size (self->pixels));
 }
 
 
@@ -1061,7 +1081,7 @@ PySession_dealloc (PySession * self)
     Py_END_ALLOW_THREADS
   }
 
-  self->ob_type->tp_free ((PyObject *) self);
+  Py_TYPE (self)->tp_free ((PyObject *) self);
 }
 
 static PyObject *
@@ -1241,7 +1261,7 @@ PyScript_dealloc (PyScript * self)
     Py_END_ALLOW_THREADS
   }
 
-  self->ob_type->tp_free ((PyObject *) self);
+  Py_TYPE (self)->tp_free ((PyObject *) self);
 }
 
 static PyObject *
@@ -1283,21 +1303,36 @@ PyScript_unload (PyScript * self)
 static PyObject *
 PyScript_post_message (PyScript * self, PyObject * args)
 {
-  PyObject * message_object, * message;
+  PyObject * message_object, * message_json;
+  char * message_utf8;
   GError * error = NULL;
 
   if (!PyArg_ParseTuple (args, "O", &message_object))
     return NULL;
 
-  message = PyObject_CallFunction (json_dumps, "O", message_object);
-  if (message == NULL)
+  message_json = PyObject_CallFunction (json_dumps, "O", message_object);
+  if (message_json == NULL)
     return NULL;
 
+#if PY_MAJOR_VERSION >= 3
+  {
+    PyObject * message_bytes;
+
+    message_bytes = PyUnicode_AsUTF8String (message_json);
+    Py_DECREF (message_json);
+    message_json = message_bytes;
+
+    message_utf8 = PyBytes_AsString (message_bytes);
+  }
+#else
+  message_utf8 = PyString_AsString (message_json);
+#endif
+
   Py_BEGIN_ALLOW_THREADS
-  frida_script_post_message_sync (self->handle, PyString_AsString (message), &error);
+  frida_script_post_message_sync (self->handle, message_utf8, &error);
   Py_END_ALLOW_THREADS
 
-  Py_DECREF (message);
+  Py_DECREF (message_json);
 
   if (error != NULL)
   {
@@ -1393,7 +1428,11 @@ PyScript_on_message (PyScript * self, const gchar * message, const gchar * data,
 
     message_object = PyObject_CallFunction (json_loads, "s", message);
     g_assert (message_object != NULL);
+#if PY_MAJOR_VERSION >= 3
+    args = Py_BuildValue ("Oy#", message_object, data, data_size);
+#else
     args = Py_BuildValue ("Os#", message_object, data, data_size);
+#endif
     Py_DECREF (message_object);
 
     for (cur = callbacks; cur != NULL; cur = cur->next)
@@ -1446,8 +1485,7 @@ PyFrida_parse_signal_method_args (PyObject * args, const char ** signal, PyObjec
 }
 
 
-PyMODINIT_FUNC
-init_frida (void)
+MOD_INIT (_frida)
 {
   PyObject * json;
   PyObject * module;
@@ -1463,29 +1501,29 @@ init_frida (void)
 
   PyDeviceManagerType.tp_new = PyType_GenericNew;
   if (PyType_Ready (&PyDeviceManagerType) < 0)
-    return;
+    return MOD_ERROR_VAL;
 
   PyDeviceType.tp_new = PyType_GenericNew;
   if (PyType_Ready (&PyDeviceType) < 0)
-    return;
+    return MOD_ERROR_VAL;
 
   PyProcessType.tp_new = PyType_GenericNew;
   if (PyType_Ready (&PyProcessType) < 0)
-    return;
+    return MOD_ERROR_VAL;
 
   PyIconType.tp_new = PyType_GenericNew;
   if (PyType_Ready (&PyIconType) < 0)
-    return;
+    return MOD_ERROR_VAL;
 
   PySessionType.tp_new = PyType_GenericNew;
   if (PyType_Ready (&PySessionType) < 0)
-    return;
+    return MOD_ERROR_VAL;
 
   PyScriptType.tp_new = PyType_GenericNew;
   if (PyType_Ready (&PyScriptType) < 0)
-    return;
+    return MOD_ERROR_VAL;
 
-  module = Py_InitModule ("_frida", NULL);
+  MOD_DEF (module, "_frida", "Frida", NULL);
 
   Py_INCREF (&PyDeviceManagerType);
   PyModule_AddObject (module, "DeviceManager", (PyObject *) &PyDeviceManagerType);
@@ -1504,4 +1542,6 @@ init_frida (void)
 
   Py_INCREF (&PyScriptType);
   PyModule_AddObject (module, "Script", (PyObject *) &PyScriptType);
+
+  return MOD_SUCCESS_VAL (module);
 }
