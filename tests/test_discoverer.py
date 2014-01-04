@@ -11,17 +11,19 @@ except:
 
 
 class TestDiscoverer(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         system = platform.system()
         if system == 'Windows':
-            self.target = subprocess.Popen([r"C:\Windows\notepad.exe"])
+            cls.target = subprocess.Popen([r"C:\Windows\notepad.exe"])
         else:
-            self.target = subprocess.Popen(["/bin/cat"])
-        self.process = frida.attach(self.target.pid)
+            cls.target = subprocess.Popen(["/bin/cat"])
+        cls.process = frida.attach(cls.target.pid)
 
-    def tearDown(self):
-        self.process.detach()
-        self.target.terminate()
+    @classmethod
+    def tearDownClass(cls):
+        cls.process.detach()
+        cls.target.terminate()
 
     def test_basics(self):
         test_ui = TestUI()
