@@ -24,7 +24,7 @@ class FridaPrebuiltExt(build_ext):
 setup(
     name='frida',
     version=version,
-    description="Inject JavaScript code to explore native apps on Windows, Mac, Linux and iOS",
+    description="Inject JavaScript to explore native apps on Windows, Mac, Linux and iOS",
     long_description=long_description,
     author="Frida Developers",
     author_email="ole.andre.ravnas@tillitech.com",
