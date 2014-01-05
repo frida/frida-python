@@ -13,24 +13,32 @@ class Reactor(object):
         self._running = False
         self._run_until_return = run_until_return
         self._pending = collections.deque([])
-        self._lock = threading.RLock()
+        self._lock = threading.Lock()
         self._cond = threading.Condition(self._lock)
 
     def run(self):
+        with self._lock:
+            self._running = True
+
         def termination_watcher():
             self._run_until_return()
             self.stop()
-        with self._lock:
-            self._running = True
-            watcher_thread = threading.Thread(target=termination_watcher)
-            watcher_thread.daemon = True
-            watcher_thread.start()
-            while self._running:
-                while len(self._pending) > 0:
+        watcher_thread = threading.Thread(target=termination_watcher)
+        watcher_thread.daemon = True
+        watcher_thread.start()
+
+        running = True
+        while running:
+            work = None
+            with self._lock:
+                if len(self._pending) > 0:
                     work = self._pending.popleft()
-                    work()
-                if self._running:
+            if work is not None:
+                work()
+            with self._lock:
+                while self._running and len(self._pending) == 0:
                     self._cond.wait()
+                running = self._running
 
     def stop(self):
         with self._lock:
