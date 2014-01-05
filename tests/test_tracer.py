@@ -1,7 +1,9 @@
 import frida
-from frida.tracer import Tracer, TracerProfileBuilder, STDOUT_SINK
+from frida.core import Reactor
+from frida.tracer import Tracer, TracerProfileBuilder, MemoryRepository, UI
 import platform
 import subprocess
+import threading
 try:
     import unittest2 as unittest
 except:
@@ -24,10 +26,16 @@ class TestTracer(unittest.TestCase):
         cls.target.terminate()
 
     def test_basics(self):
-        tp = TracerProfileBuilder().include("open*")
-        t = Tracer(tp.build())
-        targets = t.start_trace(self.process, STDOUT_SINK)
-        t.stop()
+        never = threading.Event()
+        reactor = Reactor(never.wait)
+        def start():
+            tp = TracerProfileBuilder().include("open*")
+            t = Tracer(reactor, MemoryRepository(), tp.build())
+            targets = t.start_trace(self.process, UI())
+            t.stop()
+            reactor.stop()
+        reactor.schedule(start)
+        reactor.run()
 
 
 if __name__ == '__main__':
