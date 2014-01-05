@@ -39,15 +39,23 @@ fi
 ])
 ADD_PYTHON_INCDIR([${PYTHON_PREFIX}/include/python${PYTHON_VERSION}${PYTHON_ABIFLAGS}/])
 ADD_PYTHON_LIBDIR([${PYTHON_PREFIX}/lib/])
-ADD_PYTHON_LIBDIR([${PYTHON_PREFIX}/lib/python${PYTHON_VERSION}/config/])
-ADD_PYTHON_LIBDIR([${PYTHON_PREFIX}/lib/python${PYTHON_VERSION}/config-${PYTHON_VERSION}${PYTHON_ABIFLAGS}/])
 if [[ "$PYTHON_EXEC_PREFIX" != "$PYTHON_PREFIX" ]]; then
   ADD_PYTHON_INCDIR([${PYTHON_EXEC_PREFIX}/include/python${PYTHON_VERSION}${PYTHON_ABIFLAGS}/])
   ADD_PYTHON_LIBDIR([${PYTHON_EXEC_PREFIX}/lib/])
-  ADD_PYTHON_LIBDIR([${PYTHON_EXEC_PREFIX}/lib/python${PYTHON_VERSION}/config/])
-  ADD_PYTHON_LIBDIR([${PYTHON_EXEC_PREFIX}/lib/python${PYTHON_VERSION}/config-${PYTHON_VERSION}${PYTHON_ABIFLAGS}/])
 fi
-PYTHON_LIBS="-lpython${PYTHON_VERSION}${PYTHON_ABIFLAGS}"
+PYTHON_LIBS=$($PYTHON -c "import sys
+result = None
+try:
+  import sysconfig
+  lib = sysconfig.get_config_var('PY3LIBRARY')
+  if lib is not None and len(lib) > 0:
+    result = '-lpython3'
+except:
+  pass
+if result is None:
+  result = '-lpython${PYTHON_VERSION}${PYTHON_ABIFLAGS}'
+print(result)
+")
 
 AC_SUBST(PYTHON_CFLAGS)
 AC_SUBST(PYTHON_LDFLAGS)
