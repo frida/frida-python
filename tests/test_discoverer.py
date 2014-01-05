@@ -28,8 +28,8 @@ class TestDiscoverer(unittest.TestCase):
     def test_basics(self):
         test_ui = TestUI()
         reactor = Reactor(test_ui.on_result.wait)
-        d = Discoverer(reactor)
         def start():
+            d = Discoverer(reactor)
             d.start(self.process, test_ui)
         reactor.schedule(start)
         reactor.run()
