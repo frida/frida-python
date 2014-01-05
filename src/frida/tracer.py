@@ -4,6 +4,7 @@ from frida.core import ModuleFunction
 import os
 import fnmatch
 import sys
+import time
 
 
 class TracerProfileBuilder(object):
@@ -99,6 +100,19 @@ class Tracer(object):
             ui.on_trace_handler_load(*args)
         self._repository.on_load(on_load)
 
+        def on_update(function, handler, source):
+            self._script.post_message({
+                'to': "/targets",
+                'name': '+update',
+                'payload': {
+                    'items': [{
+                        'absolute_address': hex(function.absolute_address),
+                        'handler': handler
+                    }]
+                }
+            })
+        self._repository.on_update(on_update)
+
         def on_message(message, data):
             self._reactor.schedule(lambda: self._process_message(message, data, ui))
 
@@ -111,10 +125,9 @@ class Tracer(object):
         self._script.load()
         for chunk in [working_set[i:i+1000] for i in range(0, len(working_set), 1000)]:
             targets = [{
-                    'name': export.name,
-                    'absolute_address': hex(export.absolute_address),
-                    'handler': self._repository.ensure_handler(export)
-                } for export in chunk]
+                    'absolute_address': hex(function.absolute_address),
+                    'handler': self._repository.ensure_handler(function)
+                } for function in chunk]
             self._script.post_message({
                 'to': "/targets",
                 'name': '+add',
@@ -135,12 +148,65 @@ class Tracer(object):
             self._script = None
 
     def _create_trace_script(self):
-        return """
+        return """\
 var started = new Date();
 var pending = [];
 var timer = null;
-function log(message) {
-    send([new Date().getTime() - started.getTime(), message]);
+var handlers = {};
+function onStanza(stanza) {
+    if (stanza.to === "/targets") {
+        if (stanza.name === '+add') {
+            add(stanza.payload.items);
+        } else if (stanza.name === '+update') {
+            update(stanza.payload.items);
+        }
+    }
+
+    recv(onStanza);
+}
+function add(targets) {
+    targets.forEach(function (target) {
+        var targetAddress = target.absolute_address;
+        eval("var handler = " + target.handler);
+        target = null;
+
+        var h = [handler];
+        handlers[targetAddress] = h;
+        function log(message) {
+            send({
+                from: "/events",
+                name: '+add',
+                payload: {
+                    items: [[new Date().getTime() - started.getTime(), targetAddress, message]]
+                }
+            });
+        }
+        var state = {};
+
+        pending.push(function attachToTarget() {
+            Interceptor.attach(ptr(targetAddress), {
+                onEnter: function onEnter(args) {
+                    h[0].onEnter(log, args, state);
+                },
+                onLeave: function onLeave(retval) {
+                    h[0].onLeave(log, retval, state);
+                }
+            });
+        });
+    });
+
+    scheduleNext();
+}
+function update(targets) {
+    targets.forEach(function (target) {
+        eval("var handler = " + target.handler);
+        handlers[target.absolute_address][0] = handler;
+    });
+}
+function scheduleNext() {
+    if (timer === null) {
+        timer = setTimeout(processNext, 0);
+    }
 }
 function processNext() {
     timer = null;
@@ -150,43 +216,26 @@ function processNext() {
         work();
         scheduleNext();
     }
-};
-function scheduleNext() {
-    if (timer === null) {
-        timer = setTimeout(processNext, 0);
-    }
-};
-function onStanza(stanza) {
-    if (stanza.to === "/targets") {
-        if (stanza.name === '+add') {
-            var targets = stanza.payload.items;
-            targets.forEach(function (target) {
-                pending.push(function () {
-                    eval("var handler = " + target.handler);
-                    var state = {};
-                    Interceptor.attach(ptr(target.absolute_address), {
-                        onEnter: function onEnter(args) {
-                            handler.onEnter(log, args, state);
-                        },
-                        onLeave: function onLeave(retval) {
-                            handler.onLeave(log, retval, state);
-                        }
-                    });
-                });
-            });
-
-            scheduleNext();
-        }
-    }
-
-    recv(onStanza);
-};
+}
 recv(onStanza);
 """
 
     def _process_message(self, message, data, ui):
         if message['type'] == 'send':
-            ui.on_trace_events([ message['payload'] ])
+            stanza = message['payload']
+            if stanza['from'] == "/events":
+                if stanza['name'] == '+add':
+                    events = [(timestamp, int(target_address, 16), message) for timestamp, target_address, message in stanza['payload']['items']]
+
+                    ui.on_trace_events(events)
+
+                    target_addresses = set([target_address for timestamp, target_address, message in events])
+                    for target_address in target_addresses:
+                        self._repository.sync_handler(target_address)
+                else:
+                    print(stanza)
+            else:
+                print(stanza)
         else:
             print(message)
 
@@ -194,15 +243,22 @@ class Repository(object):
     def __init__(self):
         self._on_create_callback = None
         self._on_load_callback = None
+        self._on_update_callback = None
 
     def ensure_handler(self, function):
         raise NotImplementedError("not implemented")
+
+    def sync_handler(self, function_address):
+        pass
 
     def on_create(self, callback):
         self._on_create_callback = callback
 
     def on_load(self, callback):
         self._on_load_callback = callback
+
+    def on_update(self, callback):
+        self._on_update_callback = callback
 
     def _notify_create(self, function, handler, source):
         if self._on_create_callback is not None:
@@ -211,6 +267,10 @@ class Repository(object):
     def _notify_load(self, function, handler, source):
         if self._on_load_callback is not None:
             self._on_load_callback(function, handler, source)
+
+    def _notify_update(self, function, handler, source):
+        if self._on_update_callback is not None:
+            self._on_update_callback(function, handler, source)
 
     def _create_stub_handler(self, function):
         return """\
@@ -274,13 +334,15 @@ class FileRepository(Repository):
     def __init__(self):
         super(FileRepository, self).__init__()
         self._handlers = {}
-        self._repo_dir = os.path.join(os.getcwd(), "__frida_handlers__")
+        self._repo_dir = os.path.join(os.getcwd(), "__handlers__")
 
     def ensure_handler(self, function):
-        handler = self._handlers.get(function)
-        if handler is not None:
+        entry = self._handlers.get(function.absolute_address)
+        if entry is not None:
+            (function, handler, handler_file, handler_mtime, last_sync) = entry
             return handler
 
+        handler = None
         handler_files_to_try = []
 
         if isinstance(function, ModuleFunction):
@@ -308,9 +370,32 @@ class FileRepository(Repository):
                 f.write(handler)
             self._notify_create(function, handler, handler_file)
 
-        self._handlers[function] = handler
+        handler_mtime = os.stat(handler_file).st_mtime
+        self._handlers[function.absolute_address] = (function, handler, handler_file, handler_mtime, time.time())
 
         return handler
+
+    def sync_handler(self, function_address):
+        (function, handler, handler_file, handler_mtime, last_sync) = self._handlers[function_address]
+        delta = time.time() - last_sync
+        if delta >= 1.0:
+            changed = False
+
+            try:
+                new_mtime = os.stat(handler_file).st_mtime
+                if new_mtime != handler_mtime:
+                    with open(handler_file, 'r') as f:
+                        new_handler = f.read()
+                    changed = new_handler != handler
+                    handler = new_handler
+                    handler_mtime = new_mtime
+            except:
+                pass
+
+            self._handlers[function_address] = (function, handler, handler_file, handler_mtime, time.time())
+
+            if changed:
+                self._notify_update(function, handler, handler_file)
 
 class UI(object):
     def on_trace_progress(self, operation):
@@ -412,7 +497,7 @@ def main():
 
         def on_trace_events(self, events):
             self._status_updated = False
-            for timestamp, message in events:
+            for timestamp, target_address, message in events:
                 print("%6d ms\t%s" % (timestamp, message))
 
         def on_trace_handler_create(self, function, handler, source):
