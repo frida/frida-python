@@ -17,7 +17,7 @@ class FridaPrebuiltExt(build_ext):
         target = self.get_ext_fullpath(ext.name)
         try:
             os.makedirs(os.path.dirname(target))
-        except Exception, e:
+        except:
             pass
         shutil.copyfile(frida_extension, target)
 
