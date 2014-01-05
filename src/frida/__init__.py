@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 def spawn(command_line, device_id = None):
     return get_device_manager().get_device(device_id).spawn(command_line)
 

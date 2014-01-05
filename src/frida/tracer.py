@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from frida.core import ModuleFunction
 import os
 import fnmatch

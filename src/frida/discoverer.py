@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from frida.core import ModuleFunction
 
 class Discoverer(object):

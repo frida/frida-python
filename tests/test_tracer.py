@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import frida
 from frida.core import Reactor
 from frida.tracer import Tracer, TracerProfileBuilder, MemoryRepository, UI
