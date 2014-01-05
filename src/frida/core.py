@@ -123,6 +123,9 @@ class FunctionContainer(object):
             return f
         return self._do_ensure_function(address)
 
+    def _do_ensure_function(self, address):
+        raise NotImplementedError("not implemented")
+
 class Process(FunctionContainer):
     def __init__(self, session):
         super(Process, self).__init__()
