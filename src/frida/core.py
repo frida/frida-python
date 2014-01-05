@@ -20,7 +20,9 @@ class Reactor(object):
             self.stop()
         with self._lock:
             self._running = True
-            threading.Thread(target=termination_watcher).start()
+            watcher_thread = threading.Thread(target=termination_watcher)
+            watcher_thread.daemon = True
+            watcher_thread.start()
             while self._running:
                 while len(self._pending) > 0:
                     work = self._pending.popleft()
