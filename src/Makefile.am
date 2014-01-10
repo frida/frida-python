@@ -23,13 +23,13 @@ _frida_la_SOURCES = \
 _frida_la_LDFLAGS = \
 	-export-symbols-regex "^(PyInit__frida|init_frida)$$" \
 	-module -avoid-version -shared \
-	$(PYTHON_LDFLAGS) \
-	$(PYFRIDA_LDFLAGS)
+	$(PYFRIDA_LDFLAGS) \
+	$(PYTHON_LDFLAGS)
 _frida_la_LIBADD = \
-	$(PYTHON_LIBS) \
-	$(PYFRIDA_LIBS)
+	$(PYFRIDA_LIBS) \
+	$(PYTHON_LIBS)
 
 AM_CPPFLAGS = \
 	-include config.h \
-	$(PYTHON_CFLAGS) \
-	$(PYFRIDA_CFLAGS)
+	$(PYFRIDA_CFLAGS) \
+	$(PYTHON_CFLAGS)
