@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 
-from frida.core import ModuleFunction
 import os
 import fnmatch
 import sys
 import time
+
+from frida.core import ModuleFunction
 
 
 class TracerProfileBuilder(object):
@@ -412,12 +413,14 @@ class UI(object):
 
 
 def main():
-    import colorama
-    from colorama import Fore, Back, Style
-    import frida
-    from frida.core import Reactor
     from optparse import OptionParser
     import sys
+
+    import colorama
+    from colorama import Fore, Back, Style
+
+    import frida
+    from frida.core import Reactor
 
     colorama.init(autoreset=True)
 

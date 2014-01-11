@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import frida
-from frida.core import Reactor
-from frida.discoverer import Discoverer, UI
 import platform
 import subprocess
 import threading
@@ -10,6 +7,10 @@ try:
     import unittest2 as unittest
 except:
     import unittest
+
+import frida
+from frida.core import Reactor
+from frida.discoverer import Discoverer, UI
 
 
 class TestDiscoverer(unittest.TestCase):

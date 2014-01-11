@@ -2,6 +2,7 @@
 
 from frida.core import ModuleFunction
 
+
 class Discoverer(object):
     def __init__(self, reactor):
         self._reactor = reactor
@@ -148,12 +149,14 @@ class UI(object):
 
 
 def main():
-    import colorama
-    from colorama import Fore, Back, Style
-    import frida
-    from frida.core import Reactor
     from optparse import OptionParser
     import sys
+
+    import colorama
+    from colorama import Fore, Back, Style
+
+    import frida
+    from frida.core import Reactor
 
     colorama.init(autoreset=True)
 
