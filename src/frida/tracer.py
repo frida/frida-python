@@ -225,7 +225,7 @@ recv(onStanza);
             stanza = message['payload']
             if stanza['from'] == "/events":
                 if stanza['name'] == '+add':
-                    events = [(timestamp, int(target_address, 16), message) for timestamp, target_address, message in stanza['payload']['items']]
+                    events = [(timestamp, int(target_address.rstrip("L"), 16), message) for timestamp, target_address, message in stanza['payload']['items']]
 
                     ui.on_trace_events(events)
 
