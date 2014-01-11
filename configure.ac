@@ -21,14 +21,13 @@ if echo $CC | grep -q "gcc"; then
 fi
 
 AM_PATH_PYTHON([2.6],, [AC_ERROR([Python is required])])
+saved_deployment_target=$MACOSX_DEPLOYMENT_TARGET
+unset MACOSX_DEPLOYMENT_TARGET
 PYTHON_CONFIG=${PYTHON}-config
-PYTHON_PREFIX=$($PYTHON_CONFIG --prefix)
-PYTHON_EXEC_PREFIX=$($PYTHON_CONFIG --exec-prefix)
-PYTHON_ABIFLAGS=$($PYTHON -c 'import sys; print(getattr(sys, "abiflags", ""))')
-PYTHON_CFLAGS=$($PYTHON_CONFIG --cflags)
-PYTHON_LDFLAGS=$($PYTHON_CONFIG --ldflags)
+PYTHON_CFLAGS=$($PYTHON_CONFIG --includes)
+PYTHON_LDFLAGS=
 PYTHON_LIBS=$($PYTHON_CONFIG --libs)
-
+export MACOSX_DEPLOYMENT_TARGET=$saved_deployment_target
 AC_SUBST(PYTHON_CFLAGS)
 AC_SUBST(PYTHON_LDFLAGS)
 AC_SUBST(PYTHON_LIBS)
