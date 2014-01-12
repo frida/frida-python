@@ -149,72 +149,29 @@ class UI(object):
 
 
 def main():
-    from optparse import OptionParser
-    import sys
+    from frida.application import ConsoleApplication
 
-    import colorama
-    from colorama import Fore, Back, Style
+    class DiscovererApplication(ConsoleApplication, UI):
+        def _usage(self):
+            return "usage: %prog [options] process-name-or-id"
 
-    import frida
-    from frida.core import Reactor
-
-    colorama.init(autoreset=True)
-
-    usage = "usage: %prog [options] process-name-or-id"
-    parser = OptionParser(usage=usage)
-    (options, args) = parser.parse_args()
-    if len(args) != 1:
-        parser.error("process name or id must be specified")
-    try:
-        target = int(args[0])
-    except:
-        target = args[0]
-
-    class Application(UI):
-        def __init__(self, target):
-            self._target = target
-            self._process = None
+        def _initialize(self, parser, options, args):
             self._discoverer = None
-            self._status_updated = False
-            self._exit_status = 0
-            self._reactor = Reactor(await_enter)
-            self._reactor.schedule(self._start)
 
-        def run(self):
-            self._reactor.run()
-            self._stop()
-            return self._exit_status
+        def _target_specifier(self, parser, options, args):
+            if len(args) != 1:
+                parser.error("process name or id must be specified")
+            return args[0]
 
         def _start(self):
-            try:
-                self._update_status("Attaching...")
-                self._process = frida.attach(self._target)
-            except Exception as e:
-                self._update_status("Failed to attach: %s" % e)
-                self._exit_status = 1
-                self._reactor.schedule(self._stop)
-                return
             self._update_status("Injecting script...")
             self._discoverer = Discoverer(self._reactor)
             self._discoverer.start(self._process, self)
 
         def _stop(self):
-            if self._discoverer is not None:
-                print("Stopping...")
-                self._discoverer.stop()
-                self._discoverer = None
-            if self._process is not None:
-                self._process.detach()
-                self._process = None
-            self._reactor.stop()
-
-        def _update_status(self, message):
-            if self._status_updated:
-                cursor_position = "\033[A"
-            else:
-                cursor_position = ""
-            print("%-80s" % (cursor_position + Style.BRIGHT + message,))
-            self._status_updated = True
+            print("Stopping...")
+            self._discoverer.stop()
+            self._discoverer = None
 
         def on_sample_progress(self, begin, end, total):
             self._update_status("Sampling %d threads: %d through %d..." % (total, begin, end))
@@ -233,18 +190,10 @@ def main():
                 for function, rate in sorted(dynamic_functions, key=lambda item: item[1], reverse=True):
                     print("\t%-10d\t%s" % (rate, function))
 
-            self._reactor.schedule(self._stop)
+            self._exit(0)
 
-    def await_enter():
-        if sys.version_info[0] >= 3:
-            input()
-        else:
-            raw_input()
-
-    app = Application(target)
-    status = app.run()
-    frida.shutdown()
-    sys.exit(status)
+    app = DiscovererApplication()
+    app.run()
 
 
 if __name__ == '__main__':

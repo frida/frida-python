@@ -2,7 +2,6 @@
 
 import os
 import fnmatch
-import sys
 import time
 
 from frida.core import ModuleFunction
@@ -413,65 +412,36 @@ class UI(object):
 
 
 def main():
-    from optparse import OptionParser
-    import sys
+    from frida.application import ConsoleApplication
 
-    import colorama
-    from colorama import Fore, Back, Style
+    class TracerApplication(ConsoleApplication, UI):
+        def _add_options(self, parser):
+            pb = TracerProfileBuilder()
+            def process_builder_arg(option, opt_str, value, parser, method, **kwargs):
+                method(value)
+            parser.add_option("-I", "--include-module=MODULE", help="include MODULE", metavar="MODULE",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_modules,))
+            parser.add_option("-X", "--exclude-module=MODULE", help="exclude MODULE", metavar="MODULE",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.exclude_modules,))
+            parser.add_option("-i", "--include=FUNCTION", help="include FUNCTION", metavar="FUNCTION",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include,))
+            parser.add_option("-x", "--exclude=FUNCTION", help="exclude FUNCTION", metavar="FUNCTION",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.exclude,))
+            self._profile_builder = pb
 
-    import frida
-    from frida.core import Reactor
+        def _usage(self):
+            return "usage: %prog [options] process-name-or-id"
 
-    colorama.init(autoreset=True)
-
-    tp = TracerProfileBuilder()
-    def process_builder_arg(option, opt_str, value, parser, method, **kwargs):
-        method(value)
-
-    usage = "usage: %prog [options] process-name-or-id"
-    parser = OptionParser(usage=usage)
-    parser.add_option("-I", "--include-module=MODULE", help="include MODULE", metavar="MODULE",
-            type='string', action='callback', callback=process_builder_arg, callback_args=(tp.include_modules,))
-    parser.add_option("-X", "--exclude-module=MODULE", help="exclude MODULE", metavar="MODULE",
-            type='string', action='callback', callback=process_builder_arg, callback_args=(tp.exclude_modules,))
-    parser.add_option("-i", "--include=FUNCTION", help="include FUNCTION", metavar="FUNCTION",
-            type='string', action='callback', callback=process_builder_arg, callback_args=(tp.include,))
-    parser.add_option("-x", "--exclude=FUNCTION", help="exclude FUNCTION", metavar="FUNCTION",
-            type='string', action='callback', callback=process_builder_arg, callback_args=(tp.exclude,))
-    (options, args) = parser.parse_args()
-    if len(args) != 1:
-        parser.error("process name or id must be specified")
-    try:
-        target = int(args[0])
-    except:
-        target = args[0]
-    profile = tp.build()
-
-    class Application(UI):
-        def __init__(self, target, profile):
-            self._target = target
-            self._process = None
+        def _initialize(self, parser, options, args):
             self._tracer = None
-            self._profile = profile
-            self._status_updated = False
-            self._exit_status = 0
-            self._reactor = Reactor(await_enter)
-            self._reactor.schedule(self._start)
+            self._profile = self._profile_builder.build()
 
-        def run(self):
-            self._reactor.run()
-            self._stop()
-            return self._exit_status
+        def _target_specifier(self, parser, options, args):
+            if len(args) != 1:
+                parser.error("process name or id must be specified")
+            return args[0]
 
         def _start(self):
-            try:
-                self._update_status("Attaching...")
-                self._process = frida.attach(self._target)
-            except Exception as e:
-                self._update_status("Failed to attach: %s" % e)
-                self._exit_status = 1
-                self._reactor.schedule(self._stop)
-                return
             self._tracer = Tracer(self._reactor, FileRepository(), self._profile)
             targets = self._tracer.start_trace(self._process, self)
             if len(targets) == 1:
@@ -481,14 +451,9 @@ def main():
             self._update_status("Started tracing %d function%s. Press ENTER to stop." % (len(targets), plural))
 
         def _stop(self):
-            if self._tracer is not None:
-                print("Stopping...")
-                self._tracer.stop()
-                self._tracer = None
-            if self._process is not None:
-                self._process.detach()
-                self._process = None
-            self._reactor.stop()
+            print("Stopping...")
+            self._tracer.stop()
+            self._tracer = None
 
         def on_trace_progress(self, operation):
             if operation == 'resolve':
@@ -509,24 +474,8 @@ def main():
         def on_trace_handler_load(self, function, handler, source):
             print("%s: Loaded handler at \"%s\"" % (function, source))
 
-        def _update_status(self, message):
-            if self._status_updated:
-                cursor_position = "\033[A"
-            else:
-                cursor_position = ""
-            print("%-80s" % (cursor_position + Style.BRIGHT + message,))
-            self._status_updated = True
-
-    def await_enter():
-        if sys.version_info[0] >= 3:
-            input()
-        else:
-            raw_input()
-
-    app = Application(target, profile)
-    status = app.run()
-    frida.shutdown()
-    sys.exit(status)
+    app = TracerApplication()
+    app.run()
 
 
 if __name__ == '__main__':
