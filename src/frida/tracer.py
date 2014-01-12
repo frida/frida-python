@@ -435,16 +435,16 @@ def main():
             pb = TracerProfileBuilder()
             def process_builder_arg(option, opt_str, value, parser, method, **kwargs):
                 method(value)
-            parser.add_option("-I", "--include-module=MODULE", help="include MODULE", metavar="MODULE",
+            parser.add_option("-I", "--include-module", help="include MODULE", metavar="MODULE",
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_modules,))
-            parser.add_option("-X", "--exclude-module=MODULE", help="exclude MODULE", metavar="MODULE",
+            parser.add_option("-X", "--exclude-module", help="exclude MODULE", metavar="MODULE",
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.exclude_modules,))
-            parser.add_option("-i", "--include=FUNCTION", help="include FUNCTION", metavar="FUNCTION",
+            parser.add_option("-i", "--include", help="include FUNCTION", metavar="FUNCTION",
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include,))
-            parser.add_option("-x", "--exclude=FUNCTION", help="exclude FUNCTION", metavar="FUNCTION",
+            parser.add_option("-x", "--exclude", help="exclude FUNCTION", metavar="FUNCTION",
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.exclude,))
-            parser.add_option("-a", "--include=MODULE!OFFSET", help="include MODULE!OFFSET", metavar="REL_ADDRESS",
-                    type='string', action='callback', callback=process_builder_arg, callback_args=(tp.include_rel_address,))
+            parser.add_option("-a", "--add", help="add MODULE!OFFSET", metavar="MODULE!OFFSET",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_rel_address,))
             self._profile_builder = pb
 
         def _usage(self):
