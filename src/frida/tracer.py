@@ -3,11 +3,14 @@
 import os
 import fnmatch
 import time
+import re
 
 from frida.core import ModuleFunction
 
 
 class TracerProfileBuilder(object):
+    _RE_REL_ADDRESS = re.compile("(?P<module>[^\s!]+)!(?P<offset>(0x)?[0-9a-fA-F]+)")
+
     def __init__(self):
         self._spec = []
 
@@ -30,6 +33,15 @@ class TracerProfileBuilder(object):
         for f in function_name_globs:
             self._spec.append(("exclude", "function", f))
         return self
+        
+    def include_rel_address(self, *address_rel_offsets):
+        for f in address_rel_offsets:
+            m = TracerProfileBuilder._RE_REL_ADDRESS.search(f)
+            if m is None:
+                continue
+            self._spec.append(("include", "rel_address", 
+                               {'module':m.group('module'), 
+                                'offset':int(m.group('offset'), base=16)}))
 
     def build(self):
         return TracerProfile(self._spec)
@@ -41,17 +53,21 @@ class TracerProfile(object):
     def resolve(self, process):
         all_modules = process.enumerate_modules()
         working_set = set()
-        for (operation, scope, glob) in self._spec:
+        for (operation, scope, param) in self._spec:
             if scope == "module":
                 if operation == "include":
-                    working_set = working_set.union(self._include_module(glob, all_modules))
+                    working_set = working_set.union(self._include_module(param, all_modules))
                 elif operation == "exclude":
-                    working_set = self._exclude_module(glob, working_set)
+                    working_set = self._exclude_module(param, working_set)
             elif scope == "function":
                 if operation == "include":
-                    working_set = working_set.union(self._include_function(glob, all_modules))
+                    working_set = working_set.union(self._include_function(param, all_modules))
                 elif operation == "exclude":
-                    working_set = self._exclude_function(glob, working_set)
+                    working_set = self._exclude_function(param, working_set)
+            elif scope == 'rel_address':
+                if operation == "include":
+                    abs_address = process.find_base_address(param['module']) + param['offset']
+                    working_set.add(process.ensure_function(abs_address))
         return list(working_set)
 
     def _include_module(self, glob, all_modules):
@@ -427,6 +443,8 @@ def main():
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include,))
             parser.add_option("-x", "--exclude=FUNCTION", help="exclude FUNCTION", metavar="FUNCTION",
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.exclude,))
+            parser.add_option("-a", "--include=MODULE!OFFSET", help="include MODULE!OFFSET", metavar="REL_ADDRESS",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(tp.include_rel_address,))
             self._profile_builder = pb
 
         def _usage(self):
