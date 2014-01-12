@@ -1,54 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import bisect
-import collections
 import fnmatch
 import numbers
 import sys
 import threading
 
-
-class Reactor(object):
-    def __init__(self, run_until_return):
-        self._running = False
-        self._run_until_return = run_until_return
-        self._pending = collections.deque([])
-        self._lock = threading.Lock()
-        self._cond = threading.Condition(self._lock)
-
-    def run(self):
-        with self._lock:
-            self._running = True
-
-        def termination_watcher():
-            self._run_until_return()
-            self.stop()
-        watcher_thread = threading.Thread(target=termination_watcher)
-        watcher_thread.daemon = True
-        watcher_thread.start()
-
-        running = True
-        while running:
-            work = None
-            with self._lock:
-                if len(self._pending) > 0:
-                    work = self._pending.popleft()
-            if work is not None:
-                work()
-            with self._lock:
-                while self._running and len(self._pending) == 0:
-                    self._cond.wait()
-                running = self._running
-
-    def stop(self):
-        with self._lock:
-            self._running = False
-            self._cond.notify()
-
-    def schedule(self, f):
-        with self._lock:
-            self._pending.append(f)
-            self._cond.notify()
 
 class DeviceManager(object):
     def __init__(self, manager):

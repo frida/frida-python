@@ -9,7 +9,7 @@ except:
     import unittest
 
 import frida
-from frida.core import Reactor
+from frida.application import Reactor
 from frida.tracer import Tracer, TracerProfileBuilder, MemoryRepository, UI
 
 
