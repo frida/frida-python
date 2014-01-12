@@ -57,6 +57,7 @@ setup(
     packages=['frida'],
     entry_points={
         'console_scripts': [
+            "frida-ps = frida.ps:main",
             "frida-discover = frida.discoverer:main",
             "frida-trace = frida.tracer:main"
         ]
