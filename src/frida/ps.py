@@ -6,7 +6,12 @@ def main():
             return "usage: %prog [options]"
 
         def _start(self):
-            processes = self._device.enumerate_processes()
+            try:
+                processes = self._device.enumerate_processes()
+            except Exception as e:
+                self._update_status("Failed to enumerate processes: %s" % e)
+                self._exit(1)
+                return
             pid_column_width = max(map(lambda p: len("%d" % p.pid), processes))
             header_format = "%" + str(pid_column_width) + "s %s"
             print(header_format % ("PID", "NAME"))
