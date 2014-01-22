@@ -1,12 +1,22 @@
 SUBDIRS = frida
 
-bin_SCRIPTS = frida-trace
+bin_SCRIPTS = \
+	frida-ps \
+	frida-discover \
+	frida-trace
 CLEANFILES = $(bin_SCRIPTS)
-EXTRA_DIST = frida-trace.in
+EXTRA_DIST = \
+	frida-ps.in \
+	frida-discover.in \
+	frida-trace.in
 
 do_substitution = sed -e 's,[@]pythondir[@],$(pythondir),g' \
 	-e 's,[@]PACKAGE[@],$(PACKAGE),g' \
 	-e 's,[@]VERSION[@],$(VERSION),g'
+
+frida-ps: frida-ps.in Makefile
+	$(do_substitution) < $(srcdir)/frida-ps.in > $@
+	chmod +x $@
 
 frida-discover: frida-discover.in Makefile
 	$(do_substitution) < $(srcdir)/frida-discover.in > $@

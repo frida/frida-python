@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import frida
 import platform
 import subprocess
 import sys
@@ -9,6 +8,8 @@ try:
     import unittest2 as unittest
 except:
     import unittest
+
+import frida
 
 
 class TestCore(unittest.TestCase):

@@ -21,9 +21,8 @@ if echo $CC | grep -q "gcc"; then
 fi
 
 AM_PATH_PYTHON([2.6],, [AC_ERROR([Python is required])])
-PYTHON_CONFIG=${PYTHON}-config
-PYTHON_PREFIX=$($PYTHON_CONFIG --prefix)
-PYTHON_EXEC_PREFIX=$($PYTHON_CONFIG --exec-prefix)
+PYTHON_PREFIX=$($PYTHON -c 'import sys; print(sys.prefix)')
+PYTHON_EXEC_PREFIX=$($PYTHON -c 'import sys; print(sys.exec_prefix)')
 PYTHON_ABIFLAGS=$($PYTHON -c 'import sys; print(getattr(sys, "abiflags", ""))')
 PYTHON_CFLAGS=""
 PYTHON_LDFLAGS=""
