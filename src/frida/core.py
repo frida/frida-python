@@ -109,15 +109,15 @@ class Process(FunctionContainer):
     """
     var modules = [];
     Process.enumerateModules({
-        onMatch: function (name, baseAddress, size, path) {
-            modules.push({name: name, base_address: baseAddress.toString(), size: size, path: path});
+        onMatch: function (module) {
+            modules.push(module);
         },
         onComplete: function () {
             send(modules);
         }
     });
     """)
-            self._modules = [Module(data['name'], int(data['base_address'], 16), data['size'], data['path'], self.session) for data in _execute_script(script)]
+            self._modules = [Module(data['name'], int(data['base'], 16), data['size'], data['path'], self.session) for data in _execute_script(script)]
         return self._modules
 
     """
@@ -128,15 +128,15 @@ class Process(FunctionContainer):
 """
 var ranges = [];
 Process.enumerateRanges(\"%s\", {
-    onMatch: function (baseAddress, size, protection) {
-        ranges.push({base_address: baseAddress.toString(), size: size, protection: protection});
+    onMatch: function (range) {
+        ranges.push(range);
     },
     onComplete: function () {
         send(ranges);
     }
 });
 """ % protection)
-        return [Range(int(data['base_address'], 16), data['size'], data['protection']) for data in _execute_script(script)]
+        return [Range(int(data['base'], 16), data['size'], data['protection']) for data in _execute_script(script)]
 
     def _exec_script(self, script_source, post_hook = None):
         script = self.session.create_script(script_source)
@@ -229,8 +229,10 @@ class Module(FunctionContainer):
 """
 var exports = [];
 Module.enumerateExports(\"%s\", {
-    onMatch: function (name, address) {
-        exports.push({name: name, address: address.toString()});
+    onMatch: function (exp) {
+        if (exp.type === 'function') {
+            exports.push(exp);
+        }
     },
     onComplete: function () {
         send(exports);
@@ -252,15 +254,15 @@ Module.enumerateExports(\"%s\", {
 """
 var ranges = [];
 Module.enumerateRanges(\"%s\", \"%s\", {
-    onMatch: function (baseAddress, size, protection) {
-        ranges.push({base_address: baseAddress.toString(), size: size, protection: protection});
+    onMatch: function (range) {
+        ranges.push(range);
     },
     onComplete: function () {
         send(ranges);
     }
 });
 """ % (self.name, protection))
-        return [Range(int(data['base_address'], 16), data['size'], data['protection']) for data in _execute_script(script)]
+        return [Range(int(data['base'], 16), data['size'], data['protection']) for data in _execute_script(script)]
 
     def _do_ensure_function(self, relative_address):
         if self._exports is None:
