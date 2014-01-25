@@ -149,7 +149,7 @@ class Modules:
     def _sync(self, payload):
         modules = []
         for item in payload['items']:
-            modules.append(Module(item['name'], int(item['address'], 16), item['size']))
+            modules.append(Module(item['name'], int(item['base'], 16), item['size']))
         modules.sort(lambda x, y: x.address - y.address)
         self._modules = modules
         self._indices = [ m.address for m in modules ]
@@ -411,8 +411,8 @@ var onStanza = function onStanza(stanza) {
 var sendModules = function sendModules(callback) {
     var modules = [];
     Process.enumerateModules({
-        onMatch: function onMatch(name, address, size, path) {
-            modules.push({ name: name, address: "0x" + address.toString(16), size: size });
+        onMatch: function onMatch(module) {
+            modules.push(module);
         },
         onComplete: function onComplete() {
             send({ name: '+sync', from: "/process/modules", payload: { items: modules } });
