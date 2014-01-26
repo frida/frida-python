@@ -33,7 +33,7 @@ class TracerProfileBuilder(object):
         for f in function_name_globs:
             self._spec.append(("exclude", "function", f))
         return self
-        
+
     def include_rel_address(self, *address_rel_offsets):
         for f in address_rel_offsets:
             m = TracerProfileBuilder._RE_REL_ADDRESS.search(f)
@@ -295,7 +295,7 @@ class Repository(object):
  * This stub is somewhat dumb. Future verions of Frida could auto-generate
  * based on OS API references, manpages, etc. (Pull-requests appreciated!)
  *
- * For full API reference, see: https://github.com/frida/frida-gum/wiki/Reference:-Script
+ * For full API reference, see: http://www.frida.re/docs/javascript-api/
  */
 
 {
