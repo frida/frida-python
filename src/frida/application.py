@@ -12,8 +12,14 @@ from colorama import Style
 import frida
 
 
+def await_enter():
+    if sys.version_info[0] >= 3:
+        input()
+    else:
+        raw_input()
+
 class ConsoleApplication(object):
-    def __init__(self):
+    def __init__(self, run_until_return=await_enter):
         colorama.init(autoreset=True)
 
         parser = OptionParser(usage=self._usage())
@@ -30,7 +36,7 @@ class ConsoleApplication(object):
         self._process = None
         self._schedule_on_process_detached = lambda: self._reactor.schedule(self._on_process_detached)
         self._started = False
-        self._reactor = Reactor(await_enter)
+        self._reactor = Reactor(run_until_return)
         self._exit_status = None
         self._status_updated = False
 
@@ -129,12 +135,6 @@ def find_device(type):
         if device.type == type:
             return device
     return None
-
-def await_enter():
-    if sys.version_info[0] >= 3:
-        input()
-    else:
-        raw_input()
 
 
 class Reactor(object):
