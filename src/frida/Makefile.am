@@ -4,6 +4,7 @@ frida_PYTHON = \
 	application.py \
 	ps.py \
 	discoverer.py \
-	tracer.py
+	tracer.py \
+	repl.py
 
 fridadir = $(pythondir)/frida

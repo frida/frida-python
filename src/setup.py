@@ -59,7 +59,8 @@ setup(
         'console_scripts': [
             "frida-ps = frida.ps:main",
             "frida-discover = frida.discoverer:main",
-            "frida-trace = frida.tracer:main"
+            "frida-trace = frida.tracer:main",
+            "frida-repl = frida.repl:main"
         ]
     },
     ext_modules=[Extension('_frida', [])],
