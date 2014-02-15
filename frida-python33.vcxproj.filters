@@ -26,10 +26,19 @@
     <None Include="src\frida\core.py">
       <Filter>Source Files\frida</Filter>
     </None>
+    <None Include="src\frida\application.py">
+      <Filter>Source Files\frida</Filter>
+    </None>
+    <None Include="src\frida\ps.py">
+      <Filter>Source Files\frida</Filter>
+    </None>
     <None Include="src\frida\discoverer.py">
       <Filter>Source Files\frida</Filter>
     </None>
     <None Include="src\frida\tracer.py">
+      <Filter>Source Files\frida</Filter>
+    </None>
+    <None Include="src\frida\repl.py">
       <Filter>Source Files\frida</Filter>
     </None>
   </ItemGroup>
