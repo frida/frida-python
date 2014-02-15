@@ -80,18 +80,18 @@ recv(onExpression);
                 self._idle.wait()
                 expression = ""
                 line = ""
-                while len(line.strip()) == 0 or line.endswith(" "):
+                while len(expression) == 0 or line.endswith("\\"):
                     try:
-                        if len(expression.strip()) == 0:
-                            line = input_impl(">> ")
+                        if len(expression) == 0:
+                            line = input_impl(">>> ")
                         else:
-                            line = input_impl(" > ")
+                            line = input_impl("... ")
                     except EOFError:
                         return
                     if len(line.strip()) > 0:
                         if len(expression) > 0:
                             expression += "\n"
-                        expression += line
+                        expression += line.rstrip("\\")
 
                 readline.add_history(expression)
                 self._idle.clear()
