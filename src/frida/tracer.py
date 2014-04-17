@@ -362,11 +362,11 @@ class FileRepository(Repository):
         handler_files_to_try = []
 
         if isinstance(function, ModuleFunction):
-            module_dir = os.path.join(self._repo_dir, function.module.name)
-            module_handler_file = os.path.join(module_dir, function.name + ".js")
+            module_dir = os.path.join(self._repo_dir, to_filename(function.module.name))
+            module_handler_file = os.path.join(module_dir, to_filename(function.name) + ".js")
             handler_files_to_try.append(module_handler_file)
 
-        any_module_handler_file = os.path.join(self._repo_dir, function.name + ".js")
+        any_module_handler_file = os.path.join(self._repo_dir, to_filename(function.name) + ".js")
         handler_files_to_try.append(any_module_handler_file)
 
         for handler_file in handler_files_to_try:
@@ -494,6 +494,15 @@ def main():
 
     app = TracerApplication()
     app.run()
+
+def to_filename(name):
+    result = ""
+    for c in name:
+        if c.isalnum() or c == ".":
+            result += c
+        else:
+            result += "_"
+    return result
 
 
 if __name__ == '__main__':
