@@ -25,6 +25,8 @@ class ConsoleApplication(object):
         parser = OptionParser(usage=self._usage())
         parser.add_option("-U", "--usb", help="connect to USB device",
                 action='store_const', const='tether', dest="device_type", default='local')
+        parser.add_option("-R", "--remote", help="connect to remote device",
+                action='store_const', const='remote', dest="device_type", default='local')
         self._add_options(parser)
 
         (options, args) = parser.parse_args()
