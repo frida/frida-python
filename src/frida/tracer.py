@@ -507,6 +507,8 @@ def to_filename(name):
 
 def to_handler_filename(name):
     full_filename = to_filename(name)
+    if len(full_filename) <= 41:
+        return full_filename + ".js"
     crc = binascii.crc32(full_filename.encode())
     return full_filename[0:32] + "_%08x.js" % crc
 
