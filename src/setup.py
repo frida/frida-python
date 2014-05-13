@@ -24,7 +24,7 @@ class FridaPrebuiltExt(build_ext):
 setup(
     name='frida',
     version=version,
-    description="Inject JavaScript to explore native apps on Windows, Mac, Linux and iOS",
+    description="Inject JavaScript to explore native apps on Windows, Mac, Linux, iOS and Android",
     long_description=long_description,
     author="Frida Developers",
     author_email="ole.andre.ravnas@tillitech.com",
@@ -34,7 +34,7 @@ setup(
     ],
     license="GNU LGPLv2+",
     zip_safe=True,
-    keywords="frida debugger inject javascript windows mac ios iphone ipad",
+    keywords="frida debugger inject javascript windows mac linux ios iphone ipad android",
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Environment :: Console",
