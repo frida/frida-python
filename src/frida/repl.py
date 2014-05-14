@@ -1,13 +1,18 @@
 def main():
     from frida.application import ConsoleApplication
     import json
-    import readline
+    try:
+        import readline
+        HAVE_READLINE = True
+    except:
+        HAVE_READLINE = False
     import sys
     import threading
 
     class REPLApplication(ConsoleApplication):
         def __init__(self):
-            readline.parse_and_bind("tab: complete")
+            if HAVE_READLINE:
+                readline.parse_and_bind("tab: complete")
             self._idle = threading.Event()
             super(REPLApplication, self).__init__(self._process_input)
 
@@ -93,7 +98,8 @@ recv(onExpression);
                             expression += "\n"
                         expression += line.rstrip("\\")
 
-                readline.add_history(expression)
+                if HAVE_READLINE:
+                    readline.add_history(expression)
                 self._idle.clear()
                 self._reactor.schedule(lambda: self._send_expression(expression))
 
