@@ -4,7 +4,6 @@ import os
 import fnmatch
 import time
 import re
-import binascii
 
 from frida.core import ModuleFunction
 
@@ -364,10 +363,10 @@ class FileRepository(Repository):
 
         if isinstance(function, ModuleFunction):
             module_dir = os.path.join(self._repo_dir, to_filename(function.module.name))
-            module_handler_file = os.path.join(module_dir, to_handler_filename(function.name))
+            module_handler_file = os.path.join(module_dir, to_filename(function.name) + ".js")
             handler_files_to_try.append(module_handler_file)
 
-        any_module_handler_file = os.path.join(self._repo_dir, to_handler_filename(function.name))
+        any_module_handler_file = os.path.join(self._repo_dir, to_filename(function.name) + ".js")
         handler_files_to_try.append(any_module_handler_file)
 
         for handler_file in handler_files_to_try:
@@ -505,12 +504,6 @@ def to_filename(name):
             result += "_"
     return result
 
-def to_handler_filename(name):
-    full_filename = to_filename(name)
-    if len(full_filename) <= 41:
-        return full_filename + ".js"
-    crc = binascii.crc32(full_filename.encode())
-    return full_filename[0:32] + "_%08x.js" % crc
 
 if __name__ == '__main__':
     main()
