@@ -32,7 +32,7 @@ setup(
     install_requires=[
         "colorama >= 0.2.7"
     ],
-    license="GNU LGPLv2+",
+    license="wxWindows Library Licence, Version 3.1",
     zip_safe=True,
     keywords="frida debugger inject javascript windows mac linux ios iphone ipad android",
     classifiers=[
@@ -42,7 +42,7 @@ setup(
         "Environment :: Win32 (MS Windows)",
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
+        "License :: OSI Approved :: wxWindows Library Licence, Version 3.1",
         "Natural Language :: English",
         "Operating System :: MacOS :: MacOS X",
         "Operating System :: Microsoft :: Windows",
