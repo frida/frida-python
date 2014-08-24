@@ -73,10 +73,10 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.3\site-packages\</OutDir>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.3\site-packages\</OutDir>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.3\site-packages\</OutDir>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.3\site-packages\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.4\site-packages\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.4\site-packages\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.4\site-packages\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.4\site-packages\</OutDir>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">_frida</TargetName>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">_frida</TargetName>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">_frida</TargetName>
