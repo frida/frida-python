@@ -203,10 +203,10 @@ function add(targets) {
         pending.push(function attachToTarget() {
             Interceptor.attach(ptr(targetAddress), {
                 onEnter: function onEnter(args) {
-                    h[0].onEnter(log, args, state);
+                    h[0].onEnter.call(this, log, args, state);
                 },
                 onLeave: function onLeave(retval) {
-                    h[0].onLeave(log, retval, state);
+                    h[0].onLeave.call(this, log, retval, state);
                 }
             });
         });
