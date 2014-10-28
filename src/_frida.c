@@ -502,7 +502,8 @@ PyDeviceManager_dealloc (PyDeviceManager * self)
   {
     g_object_set_data (G_OBJECT (self->handle), "pyobject", NULL);
     Py_BEGIN_ALLOW_THREADS
-    g_object_unref (self->handle);
+    frida_device_manager_close_sync (self->handle);
+    frida_unref (self->handle);
     Py_END_ALLOW_THREADS
   }
 
@@ -668,7 +669,7 @@ PyDevice_from_handle (FridaDevice * handle)
   }
   else
   {
-    g_object_unref (handle);
+    frida_unref (handle);
     Py_INCREF (device);
   }
 
@@ -705,7 +706,7 @@ PyDevice_dealloc (PyDevice * self)
   {
     g_object_set_data (G_OBJECT (self->handle), "pyobject", NULL);
     Py_BEGIN_ALLOW_THREADS
-    g_object_unref (self->handle);
+    frida_unref (self->handle);
     Py_END_ALLOW_THREADS
   }
 
@@ -1054,7 +1055,7 @@ PySession_from_handle (FridaSession * handle)
   }
   else
   {
-    g_object_unref (handle);
+    frida_unref (handle);
     Py_INCREF (session);
   }
 
@@ -1083,7 +1084,7 @@ PySession_dealloc (PySession * self)
   {
     g_object_set_data (G_OBJECT (self->handle), "pyobject", NULL);
     Py_BEGIN_ALLOW_THREADS
-    g_object_unref (self->handle);
+    frida_unref (self->handle);
     Py_END_ALLOW_THREADS
   }
 
@@ -1234,7 +1235,7 @@ PyScript_from_handle (FridaScript * handle)
   }
   else
   {
-    g_object_unref (handle);
+    frida_unref (handle);
     Py_INCREF (script);
   }
 
@@ -1263,7 +1264,7 @@ PyScript_dealloc (PyScript * self)
   {
     g_object_set_data (G_OBJECT (self->handle), "pyobject", NULL);
     Py_BEGIN_ALLOW_THREADS
-    g_object_unref (self->handle);
+    frida_unref (self->handle);
     Py_END_ALLOW_THREADS
   }
 
