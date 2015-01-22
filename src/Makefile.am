@@ -12,7 +12,9 @@ EXTRA_DIST = \
 	frida-trace.in \
 	frida-repl.in
 
-do_substitution = sed -e 's,[@]pythondir[@],$(pythondir),g' \
+do_substitution = sed \
+	-e 's,[@]PYTHON[@],$(PYTHON),g' \
+	-e 's,[@]pythondir[@],$(pythondir),g' \
 	-e 's,[@]PACKAGE[@],$(PACKAGE),g' \
 	-e 's,[@]VERSION[@],$(VERSION),g'
 
