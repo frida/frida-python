@@ -805,18 +805,14 @@ PyDevice_spawn (PyDevice * self, PyObject * args)
     }
   }
 
-#ifdef HAVE_MAC
-  envp = *_NSGetEnviron ();
+  envp = g_get_environ ();
   envp_length = g_strv_length (envp);
-#else
-  envp = NULL;
-  envp_length = 0;
-#endif
 
   Py_BEGIN_ALLOW_THREADS
   pid = frida_device_spawn_sync (self->handle, argv[0], argv, argc, envp, envp_length, &error);
   Py_END_ALLOW_THREADS
 
+  g_strfreev (envp);
   g_strfreev (argv);
 
   if (error != NULL)
