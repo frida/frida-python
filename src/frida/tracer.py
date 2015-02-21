@@ -449,16 +449,14 @@ def main():
             self._profile_builder = pb
 
         def _usage(self):
-            return "usage: %prog [options] process-name-or-id"
+            return "usage: %prog [options] target"
 
         def _initialize(self, parser, options, args):
             self._tracer = None
             self._profile = self._profile_builder.build()
 
-        def _target_specifier(self, parser, options, args):
-            if len(args) != 1:
-                parser.error("process name or id must be specified")
-            return args[0]
+        def _needs_target(self):
+            return True
 
         def _start(self):
             self._tracer = Tracer(self._reactor, FileRepository(), self._profile)

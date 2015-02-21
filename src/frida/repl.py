@@ -17,12 +17,10 @@ def main():
             super(REPLApplication, self).__init__(self._process_input)
 
         def _usage(self):
-            return "usage: %prog [options]"
+            return "usage: %prog [options] target"
 
-        def _target_specifier(self, parser, options, args):
-            if len(args) != 1:
-                parser.error("process name or id must be specified")
-            return args[0]
+        def _needs_target(self):
+            return True
 
         def _start(self):
             def on_message(message, data):
