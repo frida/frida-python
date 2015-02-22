@@ -28,7 +28,7 @@ def main():
             def on_message(message, data):
                 self._reactor.schedule(lambda: self._process_message(message, data))
             self._script = self._process.session.create_script(self._create_repl_script())
-            self._script.on("message", on_message)
+            self._script.on('message', on_message)
             self._script.load()
             self._idle.set()
 

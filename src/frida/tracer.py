@@ -17,22 +17,22 @@ class TracerProfileBuilder(object):
 
     def include_modules(self, *module_name_globs):
         for m in module_name_globs:
-            self._spec.append(("include", "module", m))
+            self._spec.append(('include', 'module', m))
         return self
 
     def exclude_modules(self, *module_name_globs):
         for m in module_name_globs:
-            self._spec.append(("exclude", "module", m))
+            self._spec.append(("exclude", 'module', m))
         return self
 
     def include(self, *function_name_globs):
         for f in function_name_globs:
-            self._spec.append(("include", "function", f))
+            self._spec.append(('include', 'function', f))
         return self
 
     def exclude(self, *function_name_globs):
         for f in function_name_globs:
-            self._spec.append(("exclude", "function", f))
+            self._spec.append(("exclude", 'function', f))
         return self
 
     def include_rel_address(self, *address_rel_offsets):
@@ -40,9 +40,9 @@ class TracerProfileBuilder(object):
             m = TracerProfileBuilder._RE_REL_ADDRESS.search(f)
             if m is None:
                 continue
-            self._spec.append(("include", "rel_address", 
-                               {'module':m.group('module'), 
-                                'offset':int(m.group('offset'), base=16)}))
+            self._spec.append(('include', "rel_address",
+                               {'module': m.group('module'),
+                                'offset': int(m.group('offset'), base=16)}))
 
     def build(self):
         return TracerProfile(self._spec)
@@ -55,18 +55,18 @@ class TracerProfile(object):
         all_modules = process.enumerate_modules()
         working_set = set()
         for (operation, scope, param) in self._spec:
-            if scope == "module":
-                if operation == "include":
+            if scope == 'module':
+                if operation == 'include':
                     working_set = working_set.union(self._include_module(param, all_modules))
                 elif operation == "exclude":
                     working_set = self._exclude_module(param, working_set)
-            elif scope == "function":
-                if operation == "include":
+            elif scope == 'function':
+                if operation == 'include':
                     working_set = working_set.union(self._include_function(param, all_modules))
                 elif operation == "exclude":
                     working_set = self._exclude_function(param, working_set)
             elif scope == 'rel_address':
-                if operation == "include":
+                if operation == 'include':
                     abs_address = process.find_base_address(param['module']) + param['offset']
                     working_set.add(process.ensure_function(abs_address))
         return list(working_set)
@@ -138,7 +138,7 @@ class Tracer(object):
         source = self._create_trace_script()
         ui.on_trace_progress('upload')
         self._script = process.session.create_script(source)
-        self._script.on("message", on_message)
+        self._script.on('message', on_message)
         self._script.load()
         for chunk in [working_set[i:i+1000] for i in range(0, len(working_set), 1000)]:
             targets = [{
