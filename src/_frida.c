@@ -780,8 +780,8 @@ PyDevice_spawn (PyDevice * self, PyObject * args)
         Py_DECREF (element);
         element = PyUnicode_AsUTF8String (element);
       }
-      if (PyString_Check (element))
-        argv[i] = g_strdup (PyString_AsString (element));
+      if (PyBytes_Check (element))
+        argv[i] = g_strdup (PyBytes_AsString (element));
       Py_DECREF (element);
 
       if (argv[i] == NULL)
