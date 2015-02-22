@@ -127,6 +127,7 @@ static PyObject * PyDevice_repr (PyDevice * self);
 static PyObject * PyDevice_enumerate_processes (PyDevice * self);
 static PyObject * PyDevice_spawn (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_resume (PyDevice * self, PyObject * args);
+static PyObject * PyDevice_kill (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_attach (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_on (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_off (PyDevice * self, PyObject * args);
@@ -180,6 +181,7 @@ static PyMethodDef PyDevice_methods[] =
   { "enumerate_processes", (PyCFunction) PyDevice_enumerate_processes, METH_NOARGS, "Enumerate processes." },
   { "spawn", (PyCFunction) PyDevice_spawn, METH_VARARGS, "Spawn a process into an attachable state." },
   { "resume", (PyCFunction) PyDevice_resume, METH_VARARGS, "Resume a process from the attachable state." },
+  { "kill", (PyCFunction) PyDevice_kill, METH_VARARGS, "Kill a PID." },
   { "attach", (PyCFunction) PyDevice_attach, METH_VARARGS, "Attach to a PID." },
   { "on", (PyCFunction) PyDevice_on, METH_VARARGS, "Add an event handler." },
   { "off", (PyCFunction) PyDevice_off, METH_VARARGS, "Remove an event handler." },
@@ -838,6 +840,28 @@ PyDevice_resume (PyDevice * self, PyObject * args)
 
   Py_BEGIN_ALLOW_THREADS
   frida_device_resume_sync (self->handle, (guint) pid, &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+  {
+    PyErr_SetString (PyExc_SystemError, error->message);
+    g_error_free (error);
+    return NULL;
+  }
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyDevice_kill (PyDevice * self, PyObject * args)
+{
+  long pid;
+  GError * error = NULL;
+
+  if (!PyArg_ParseTuple (args, "l", &pid))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_device_kill_sync (self->handle, (guint) pid, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
   {

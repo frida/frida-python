@@ -60,7 +60,10 @@ class Device(object):
         return self._device.spawn(command_line)
 
     def resume(self, target):
-        return self._device.resume(self._pid_of(target))
+        self._device.resume(self._pid_of(target))
+
+    def kill(self, target):
+        self._device.kill(self._pid_of(target))
 
     def attach(self, target):
         return Process(self._device.attach(self._pid_of(target)))
