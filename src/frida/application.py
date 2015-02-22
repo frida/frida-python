@@ -47,6 +47,7 @@ class ConsoleApplication(object):
         self._device = None
         self._schedule_on_device_lost = lambda: self._reactor.schedule(self._on_device_lost)
         self._spawned_pid = None
+        self._spawned_argv = None
         self._process = None
         self._schedule_on_process_detached = lambda: self._reactor.schedule(self._on_process_detached)
         self._started = False
@@ -134,8 +135,9 @@ class ConsoleApplication(object):
                 target_type, target_value = self._target
                 if target_type == 'file':
                     argv = target_value
-                    self._update_status("Spawning: %s" % " ".join(argv))
+                    self._update_status("Spawning `%s`..." % " ".join(argv))
                     self._spawned_pid = self._device.spawn(argv)
+                    self._spawned_argv = argv
                     attach_target = self._spawned_pid
                 else:
                     attach_target = target_value
