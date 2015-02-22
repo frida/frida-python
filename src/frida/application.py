@@ -3,6 +3,7 @@
 import collections
 from optparse import OptionParser
 import os
+import platform
 import sys
 import threading
 import time
@@ -180,7 +181,11 @@ def find_device(type):
     return None
 
 def infer_target(target_value):
-    if target_value.startswith('.') or target_value.startswith(os.path.sep):
+    if target_value.startswith('.') or target_value.startswith(os.path.sep) \
+            or (platform.system() == 'Windows' \
+                and target_value[0].isalpha() \
+                and target_value[1] == ":" \
+                and target_value[2] == "\\"):
         target_type = 'file'
         target_value = [target_value]
     else:
