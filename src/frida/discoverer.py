@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
+from frida.application import await_enter
 from frida.core import ModuleFunction
+import threading
 
 
 class Discoverer(object):
@@ -13,8 +15,15 @@ class Discoverer(object):
             self._reactor.schedule(lambda: self._process_message(message, data, process, ui))
         source = self._create_discover_script()
         self._script = process.session.create_script(source)
-        self._script.on("message", on_message)
+        self._script.on('message', on_message)
         self._script.load()
+
+    def stop(self):
+        self._script.post_message({
+            'to': "/sampler",
+            'name': '+stop',
+            'payload': {}
+        })
 
     def stop(self):
         if self._script is not None:
@@ -25,90 +34,74 @@ class Discoverer(object):
             self._script = None
 
     def _create_discover_script(self):
-        return """
-var Sampler = function Sampler() {
-    var total = 0;
-    var pending = [];
-    var active = [];
-    var samples = {};
-    Process.enumerateThreads({
-        onMatch: function (thread) {
-            pending.push(thread);
-        },
-        onComplete: function () {
-            var currentThreadId = Process.getCurrentThreadId();
-            pending = pending.filter(function (thread) {
-                return thread.id !== currentThreadId;
-            });
-            total = pending.length;
-            var processNext = function processNext() {
-                active.forEach(function (thread) {
-                    Stalker.unfollow(thread.id);
-                });
-                active = pending.splice(0, 4);
-                if (active.length > 0) {
-                    var begin = total - pending.length - active.length;
-                    send({
-                        from: "/sampler",
-                        name: '+progress',
-                        payload: {
-                            begin: begin,
-                            end: begin + active.length - 1,
-                            total: total
-                        }
-                    });
-                } else {
-                    for (var address in samples) {
-                        if (samples.hasOwnProperty(address)) {
-                            var counts = samples[address].counts;
-                            var sum = 0;
-                            for (var i = 0; i !== counts.length; i++) {
-                                sum += counts[i];
-                            }
-                            var callsPerSecond = Math.round(sum / (counts.length * 0.25));
-                            samples[address] = callsPerSecond;
-                        }
-                    }
-                    send({
-                        from: "/sampler",
-                        name: '+result',
-                        payload: {
-                            samples: samples
-                        }
-                    });
-                    samples = null;
-                }
-                active.forEach(function (thread) {
-                    Stalker.follow(thread.id, {
+        return """\
+function Sampler() {
+    var threadIds = [];
+    var result = {};
+
+    function onStanza(stanza) {
+        if (stanza.to === "/sampler") {
+            if (stanza.name === '+stop') {
+                stop();
+            }
+        }
+
+        recv(onStanza);
+    }
+
+    this.start = function () {
+        threadIds = [];
+        Process.enumerateThreads({
+            onMatch: function (thread) {
+                threadIds.push(thread.id);
+            },
+            onComplete: function () {
+                threadIds.forEach(function (threadId) {
+                    Stalker.follow(threadId, {
                         events: { call: true },
                         onCallSummary: function (summary) {
-                            if (samples === null) {
-                                return;
-                            }
-
                             for (var address in summary) {
                                 if (summary.hasOwnProperty(address)) {
-                                    var sample = samples[address];
-                                    if (sample === undefined) {
-                                        sample = { counts: [] };
-                                        samples[address] = sample;
-                                    }
-                                    sample.counts.push(summary[address]);
+                                    var count = result[address] || 0;
+                                    result[address] = count + summary[address];
                                 }
                             }
                         }
                     });
                 });
-                if (active.length > 0) {
-                    setTimeout(processNext, 2000);
-                    setTimeout(Stalker.garbageCollect, 2100);
-                }
-            };
-            setTimeout(processNext, 0);
-        }
-    });
+
+                send({
+                    from: "/sampler",
+                    name: '+started',
+                    payload: {
+                        total: threadIds.length
+                    }
+                });
+            }
+        });
+    }
+
+    function stop() {
+        threadIds.forEach(function (threadId) {
+            Stalker.unfollow(threadId);
+        });
+        threadIds = [];
+
+        send({
+            from: "/sampler",
+            name: '+stopped',
+            payload: {
+                result: result
+            }
+        });
+        result = {};
+    }
+
+    recv(onStanza);
 };
+
 sampler = new Sampler();
+setTimeout(function () { sampler.start(); }, 0);
 """
 
     def _process_message(self, message, data, process, ui):
@@ -117,21 +110,21 @@ sampler = new Sampler();
             name = stanza['name']
             payload = stanza['payload']
             if stanza['from'] == "/sampler":
-                if name == '+progress':
-                    ui.on_sample_progress(payload['begin'], payload['end'], payload['total'])
-                elif name == '+result':
+                if name == '+started':
+                    ui.on_sample_start(payload['total'])
+                elif name == '+stopped':
                     module_functions = {}
                     dynamic_functions = []
-                    for address, rate in payload['samples'].items():
+                    for address, count in payload['result'].items():
                         address = int(address, 16)
                         function = process.ensure_function(address)
                         if isinstance(function, ModuleFunction):
                             functions = module_functions.get(function.module, [])
                             if len(functions) == 0:
                                 module_functions[function.module] = functions
-                            functions.append((function, rate))
+                            functions.append((function, count))
                         else:
-                            dynamic_functions.append((function, rate))
+                            dynamic_functions.append((function, count))
                     ui.on_sample_result(module_functions, dynamic_functions)
                 else:
                     print(message, data)
@@ -141,7 +134,7 @@ sampler = new Sampler();
             print(message, data)
 
 class UI(object):
-    def on_sample_progress(self, begin, end, total):
+    def on_sample_start(self, total):
         pass
 
     def on_sample_result(self, module_functions, dynamic_functions):
@@ -152,6 +145,15 @@ def main():
     from frida.application import ConsoleApplication
 
     class DiscovererApplication(ConsoleApplication, UI):
+        def __init__(self):
+            self._results_received = threading.Event()
+            ConsoleApplication.__init__(self, self._await_keys)
+
+        def _await_keys(self):
+            await_enter()
+            self._reactor.schedule(lambda: self._discoverer.stop())
+            self._results_received.wait()
+
         def _usage(self):
             return "usage: %prog [options] target"
 
@@ -171,24 +173,25 @@ def main():
             self._discoverer.stop()
             self._discoverer = None
 
-        def on_sample_progress(self, begin, end, total):
-            self._update_status("Sampling %d threads: %d through %d..." % (total, begin, end))
+        def on_sample_start(self, total):
+            self._update_status("Tracing %d threads. Press ENTER to stop." % total)
+            self._resume()
 
         def on_sample_result(self, module_functions, dynamic_functions):
             for module, functions in module_functions.items():
                 print(module.name)
-                print("\t%-10s\t%s" % ("Rate", "Function"))
-                for function, rate in sorted(functions, key=lambda item: item[1], reverse=True):
-                    print("\t%-10d\t%s" % (rate, function))
+                print("\t%-10s\t%s" % ("Calls", "Function"))
+                for function, count in sorted(functions, key=lambda item: item[1], reverse=True):
+                    print("\t%-10d\t%s" % (count, function))
                 print("")
 
             if len(dynamic_functions) > 0:
                 print("Dynamic functions:")
-                print("\t%-10s\t%s" % ("Rate", "Function"))
-                for function, rate in sorted(dynamic_functions, key=lambda item: item[1], reverse=True):
-                    print("\t%-10d\t%s" % (rate, function))
+                print("\t%-10s\t%s" % ("Calls", "Function"))
+                for function, count in sorted(dynamic_functions, key=lambda item: item[1], reverse=True):
+                    print("\t%-10d\t%s" % (count, function))
 
-            self._exit(0)
+            self._results_received.set()
 
     app = DiscovererApplication()
     app.run()
