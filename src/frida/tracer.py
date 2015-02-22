@@ -136,7 +136,7 @@ class Tracer(object):
         ui.on_trace_progress('resolve')
         working_set = self._profile.resolve(process)
         source = self._create_trace_script()
-        ui.on_trace_progress('upload')
+        ui.on_trace_progress('instrument')
         self._script = process.session.create_script(source)
         self._script.on('message', on_message)
         self._script.load()
@@ -152,7 +152,12 @@ class Tracer(object):
                     'items': targets
                 }
             })
-        ui.on_trace_progress('ready')
+
+        self._script.post_message({
+            'to': "/targets",
+            'name': '+start',
+            'payload': {}
+        })
 
         return working_set
 
@@ -176,6 +181,8 @@ function onStanza(stanza) {
             add(stanza.payload.items);
         } else if (stanza.name === '+update') {
             update(stanza.payload.items);
+        } else if (stanza.name === '+start') {
+            start();
         }
     }
 
@@ -220,6 +227,16 @@ function update(targets) {
         handlers[target.absolute_address][0] = handler;
     });
 }
+function start() {
+    pending.push(function acknowledgeStart() {
+        send({
+            from: "/targets",
+            name: '+started',
+            payload: {}
+        });
+    });
+    scheduleNext();
+}
 function scheduleNext() {
     if (timer === null) {
         timer = setTimeout(processNext, 0);
@@ -238,22 +255,23 @@ recv(onStanza);
 """
 
     def _process_message(self, message, data, ui):
+        handled = False
         if message['type'] == 'send':
             stanza = message['payload']
-            if stanza['from'] == "/events":
-                if stanza['name'] == '+add':
-                    events = [(timestamp, int(target_address.rstrip("L"), 16), message) for timestamp, target_address, message in stanza['payload']['items']]
+            if stanza['from'] == "/events" and stanza['name'] == '+add':
+                events = [(timestamp, int(target_address.rstrip("L"), 16), message) for timestamp, target_address, message in stanza['payload']['items']]
 
-                    ui.on_trace_events(events)
+                ui.on_trace_events(events)
 
-                    target_addresses = set([target_address for timestamp, target_address, message in events])
-                    for target_address in target_addresses:
-                        self._repository.sync_handler(target_address)
-                else:
-                    print(stanza)
-            else:
-                print(stanza)
-        else:
+                target_addresses = set([target_address for timestamp, target_address, message in events])
+                for target_address in target_addresses:
+                    self._repository.sync_handler(target_address)
+
+                handled = True
+            elif stanza['from'] == "/targets" and stanza['name'] == '+started':
+                ui.on_trace_progress('ready')
+                handled = True
+        if not handled:
             print(message)
 
 class Repository(object):
@@ -449,25 +467,19 @@ def main():
             self._profile_builder = pb
 
         def _usage(self):
-            return "usage: %prog [options] process-name-or-id"
+            return "usage: %prog [options] target"
 
         def _initialize(self, parser, options, args):
             self._tracer = None
+            self._targets = None
             self._profile = self._profile_builder.build()
 
-        def _target_specifier(self, parser, options, args):
-            if len(args) != 1:
-                parser.error("process name or id must be specified")
-            return args[0]
+        def _needs_target(self):
+            return True
 
         def _start(self):
             self._tracer = Tracer(self._reactor, FileRepository(), self._profile)
-            targets = self._tracer.start_trace(self._process, self)
-            if len(targets) == 1:
-                plural = ""
-            else:
-                plural = "s"
-            self._update_status("Started tracing %d function%s. Press ENTER to stop." % (len(targets), plural))
+            self._targets = self._tracer.start_trace(self._process, self)
 
         def _stop(self):
             print("Stopping...")
@@ -477,10 +489,15 @@ def main():
         def on_trace_progress(self, operation):
             if operation == 'resolve':
                 self._update_status("Resolving functions...")
-            elif operation == 'upload':
-                self._update_status("Uploading data...")
+            elif operation == 'instrument':
+                self._update_status("Instrumenting functions...")
             elif operation == 'ready':
-                self._update_status("Ready!")
+                if len(self._targets) == 1:
+                    plural = ""
+                else:
+                    plural = "s"
+                self._update_status("Started tracing %d function%s. Press ENTER to stop." % (len(self._targets), plural))
+                self._resume()
 
         def on_trace_events(self, events):
             self._status_updated = False

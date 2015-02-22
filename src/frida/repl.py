@@ -17,12 +17,10 @@ def main():
             super(REPLApplication, self).__init__(self._process_input)
 
         def _usage(self):
-            return "usage: %prog [options]"
+            return "usage: %prog [options] target"
 
-        def _target_specifier(self, parser, options, args):
-            if len(args) != 1:
-                parser.error("process name or id must be specified")
-            return args[0]
+        def _needs_target(self):
+            return True
 
         def _start(self):
             def on_message(message, data):
@@ -30,50 +28,62 @@ def main():
             self._script = self._process.session.create_script(self._create_repl_script())
             self._script.on('message', on_message)
             self._script.load()
+            if self._spawned_argv is not None:
+                self._update_status("Spawned `%s`. Call resume() to let the main thread start executing!" % " ".join(self._spawned_argv))
             self._idle.set()
 
         def _stop(self):
-            self._script.unload()
+            try:
+                self._script.unload()
+            except:
+                pass
+            self._script = None
 
         def _create_repl_script(self):
             return """\
 
-Object.defineProperty(this, 'modules', {
-    enumerable: true,
-    get: function () {
-        var result = [];
-        Process.enumerateModules({
-            onMatch: function onMatch(mod) {
-                result.push(mod);
-            },
-            onComplete: function onComplete() {
-            }
-        });
-        return result;
-    }
-});
+(function () {
+    this.resume = function () {
+        send({ name: '+resume' });
+    };
 
-function onExpression(expression) {
-    try {
-        var result;
-        eval("result = " + expression);
-        var sentRaw = false;
-        if (result && result.hasOwnProperty('length')) {
-            try {
-                send({ name: '+result', payload: "OOB" }, result);
-                sentRaw = true;
-            } catch (e) {
+    Object.defineProperty(this, 'modules', {
+        enumerable: true,
+        get: function () {
+            var result = [];
+            Process.enumerateModules({
+                onMatch: function onMatch(mod) {
+                    result.push(mod);
+                },
+                onComplete: function onComplete() {
+                }
+            });
+            return result;
+        }
+    });
+
+    function onExpression(expression) {
+        try {
+            var result;
+            eval("result = " + expression);
+            var sentRaw = false;
+            if (result && result.hasOwnProperty('length')) {
+                try {
+                    send({ name: '+result', payload: "OOB" }, result);
+                    sentRaw = true;
+                } catch (e) {
+                }
             }
+            if (!sentRaw) {
+                send({ name: '+result', payload: result });
+            }
+        } catch (e) {
+            send({ name: '+error', payload: e.toString() });
         }
-        if (!sentRaw) {
-            send({ name: '+result', payload: result });
-        }
-    } catch (e) {
-        send({ name: '+error', payload: e.toString() });
+        recv(onExpression);
     }
     recv(onExpression);
-}
-recv(onExpression);
+}).call(this);
 """
 
         def _process_input(self):
@@ -111,22 +121,30 @@ recv(onExpression);
 
             if message['type'] == 'send' and 'payload' in message:
                 stanza = message['payload']
-                if isinstance(stanza, dict) and stanza.get('name') in ('+result', '+error'):
-                    handled = True
-                    if data is not None:
-                        output = hexdump(data).rstrip("\n")
-                    else:
-                        if 'payload' in stanza:
-                            value = stanza['payload']
-                            if stanza['name'] == '+result':
-                                output = json.dumps(value, sort_keys=True, indent=4, separators=(",", ": "))
-                            else:
-                                output = value
+                if isinstance(stanza, dict):
+                    name = stanza.get('name')
+                    if name in ('+result', '+error'):
+                        if data is not None:
+                            output = hexdump(data).rstrip("\n")
                         else:
-                            output = "undefined"
-                    sys.stdout.write(output + "\n")
-                    sys.stdout.flush()
-                    self._idle.set()
+                            if 'payload' in stanza:
+                                value = stanza['payload']
+                                if stanza['name'] == '+result':
+                                    output = json.dumps(value, sort_keys=True, indent=4, separators=(",", ": "))
+                                else:
+                                    output = value
+                            else:
+                                output = "undefined"
+                        sys.stdout.write(output + "\n")
+                        sys.stdout.flush()
+                        self._idle.set()
+
+                        handled = True
+                    elif name == '+resume':
+                        self._resume()
+                        self._idle.set()
+
+                        handled = True
 
             if not handled:
                 print("message:", message, "data:", data)
