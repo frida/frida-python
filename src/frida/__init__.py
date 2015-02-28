@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+import threading
+
+
 def spawn(command_line, device_id = None):
     return get_device_manager().get_device(device_id).spawn(command_line)
 
@@ -12,8 +15,43 @@ def kill(target, device_id = None):
 def attach(target, device_id = None):
     return get_device_manager().get_device(device_id).attach(target)
 
+def get_usb_device(timeout = 0):
+    return _get_device('tether', timeout)
+
+def get_remote_device(timeout = 0):
+    return _get_device('remote', timeout)
+
+def _get_device(type, timeout):
+    mgr = get_device_manager()
+    def find_usb_device():
+        usb_devices = [device for device in mgr.enumerate_devices() if device.type == type]
+        if len(usb_devices) > 0:
+            return usb_devices[0]
+        else:
+            return None
+    device = find_usb_device()
+    if device is None:
+        result = [None]
+        event = threading.Event()
+        def on_devices_changed():
+            result[0] = find_usb_device()
+            if result[0] is not None:
+                event.set()
+        mgr.on('changed', on_devices_changed)
+        device = find_usb_device()
+        if device is None:
+            event.wait(timeout)
+            device = result[0]
+        mgr.off('changed', on_devices_changed)
+        if device is None:
+            raise TimeoutError("timed out while waiting for device to appear")
+    return device
+
 def shutdown():
     get_device_manager()._manager.close()
+
+class TimeoutError(Exception):
+    pass
 
 
 global _device_manager
@@ -45,5 +83,4 @@ def get_device_manager():
             print("")
             raise ex
         _device_manager = core.DeviceManager(_frida.DeviceManager())
-        _device_manager.enumerate_devices() # warm up
     return _device_manager
