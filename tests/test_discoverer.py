@@ -34,6 +34,7 @@ class TestDiscoverer(unittest.TestCase):
         def start():
             d = Discoverer(reactor)
             d.start(self.process, test_ui)
+            reactor.schedule(d.stop, 0.1)
         reactor.schedule(start)
         reactor.run()
         self.assertIsInstance(test_ui.module_functions, dict)
