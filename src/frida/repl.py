@@ -65,7 +65,7 @@ def main():
     function onExpression(expression) {
         try {
             var result;
-            eval("result = " + expression);
+            eval("result = " + expression + ";");
             var sentRaw = false;
             if (result && result.hasOwnProperty('length')) {
                 try {
