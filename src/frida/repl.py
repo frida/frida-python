@@ -1,5 +1,6 @@
 def main():
     from frida.application import ConsoleApplication
+    from colorama import Fore, Style
     import json
     try:
         import readline
@@ -132,11 +133,9 @@ def main():
                                 if stanza['name'] == '+result':
                                     output = json.dumps(value, sort_keys=True, indent=4, separators=(",", ": "))
                                 else:
-                                    output = value
-                            else:
-                                output = "undefined"
-                        sys.stdout.write(output + "\n")
-                        sys.stdout.flush()
+                                    output = Fore.RED + Style.BRIGHT + value
+                                sys.stdout.write(output + "\n")
+                                sys.stdout.flush()
                         self._idle.set()
 
                         handled = True
