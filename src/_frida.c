@@ -44,6 +44,8 @@
 
 #define FRIDA_FUNCPTR_TO_POINTER(f) (GSIZE_TO_POINTER (f))
 
+static PyObject * frida_message_type_log;
+
 static PyObject * json_loads;
 static PyObject * json_dumps;
 
@@ -1481,33 +1483,67 @@ PyScript_on_message (PyScript * self, const gchar * message, const gchar * data,
 
   if (g_object_get_data (G_OBJECT (handle), "pyobject") == self)
   {
-    GList * callbacks, * cur;
-    PyObject * args, * message_object;
-
-    g_list_foreach (self->on_message, (GFunc) Py_IncRef, NULL);
-    callbacks = g_list_copy (self->on_message);
+    PyObject * message_object, * type;
 
     message_object = PyObject_CallFunction (json_loads, "s", message);
     g_assert (message_object != NULL);
-#if PY_MAJOR_VERSION >= 3
-    args = Py_BuildValue ("Oy#", message_object, data, data_size);
-#else
-    args = Py_BuildValue ("Os#", message_object, data, data_size);
-#endif
-    Py_DECREF (message_object);
-
-    for (cur = callbacks; cur != NULL; cur = cur->next)
+    type = PyMapping_GetItemString (message_object, "type");
+    g_assert (type != NULL);
+    if (PyUnicode_Compare (type, frida_message_type_log) == 0)
     {
-      PyObject * result = PyObject_CallObject ((PyObject *) cur->data, args);
-      if (result == NULL)
-        PyErr_Print ();
-      else
-        Py_DECREF (result);
+      PyObject * log_message;
+      char * log_message_utf8;
+
+      log_message = PyMapping_GetItemString (message_object, "payload");
+      g_assert (log_message != NULL);
+
+#if PY_MAJOR_VERSION >= 3
+      {
+        PyObject * log_message_bytes;
+
+        log_message_bytes = PyUnicode_AsUTF8String (log_message);
+        Py_DECREF (log_message);
+        log_message = log_message_bytes;
+
+        log_message_utf8 = PyBytes_AsString (log_message);
+      }
+#else
+      log_message_utf8 = PyString_AsString (log_message);
+#endif
+
+      g_print ("%s\n", log_message_utf8);
+
+      Py_DECREF (log_message);
     }
+    else
+    {
+      PyObject * args;
+      GList * callbacks, * cur;
 
-    Py_DECREF (args);
+#if PY_MAJOR_VERSION >= 3
+      args = Py_BuildValue ("Oy#", message_object, data, data_size);
+#else
+      args = Py_BuildValue ("Os#", message_object, data, data_size);
+#endif
 
-    g_list_free_full (callbacks, (GDestroyNotify) Py_DecRef);
+      g_list_foreach (self->on_message, (GFunc) Py_IncRef, NULL);
+      callbacks = g_list_copy (self->on_message);
+
+      for (cur = callbacks; cur != NULL; cur = cur->next)
+      {
+        PyObject * result = PyObject_CallObject ((PyObject *) cur->data, args);
+        if (result == NULL)
+          PyErr_Print ();
+        else
+          Py_DECREF (result);
+      }
+
+      g_list_free_full (callbacks, (GDestroyNotify) Py_DecRef);
+
+      Py_DECREF (args);
+    }
+    Py_DECREF (type);
+    Py_DECREF (message_object);
   }
 
   PyGILState_Release (gstate);
@@ -1552,6 +1588,8 @@ MOD_INIT (_frida)
   PyObject * module;
 
   PyEval_InitThreads ();
+
+  frida_message_type_log = PyUnicode_FromString ("log");
 
   json = PyImport_ImportModule ("json");
   json_loads = PyObject_GetAttrString (json, "loads");
