@@ -10,6 +10,14 @@ class Discoverer(object):
         self._reactor = reactor
         self._script = None
 
+    def dispose(self):
+        if self._script is not None:
+            try:
+                self._script.unload()
+            except:
+                pass
+            self._script = None
+
     def start(self, process, ui):
         def on_message(message, data):
             self._reactor.schedule(lambda: self._process_message(message, data, process, ui))
@@ -24,14 +32,6 @@ class Discoverer(object):
             'name': '+stop',
             'payload': {}
         })
-
-    def stop(self):
-        if self._script is not None:
-            try:
-                self._script.unload()
-            except:
-                pass
-            self._script = None
 
     def _create_discover_script(self):
         return """\
@@ -170,7 +170,7 @@ def main():
 
         def _stop(self):
             print("Stopping...")
-            self._discoverer.stop()
+            self._discoverer.dispose()
             self._discoverer = None
 
         def on_sample_start(self, total):
