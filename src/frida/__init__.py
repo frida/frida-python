@@ -4,7 +4,10 @@ def spawn(command_line, device_id = None):
     return get_device_manager().get_device(device_id).spawn(command_line)
 
 def resume(target, device_id = None):
-    return get_device_manager().get_device(device_id).resume(target)
+    get_device_manager().get_device(device_id).resume(target)
+
+def kill(target, device_id = None):
+    get_device_manager().get_device(device_id).kill(target)
 
 def attach(target, device_id = None):
     return get_device_manager().get_device(device_id).attach(target)
