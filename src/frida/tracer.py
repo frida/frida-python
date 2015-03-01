@@ -175,6 +175,7 @@ var started = new Date();
 var pending = [];
 var timer = null;
 var handlers = {};
+var state = {};
 function onStanza(stanza) {
     if (stanza.to === "/targets") {
         if (stanza.name === '+add') {
@@ -205,7 +206,6 @@ function add(targets) {
                 }
             });
         }
-        var state = {};
 
         pending.push(function attachToTarget() {
             Interceptor.attach(ptr(targetAddress), {
