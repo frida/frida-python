@@ -313,7 +313,8 @@ class Repository(object):
         argc = 0
         varargs = False
         try:
-            output = subprocess.check_output(["man", "-P", "col -b", "2", function.name], stderr=subprocess.DEVNULL)
+            with open(os.devnull, 'w') as devnull:
+                output = subprocess.check_output(["man", "-P", "col -b", "2", function.name], stderr=devnull)
             match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}" + function.name + r"\(.*\n(^.+$\n)*)(?:.|\n)*^DESCRIPTION", output.decode(), re.MULTILINE)
             if match:
                 decl = match.group(1)
