@@ -327,7 +327,7 @@ class Repository(object):
                     args += '%(pre)s%(arg)s=" + args[%(argc)s]' % {"arg": arg, "argc": argc, "pre": '"' if argc == 0 else '+ ", '}
                     argc += 1
 
-        except subprocess.CalledProcessError:
+        except (subprocess.CalledProcessError, OSError): # WindowError or FileNotFoundError
             pass
 
         if args == "":
