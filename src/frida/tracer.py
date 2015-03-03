@@ -320,6 +320,8 @@ class Repository(object):
                 decl = match.group(1)
                 for argm in re.finditer(r"([^* ]*)\s*(,|\))", decl):
                     arg = argm.group(1)
+                    if arg == 'void':
+                        continue
                     if arg == '...':
                         args += '+ ", ..."'
                         varargs = True
