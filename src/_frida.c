@@ -548,7 +548,7 @@ PyDeviceManager_enumerate_devices (PyDeviceManager * self)
   {
     PyList_SET_ITEM (devices, i, PyDevice_from_handle (frida_device_list_get (result, i)));
   }
-  g_object_unref (result);
+  frida_unref (result);
 
   return devices;
 }
