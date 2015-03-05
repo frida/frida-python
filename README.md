@@ -1,10 +1,16 @@
+# frida-python
+
+Python bindings for [Frida](http://www.frida.re).
+
+# FAQ
+
 ## So what is Frida, exactly?
 
 It's Greasemonkey for native apps, or, put in more technical terms, it's a
 dynamic code instrumentation toolkit. It lets you inject snippets of JavaScript
-into native apps on Windows, Mac, Linux and iOS. Frida also provides you with
-some simple tools built on top of the Frida API. These can be used as-is,
-tweaked to your needs, or serve as examples of how to use the API.
+into native apps on Windows, Mac, Linux, iOS and Android. Frida also provides
+you with some simple tools built on top of the Frida API. These can be used
+as-is, tweaked to your needs, or serve as examples of how to use the API.
 
 ## Why do I need this?
 
