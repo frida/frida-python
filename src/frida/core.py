@@ -241,7 +241,7 @@ Module.enumerateExports(\"%s\", {
         send(exports);
     }
 });
-""" % self.path)
+""" % self.path.replace("\\", "\\\\"))
             self._exports = []
             for export in _execute_script(script):
                 relative_address = int(export["address"], 16) - self.base_address
@@ -264,7 +264,7 @@ Module.enumerateRanges(\"%s\", \"%s\", {
         send(ranges);
     }
 });
-""" % (self.path, protection))
+""" % (self.path.replace("\\", "\\\\"), protection))
         return [Range(int(data['base'], 16), data['size'], data['protection']) for data in _execute_script(script)]
 
     def _do_ensure_function(self, relative_address):
