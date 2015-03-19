@@ -8,17 +8,17 @@ import threading
 
 
 class DeviceManager(object):
-    def __init__(self, manager):
-        self._manager = manager
+    def __init__(self, impl):
+        self._impl = impl
 
     def __repr__(self):
-        return repr(self._manager)
+        return repr(self._impl)
 
     def enumerate_devices(self):
-        return [Device(device) for device in self._manager.enumerate_devices()]
+        return [Device(device) for device in self._impl.enumerate_devices()]
 
     def get_device(self, device_id):
-        devices = self._manager.enumerate_devices()
+        devices = self._impl.enumerate_devices()
         if device_id is None:
             return Device(devices[0])
         for device in devices:
@@ -27,10 +27,10 @@ class DeviceManager(object):
         raise ValueError("device not found")
 
     def on(self, signal, callback):
-        self._manager.on(signal, callback)
+        self._impl.on(signal, callback)
 
     def off(self, signal, callback):
-        self._manager.off(signal, callback)
+        self._impl.off(signal, callback)
 
 class Device(object):
     def __init__(self, device):
@@ -38,17 +38,17 @@ class Device(object):
         self.name = device.name
         self.icon = device.icon
         self.type = device.type
-        self._device = device
+        self._impl = device
 
     def __repr__(self):
-        return repr(self._device)
+        return repr(self._impl)
 
     def enumerate_processes(self):
-        return self._device.enumerate_processes()
+        return self._impl.enumerate_processes()
 
     def get_process(self, process_name):
         process_name_lc = process_name.lower()
-        matching = [process for process in self._device.enumerate_processes() if fnmatch.fnmatchcase(process.name.lower(), process_name_lc)]
+        matching = [process for process in self._impl.enumerate_processes() if fnmatch.fnmatchcase(process.name.lower(), process_name_lc)]
         if len(matching) == 1:
             return matching[0]
         elif len(matching) > 1:
@@ -57,22 +57,22 @@ class Device(object):
             raise ValueError("process not found")
 
     def spawn(self, command_line):
-        return self._device.spawn(command_line)
+        return self._impl.spawn(command_line)
 
     def resume(self, target):
-        self._device.resume(self._pid_of(target))
+        self._impl.resume(self._pid_of(target))
 
     def kill(self, target):
-        self._device.kill(self._pid_of(target))
+        self._impl.kill(self._pid_of(target))
 
     def attach(self, target):
-        return Process(self._device.attach(self._pid_of(target)))
+        return Session(self._impl.attach(self._pid_of(target)))
 
     def on(self, signal, callback):
-        self._device.on(signal, callback)
+        self._impl.on(signal, callback)
 
     def off(self, signal, callback):
-        self._device.off(signal, callback)
+        self._impl.off(signal, callback)
 
     def _pid_of(self, target):
         if isinstance(target, numbers.Number):
@@ -96,19 +96,19 @@ class FunctionContainer(object):
     def _do_ensure_function(self, address):
         raise NotImplementedError("not implemented")
 
-class Process(FunctionContainer):
-    def __init__(self, session):
-        super(Process, self).__init__()
-        self.session = session
+class Session(FunctionContainer):
+    def __init__(self, impl):
+        super(Session, self).__init__()
+        self._impl = impl
         self._modules = None
         self._module_map = None
 
     def detach(self):
-        self.session.detach()
+        self._impl.detach()
 
     def enumerate_modules(self):
         if self._modules is None:
-            script = self.session.create_script(
+            script = self.create_script(
     """
     var modules = [];
     Process.enumerateModules({
@@ -120,14 +120,14 @@ class Process(FunctionContainer):
         }
     });
     """)
-            self._modules = [Module(data['name'], int(data['base'], 16), data['size'], data['path'], self.session) for data in _execute_script(script)]
+            self._modules = [Module(data['name'], int(data['base'], 16), data['size'], data['path'], self) for data in _execute_script(script)]
         return self._modules
 
     """
       @param protection example '--x'
     """
     def enumerate_ranges(self, protection):
-        script = self.session.create_script(
+        script = self.create_script(
 """
 var ranges = [];
 Process.enumerateRanges(\"%s\", {
@@ -141,18 +141,11 @@ Process.enumerateRanges(\"%s\", {
 """ % protection)
         return [Range(int(data['base'], 16), data['size'], data['protection']) for data in _execute_script(script)]
 
-    def _exec_script(self, script_source, post_hook = None):
-        script = self.session.create_script(script_source)
-        return _execute_script(script, post_hook)
-
     def find_base_address(self, module_name):
         return int(self._exec_script("var p = Module.findBaseAddress(\"%s\"); send(p !== null ? p.toString() : \"0\");" % module_name), 16)
 
     def read_bytes(self, address, length):
         return self._exec_script("send(null, Memory.readByteArray(ptr(\"%u\"), %u));" % (address, length))
-
-    def read_utf8(self, address, length = -1):
-        return self._exec_script("send(Memory.readUtf8String(ptr(\"%u\"), %u));" % (address, length))
 
     def write_bytes(self, address, data):
         script = \
@@ -170,6 +163,9 @@ recv(function (data) {
 
         self._exec_script(script, send_data)
 
+    def read_utf8(self, address, length = -1):
+        return self._exec_script("send(Memory.readUtf8String(ptr(\"%u\"), %u));" % (address, length))
+
     def write_utf8(self, address, string):
         script = \
 """
@@ -184,11 +180,18 @@ recv(function (string) {
 
         self._exec_script(script, send_data)
 
+    def create_script(self, source):
+        return self._impl.create_script(source)
+
     def on(self, signal, callback):
-        self.session.on(signal, callback)
+        self._impl.on(signal, callback)
 
     def off(self, signal, callback):
-        self.session.off(signal, callback)
+        self._impl.off(signal, callback)
+
+    def _exec_script(self, script_source, post_hook = None):
+        script = self.create_script(script_source)
+        return _execute_script(script, post_hook)
 
     def _do_ensure_function(self, absolute_address):
         if self._module_map is None:
@@ -200,6 +203,12 @@ recv(function (string) {
             f = Function("dsub_%x" % absolute_address, absolute_address)
             self._functions[absolute_address] = f
         return f
+
+    def __getattr__(self, attr):
+        if attr == 'session':
+            raise KeyError("Please update your code from `.session.create_script()` to `.create_script()`")
+        else:
+            return super(Session, self).__getattr__(self, attr)
 
 class Module(FunctionContainer):
     def __init__(self, name, base_address, size, path, session):

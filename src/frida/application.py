@@ -49,8 +49,8 @@ class ConsoleApplication(object):
         self._schedule_on_device_lost = lambda: self._reactor.schedule(self._on_device_lost)
         self._spawned_pid = None
         self._spawned_argv = None
-        self._process = None
-        self._schedule_on_process_detached = lambda: self._reactor.schedule(self._on_process_detached)
+        self._session = None
+        self._schedule_on_session_detached = lambda: self._reactor.schedule(self._on_session_detached)
         self._started = False
         self._resumed = False
         self._reactor = Reactor(run_until_return)
@@ -86,10 +86,10 @@ class ConsoleApplication(object):
         self._reactor.run()
         if self._started:
             self._stop()
-        if self._process is not None:
-            self._process.off('detached', self._schedule_on_process_detached)
-            self._process.detach()
-            self._process = None
+        if self._session is not None:
+            self._session.off('detached', self._schedule_on_session_detached)
+            self._session.detach()
+            self._session = None
         if self._spawned_pid is not None:
             self._device.kill(self._spawned_pid)
         if self._device is not None:
@@ -143,8 +143,8 @@ class ConsoleApplication(object):
                 else:
                     attach_target = target_value
                     self._update_status("Attaching...")
-                self._process = self._device.attach(attach_target)
-                self._process.on('detached', self._schedule_on_process_detached)
+                self._session = self._device.attach(attach_target)
+                self._session.on('detached', self._schedule_on_session_detached)
             except Exception as e:
                 self._update_status("Failed to attach: %s" % e)
                 self._exit(1)
@@ -162,7 +162,7 @@ class ConsoleApplication(object):
         print("Device disconnected.")
         self._exit(1)
 
-    def _on_process_detached(self):
+    def _on_session_detached(self):
         print("Target process terminated.")
         self._exit(1)
 

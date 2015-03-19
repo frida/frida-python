@@ -18,11 +18,11 @@ class Discoverer(object):
                 pass
             self._script = None
 
-    def start(self, process, ui):
+    def start(self, session, ui):
         def on_message(message, data):
-            self._reactor.schedule(lambda: self._process_message(message, data, process, ui))
+            self._reactor.schedule(lambda: self._process_message(message, data, session, ui))
         source = self._create_discover_script()
-        self._script = process.session.create_script(source)
+        self._script = session.create_script(source)
         self._script.on('message', on_message)
         self._script.load()
 
@@ -104,7 +104,7 @@ sampler = new Sampler();
 setTimeout(function () { sampler.start(); }, 0);
 """
 
-    def _process_message(self, message, data, process, ui):
+    def _process_message(self, message, data, session, ui):
         if message['type'] == 'send':
             stanza = message['payload']
             name = stanza['name']
@@ -117,7 +117,7 @@ setTimeout(function () { sampler.start(); }, 0);
                     dynamic_functions = []
                     for address, count in payload['result'].items():
                         address = int(address, 16)
-                        function = process.ensure_function(address)
+                        function = session.ensure_function(address)
                         if isinstance(function, ModuleFunction):
                             functions = module_functions.get(function.module, [])
                             if len(functions) == 0:
@@ -166,7 +166,7 @@ def main():
         def _start(self):
             self._update_status("Injecting script...")
             self._discoverer = Discoverer(self._reactor)
-            self._discoverer.start(self._process, self)
+            self._discoverer.start(self._session, self)
 
         def _stop(self):
             print("Stopping...")

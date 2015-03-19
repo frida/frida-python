@@ -21,11 +21,11 @@ class TestTracer(unittest.TestCase):
             cls.target = subprocess.Popen([r"C:\Windows\notepad.exe"])
         else:
             cls.target = subprocess.Popen(["/bin/cat"])
-        cls.process = frida.attach(cls.target.pid)
+        cls.session = frida.attach(cls.target.pid)
 
     @classmethod
     def tearDownClass(cls):
-        cls.process.detach()
+        cls.session.detach()
         cls.target.terminate()
 
     def test_basics(self):
@@ -34,7 +34,7 @@ class TestTracer(unittest.TestCase):
         def start():
             tp = TracerProfileBuilder().include("open*")
             t = Tracer(reactor, MemoryRepository(), tp.build())
-            targets = t.start_trace(self.process, UI())
+            targets = t.start_trace(self.session, UI())
             t.stop()
             reactor.stop()
         reactor.schedule(start)

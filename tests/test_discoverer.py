@@ -21,11 +21,11 @@ class TestDiscoverer(unittest.TestCase):
             cls.target = subprocess.Popen([r"C:\Windows\notepad.exe"])
         else:
             cls.target = subprocess.Popen(["/bin/cat"])
-        cls.process = frida.attach(cls.target.pid)
+        cls.session = frida.attach(cls.target.pid)
 
     @classmethod
     def tearDownClass(cls):
-        cls.process.detach()
+        cls.session.detach()
         cls.target.terminate()
 
     def test_basics(self):
@@ -33,7 +33,7 @@ class TestDiscoverer(unittest.TestCase):
         reactor = Reactor(test_ui.on_result.wait)
         def start():
             d = Discoverer(reactor)
-            d.start(self.process, test_ui)
+            d.start(self.session, test_ui)
             reactor.schedule(d.stop, 0.1)
         reactor.schedule(start)
         reactor.run()

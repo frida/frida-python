@@ -52,8 +52,8 @@ class TracerProfile(object):
     def __init__(self, spec):
         self._spec = spec
 
-    def resolve(self, process):
-        all_modules = process.enumerate_modules()
+    def resolve(self, session):
+        all_modules = session.enumerate_modules()
         working_set = set()
         for (operation, scope, param) in self._spec:
             if scope == 'module':
@@ -68,8 +68,8 @@ class TracerProfile(object):
                     working_set = self._exclude_function(param, working_set)
             elif scope == 'rel_address':
                 if operation == 'include':
-                    abs_address = process.find_base_address(param['module']) + param['offset']
-                    working_set.add(process.ensure_function(abs_address))
+                    abs_address = session.find_base_address(param['module']) + param['offset']
+                    working_set.add(session.ensure_function(abs_address))
         return list(working_set)
 
     def _include_module(self, glob, all_modules):
@@ -109,7 +109,7 @@ class Tracer(object):
         self._profile = profile
         self._script = None
 
-    def start_trace(self, process, ui):
+    def start_trace(self, session, ui):
         def on_create(*args):
             ui.on_trace_handler_create(*args)
         self._repository.on_create(on_create)
@@ -135,10 +135,10 @@ class Tracer(object):
             self._reactor.schedule(lambda: self._process_message(message, data, ui))
 
         ui.on_trace_progress('resolve')
-        working_set = self._profile.resolve(process)
+        working_set = self._profile.resolve(session)
         source = self._create_trace_script()
         ui.on_trace_progress('instrument')
-        self._script = process.session.create_script(source)
+        self._script = session.create_script(source)
         self._script.on('message', on_message)
         self._script.load()
         for chunk in [working_set[i:i+1000] for i in range(0, len(working_set), 1000)]:
@@ -506,7 +506,7 @@ def main():
 
         def _start(self):
             self._tracer = Tracer(self._reactor, FileRepository(), self._profile)
-            self._targets = self._tracer.start_trace(self._process, self)
+            self._targets = self._tracer.start_trace(self._session, self)
 
         def _stop(self):
             print("Stopping...")
