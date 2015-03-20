@@ -48,7 +48,7 @@ def _get_device(type, timeout):
     return device
 
 def shutdown():
-    get_device_manager()._manager.close()
+    get_device_manager()._impl.close()
 
 class TimeoutError(Exception):
     pass
