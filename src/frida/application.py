@@ -171,7 +171,7 @@ class ConsoleApplication(object):
             cursor_position = "\033[A"
         else:
             cursor_position = ""
-        print("%-80s" % (cursor_position + Style.BRIGHT + message,))
+        print("%-80s" % (cursor_position + Style.BRIGHT + message + Style.RESET_ALL,))
         self._status_updated = True
 
 def find_device(type):
