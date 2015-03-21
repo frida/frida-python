@@ -22,7 +22,7 @@ def await_enter():
 
 class ConsoleApplication(object):
     def __init__(self, run_until_return=await_enter):
-        colorama.init(autoreset=True)
+        colorama.init()
 
         parser = OptionParser(usage=self._usage())
         parser.add_option("-U", "--usb", help="connect to USB device",
