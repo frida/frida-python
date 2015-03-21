@@ -133,7 +133,7 @@ def main():
                                 if stanza['name'] == '+result':
                                     output = json.dumps(value, sort_keys=True, indent=4, separators=(",", ": "))
                                 else:
-                                    output = Fore.RED + Style.BRIGHT + value
+                                    output = Fore.RED + Style.BRIGHT + value + Style.RESET_ALL
                                 sys.stdout.write(output + "\n")
                                 sys.stdout.flush()
                         self._idle.set()

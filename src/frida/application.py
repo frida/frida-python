@@ -22,7 +22,7 @@ def await_enter():
 
 class ConsoleApplication(object):
     def __init__(self, run_until_return=await_enter):
-        colorama.init(autoreset=True)
+        colorama.init()
 
         parser = OptionParser(usage=self._usage())
         parser.add_option("-U", "--usb", help="connect to USB device",
@@ -171,7 +171,7 @@ class ConsoleApplication(object):
             cursor_position = "\033[A"
         else:
             cursor_position = ""
-        print("%-80s" % (cursor_position + Style.BRIGHT + message,))
+        print("%-80s" % (cursor_position + Style.BRIGHT + message + Style.RESET_ALL,))
         self._status_updated = True
 
 def find_device(type):
