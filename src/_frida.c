@@ -1288,6 +1288,7 @@ PyScript_from_handle (FridaScript * handle)
     script = PyObject_CallFunction ((PyObject *) &PyScriptType, NULL);
     ((PyScript *) script)->handle = handle;
     g_object_set_data (G_OBJECT (handle), "pyobject", script);
+    g_signal_connect_swapped (handle, "message", G_CALLBACK (PyScript_on_message), script);
   }
   else
   {
@@ -1310,14 +1311,10 @@ PyScript_init (PyScript * self)
 static void
 PyScript_dealloc (PyScript * self)
 {
-  if (self->on_message != NULL)
+  if (self->handle != NULL)
   {
     g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyScript_on_message), self);
     g_list_free_full (self->on_message, (GDestroyNotify) Py_DecRef);
-  }
-
-  if (self->handle != NULL)
-  {
     g_object_set_data (G_OBJECT (self->handle), "pyobject", NULL);
     Py_BEGIN_ALLOW_THREADS
     frida_unref (self->handle);
@@ -1418,11 +1415,6 @@ PyScript_on (PyScript * self, PyObject * args)
 
   if (strcmp (signal, "message") == 0)
   {
-    if (self->on_message == NULL)
-    {
-      g_signal_connect_swapped (self->handle, "message", G_CALLBACK (PyScript_on_message), self);
-    }
-
     Py_INCREF (callback);
     self->on_message = g_list_append (self->on_message, callback);
   }
@@ -1458,11 +1450,6 @@ PyScript_off (PyScript * self, PyObject * args)
     {
       PyErr_SetString (PyExc_ValueError, "unknown callback");
       return NULL;
-    }
-
-    if (self->on_message == NULL)
-    {
-      g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyScript_on_message), self);
     }
   }
   else
