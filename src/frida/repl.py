@@ -2,8 +2,12 @@ def main():
     from frida.application import ConsoleApplication
     from colorama import Fore, Style
     import json
+    import platform
     try:
         import readline
+        # Stupid hack to workaround oxs's shitty readline impl
+        if platform.system() == "Darwin":
+            import gnureadline as readline
         HAVE_READLINE = True
     except:
         HAVE_READLINE = False
