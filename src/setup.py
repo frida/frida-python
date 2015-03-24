@@ -60,7 +60,7 @@ setup(
             "frida-ps = frida.ps:main",
             "frida-discover = frida.discoverer:main",
             "frida-trace = frida.tracer:main",
-            "frida-repl = frida.repl:main"
+            "frida = frida.repl:main"
         ]
     },
     ext_modules=[Extension('_frida', [])],
