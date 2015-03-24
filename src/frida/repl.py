@@ -203,8 +203,21 @@ def main():
 
                 if HAVE_READLINE:
                     readline.add_history(expression)
-                self._idle.clear()
-                self._reactor.schedule(lambda: self._send_expression(expression))
+
+                if expression.endswith("?"):
+                    # Help feature
+                    self._print_help(expression)
+                elif expression.startswith("%"):
+                    # "Magic" commands
+                    self._do_magic(expression)
+                elif expression in ("quit", "q", "exit"):
+                    print "Thank you for using Frida!"
+                    return
+                elif expression == "help":
+                    print "Frida help 1.0!"
+                else:
+                    self._idle.clear()
+                    self._reactor.schedule(lambda: self._send_expression(expression))
 
         def _send_expression(self, expression):
             self._script.post_message(expression)
@@ -259,6 +272,47 @@ def main():
     `._.'
 
 """
+
+        def _print_help(self, expression):
+            # TODO: Figure out docstrings and implement here. This is real jankaty right now.
+            help_text = ""
+            if expression.endswith(".?"):
+                expression = expression[:-2] + "?"
+
+            obj_to_identify = [x for x in expression.split(' ') if x.endswith("?")][0][:-1]
+            obj_type = self._synchronous_evaluate("typeof(%s)" % obj_to_identify)
+
+            if obj_type == "function":
+
+                signature = self._synchronous_evaluate("%s.toString()" % obj_to_identify)
+                clean_signature = signature.split("{")[0][:-1].split('function ')[-1]
+
+                if "[native code]" in signature:
+                    help_text += "Type:      Function (native)\n"
+                else:
+                    help_text += "Type:      Function\n"
+
+                help_text += "Signature: %s\n" % clean_signature
+                help_text += "Docstring: #TODO :)"
+            elif obj_type == "object":
+                help_text += "Type:      Object\n"
+                help_text += "Docstring: #TODO :)"
+
+            elif obj_type == "boolean":
+                help_text += "Type:      Boolean\n"
+                help_text += "Docstring: #TODO :)"
+
+            elif obj_type == "string":
+                help_text += "Type:      Boolean\n"
+                help_text += "Text:      %s\n" % self._synchronous_evaluate("%s.toString()" % obj_to_identify)
+                help_text += "Docstring: #TODO :)"
+
+            print help_text
+
+
+        def _do_magic(self, expression):
+            #TODO: add local file read capabilities i.e. %run /tmp/script.txt, and other stuff?
+            print "You thought I was sleeping, didn't you. Acting."
 
     def hexdump(src, length=16):
         try:
