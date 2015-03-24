@@ -18,7 +18,16 @@ def main():
         def __init__(self):
             if HAVE_READLINE:
                 readline.parse_and_bind("tab: complete")
+                # force completor to run on first tab press
+                readline.parse_and_bind("set show-all-if-unmodified on")
+                readline.parse_and_bind("set show-all-if-ambiguous on")
+                # Set our custom completer
+                readline.set_completer(self.completer)
             self._idle = threading.Event()
+            self._cond = threading.Condition()
+            self._response = None
+            self._completor_locals = []
+
             super(REPLApplication, self).__init__(self._process_input)
 
         def _usage(self):
@@ -46,8 +55,7 @@ def main():
             self._script = None
 
         def _create_repl_script(self):
-            return """\
-
+            return """
 (function () {
     this.resume = function () {
         send({ name: '+resume' });
@@ -71,17 +79,27 @@ def main():
     function onExpression(expression) {
         try {
             var result;
-            eval("result = " + expression + ";");
-            var sentRaw = false;
-            if (result && result.hasOwnProperty('length')) {
-                try {
-                    send({ name: '+result', payload: "OOB" }, result);
-                    sentRaw = true;
-                } catch (e) {
+            // If we passed in an object
+            // TODO: Fix this gross nonsense
+            if (typeof(expression) == "object"){
+                if (expression.eval){
+                    eval("result = " + expression.eval + ";");
                 }
-            }
-            if (!sentRaw) {
-                send({ name: '+result', payload: result });
+                send({ name: '+silent_result', payload: result });
+            // Otherwise expression is a string
+            } else {
+                eval("result = " + expression + ";");
+                var sentRaw = false;
+                if (result && result.hasOwnProperty('length')) {
+                    try {
+                        send({ name: '+result', payload: "OOB" }, result);
+                        sentRaw = true;
+                    } catch (e) {
+                    }
+                }
+                if (!sentRaw) {
+                    send({ name: '+result', payload: result });
+                }
             }
         } catch (e) {
             send({ name: '+error', payload: e.toString() });
@@ -91,6 +109,20 @@ def main():
     recv(onExpression);
 }).call(this);
 """
+
+        def _synchronous_evaluate(self, text):
+            self._reactor.schedule(lambda: self._send_expression({"eval": text}))
+            self._cond.acquire()
+            while self._response is None:
+                self._cond.wait()
+            response = self._response
+            self._response = None
+            self._cond.release()
+            # TODO: This is super gross, need to actually fix this and unify conventions
+            # once we know what we're doing with messages.
+            if "payload" not in response[0]:
+                response[0]['payload'] = None
+            return response[0]['payload']
 
         def _create_prompt(self):
             # Todo: Make this prompt less shitty and make sure all platforms are covered ;)
@@ -112,6 +144,36 @@ def main():
                 prompt_string = "%s::%s::%s" % (self._device.name, self._device.name, target)
 
             return prompt_string
+
+        def completer(self, prefix, index):
+            # If it's the first loop, do the init
+            if index == 0:
+                # If nothing is in the readline buffer
+                if not prefix:
+                    # Give every key that doesn't start with a "_"
+                    self._completor_locals = [key for key in self._synchronous_evaluate("Object.keys(this)") if not key.startswith('_')]
+                else:
+                    if prefix.endswith("."):
+                        thing_to_check = prefix.split(' ')[0][:-1]
+                        self._completor_locals = self._synchronous_evaluate("Object.keys(" + thing_to_check + ")")
+                    else:
+                        if "." in prefix:
+                            # grab the last statement
+                            target = prefix.split(' ')[-1]
+                            needle = target.split('.')[-1]
+                            # Chop off everything
+                            target = ".".join(target.split('.')[:-1])
+                            self._completor_locals = [target + "." + key for key in self._synchronous_evaluate("Object.keys(" + target + ")") if key.startswith(needle)]
+                            # Do stuff
+                        # Give every key that starts with the root prefix
+                        else:
+                            self._completor_locals = [key for key in self._synchronous_evaluate("Object.keys(this)") if key.startswith(prefix)]
+
+            try:
+                return self._completor_locals[index]
+            except IndexError:
+                return None
+
         def _process_input(self):
             if sys.version_info[0] >= 3:
                 input_impl = input
@@ -166,14 +228,19 @@ def main():
                                     output = Fore.RED + Style.BRIGHT + value + Style.RESET_ALL
                                 sys.stdout.write(output + "\n")
                                 sys.stdout.flush()
-                        self._idle.set()
 
-                        handled = True
                     elif name == '+resume':
                         self._resume()
-                        self._idle.set()
 
-                        handled = True
+                    elif name == "+silent_result":
+                        # TODO: This is hacky as shit, need to make it cleaner/better
+                        self._cond.acquire()
+                        self._response = (stanza, data)
+                        self._cond.notify()
+                        self._cond.release()
+
+                    self._idle.set()
+                    handled = True
 
             if not handled:
                 print("message:", message, "data:", data)
@@ -215,7 +282,6 @@ def main():
 
     app = REPLApplication()
     app.run()
-
 
 if __name__ == '__main__':
     main()
