@@ -28,6 +28,7 @@ def main():
             return True
 
         def _start(self):
+            self._prompt_string = self._create_prompt()
             def on_message(message, data):
                 self._reactor.schedule(lambda: self._process_message(message, data))
             self._script = self._session.create_script(self._create_repl_script())
@@ -91,11 +92,34 @@ def main():
 }).call(this);
 """
 
+        def _create_prompt(self):
+            # Todo: Make this prompt less shitty and make sure all platforms are covered ;)
+            device_type = self._device.type
+            type_name = self._target[0]
+            target = self._target[1]
+
+            if device_type == "local":
+                if self._target[0] == "name":
+                    type_name = "ProcName"
+                elif self._target[0] == "pid":
+                    type_name = "PID"
+                prompt_string = "%s::%s::%s" % ("Local", type_name, target)
+
+            elif device_type == "tether" :
+                prompt_string = "%s::%s::%s" % ("USB", self._device.name, target)
+
+            else:
+                prompt_string = "%s::%s::%s" % (self._device.name, self._device.name, target)
+
+            return prompt_string
         def _process_input(self):
             if sys.version_info[0] >= 3:
                 input_impl = input
             else:
                 input_impl = raw_input
+
+            self._print_startup_message()
+
             while True:
                 self._idle.wait()
                 expression = ""
@@ -103,10 +127,12 @@ def main():
                 while len(expression) == 0 or line.endswith("\\"):
                     try:
                         if len(expression) == 0:
-                            line = input_impl(">>> ")
+                            line = input_impl("[%s]" % self._prompt_string + "-> ")
                         else:
                             line = input_impl("... ")
                     except EOFError:
+                        # An extra newline after EOF to exit the REPL cleanly
+                        print "\nThank you for using Frida!"
                         return
                     if len(line.strip()) > 0:
                         if len(expression) > 0:
@@ -151,6 +177,21 @@ def main():
 
             if not handled:
                 print("message:", message, "data:", data)
+
+        def _print_startup_message(self):
+            print """    _____
+   (_____)
+    |   |    Frida v3.0 - A world-class dynamic instrumentation framework
+    |   |
+    |`-'|    Commands:
+    |   |        help      -> Displays the help system
+    |   |        object?   -> Display information about 'object'
+    |   |        exit/quit -> Exit
+    |   |
+    |   |    More info at http://www.frida.re/docs/home/
+    `._.'
+
+"""
 
     def hexdump(src, length=16):
         try:
