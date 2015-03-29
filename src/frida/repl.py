@@ -4,10 +4,11 @@ def main():
     import json
     import platform
     try:
-        import readline
-        # Stupid hack to workaround oxs's shitty readline impl
         if platform.system() == "Darwin":
+            # We really want to avoid libedit
             import gnureadline as readline
+        else:
+            import readline
         HAVE_READLINE = True
     except:
         HAVE_READLINE = False
