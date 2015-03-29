@@ -13,6 +13,10 @@ def main():
         HAVE_READLINE = False
     import sys
     import threading
+    import os
+
+    if HAVE_READLINE:
+       HIST_FILE = os.path.join(os.path.expanduser("~"), ".frida_history")
 
     class REPLApplication(ConsoleApplication):
         def __init__(self):
@@ -23,6 +27,12 @@ def main():
                 readline.parse_and_bind("set show-all-if-ambiguous on")
                 # Set our custom completer
                 readline.set_completer(self.completer)
+
+                try:
+                    readline.read_history_file(HIST_FILE)
+                except IOError:
+                    pass
+
             self._idle = threading.Event()
             self._cond = threading.Condition()
             self._response = None
@@ -203,6 +213,10 @@ def main():
 
                 if HAVE_READLINE:
                     readline.add_history(expression)
+                    try:
+                        readline.write_history_file(HIST_FILE)
+                    except IOError:
+                        pass
 
                 if expression.endswith("?"):
                     # Help feature
