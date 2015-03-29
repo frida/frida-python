@@ -212,7 +212,6 @@ def main():
                         expression += line.rstrip("\\")
 
                 if HAVE_READLINE:
-                    readline.add_history(expression)
                     try:
                         readline.write_history_file(HIST_FILE)
                     except IOError:
