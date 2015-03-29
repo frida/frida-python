@@ -194,7 +194,7 @@ def main():
                             line = input_impl("... ")
                     except EOFError:
                         # An extra newline after EOF to exit the REPL cleanly
-                        print "\nThank you for using Frida!"
+                        print("\nThank you for using Frida!")
                         return
                     if len(line.strip()) > 0:
                         if len(expression) > 0:
@@ -211,10 +211,10 @@ def main():
                     # "Magic" commands
                     self._do_magic(expression)
                 elif expression in ("quit", "q", "exit"):
-                    print "Thank you for using Frida!"
+                    print("Thank you for using Frida!")
                     return
                 elif expression == "help":
-                    print "Frida help 1.0!"
+                    print("Frida help 1.0!")
                 else:
                     self._idle.clear()
                     self._reactor.schedule(lambda: self._send_expression(expression))
@@ -259,7 +259,7 @@ def main():
                 print("message:", message, "data:", data)
 
         def _print_startup_message(self):
-            print """    _____
+            print("""    _____
    (_____)
     |   |    Frida v3.0 - A world-class dynamic instrumentation framework
     |   |
@@ -271,7 +271,7 @@ def main():
     |   |    More info at http://www.frida.re/docs/home/
     `._.'
 
-"""
+""")
 
         def _print_help(self, expression):
             # TODO: Figure out docstrings and implement here. This is real jankaty right now.
@@ -307,12 +307,12 @@ def main():
                 help_text += "Text:      %s\n" % self._synchronous_evaluate("%s.toString()" % obj_to_identify)
                 help_text += "Docstring: #TODO :)"
 
-            print help_text
+            print(help_text)
 
 
         def _do_magic(self, expression):
             #TODO: add local file read capabilities i.e. %run /tmp/script.txt, and other stuff?
-            print "You thought I was sleeping, didn't you. Acting."
+            print("You thought I was sleeping, didn't you. Acting.")
 
     def hexdump(src, length=16):
         try:
