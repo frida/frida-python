@@ -32,3 +32,4 @@
 /src/frida/Makefile
 /src/frida/Makefile.in
 /stamp-h1
+.idea/
