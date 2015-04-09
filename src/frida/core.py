@@ -180,8 +180,8 @@ recv(function (string) {
 
         self._exec_script(script, send_data)
 
-    def create_script(self, source):
-        return self._impl.create_script(source)
+    def create_script(self, source, **kwargs):
+        return self._impl.create_script(source, **kwargs)
 
     def on(self, signal, callback):
         self._impl.on(signal, callback)

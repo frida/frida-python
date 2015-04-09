@@ -151,7 +151,7 @@ static PyObject * PySession_from_handle (FridaSession * handle);
 static int PySession_init (PySession * self);
 static void PySession_dealloc (PySession * self);
 static PyObject * PySession_detach (PySession * self);
-static PyObject * PySession_create_script (PySession * self, PyObject * args);
+static PyObject * PySession_create_script (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_on (PySession * self, PyObject * args);
 static PyObject * PySession_off (PySession * self, PyObject * args);
 static void PySession_on_detached (PySession * self, FridaSession * handle);
@@ -225,7 +225,7 @@ static PyMemberDef PyIcon_members[] =
 static PyMethodDef PySession_methods[] =
 {
   { "detach", (PyCFunction) PySession_detach, METH_NOARGS, "Detach session from the process." },
-  { "create_script", (PyCFunction) PySession_create_script, METH_VARARGS, "Create a new script." },
+  { "create_script", (PyCFunction) PySession_create_script, METH_VARARGS | METH_KEYWORDS, "Create a new script." },
   { "on", (PyCFunction) PySession_on, METH_VARARGS, "Add an event handler." },
   { "off", (PyCFunction) PySession_off, METH_VARARGS, "Remove an event handler." },
   { NULL }
@@ -1158,17 +1158,18 @@ PySession_detach (PySession * self)
 }
 
 static PyObject *
-PySession_create_script (PySession * self, PyObject * args)
+PySession_create_script (PySession * self, PyObject * args, PyObject * kw)
 {
-  const char * source;
+  static char * keywords[] = { "name", NULL };
+  const char * source, * name = NULL;
   GError * error = NULL;
   FridaScript * handle;
 
-  if (!PyArg_ParseTuple (args, "s", &source))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|s", keywords, &source, &name))
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  handle = frida_session_create_script_sync (self->handle, source, &error);
+  handle = frida_session_create_script_sync (self->handle, name, source, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
   {
