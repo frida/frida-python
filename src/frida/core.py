@@ -319,6 +319,20 @@ class ModuleFunction(Function):
     def __repr__(self):
         return "ModuleFunction(module=\"%s\", name=\"%s\", relative_address=0x%x)" % (self.module.name, self.name, self.relative_address)
 
+class ObjCMethod(Function):
+    def __init__(self, mtype, cls, method, address):
+        self.mtype = mtype
+        self.cls = cls
+        self.method = method
+        self.address = address
+        super(ObjCMethod, self).__init__(self.display_name(), address)
+
+    def display_name(self):
+        return '{mtype}[{cls} {method}]'.format(mtype=self.mtype, cls=self.cls, method=self.method)
+
+    def __repr__(self):
+        return "ObjCMethod(mtype=\"%s\", cls=\"%s\", method=\"%s\", address=0x%x)" % (self.mtype, self.cls, self.method, self.address)
+
 class Range(object):
     def __init__(self, base_address, size, protection):
         self.base_address = base_address

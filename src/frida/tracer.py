@@ -7,7 +7,7 @@ import re
 import binascii
 import subprocess
 
-from frida.core import ModuleFunction
+from frida.core import ModuleFunction, ObjCMethod
 
 
 class TracerProfileBuilder(object):
@@ -34,6 +34,11 @@ class TracerProfileBuilder(object):
     def exclude(self, *function_name_globs):
         for f in function_name_globs:
             self._spec.append(("exclude", 'function', f))
+        return self
+
+    def include_objc_method(self, *function_name_globs):
+        for f in function_name_globs:
+            self._spec.append(('include', 'objc_method', f))
         return self
 
     def include_rel_address(self, *address_rel_offsets):
@@ -66,6 +71,9 @@ class TracerProfile(object):
                     working_set = working_set.union(self._include_function(param, all_modules))
                 elif operation == "exclude":
                     working_set = self._exclude_function(param, working_set)
+            elif scope == 'objc_method':
+                if operation == 'include':
+                    working_set = working_set.union(self._include_objc_method(param, session))
             elif scope == 'rel_address':
                 if operation == 'include':
                     abs_address = session.find_base_address(param['module']) + param['offset']
@@ -101,6 +109,110 @@ class TracerProfile(object):
             if not fnmatch.fnmatchcase(export.name, glob):
                 r.append(export)
         return set(r)
+
+    def _include_objc_method(self, glob, session):
+        match = re.search(r'([+-])\[(\S+)\s+(\S+)\]', glob)
+
+        if not match:
+            raise Exception('Format: -[Class foo:bar:] or +[Class baz]')
+
+        mtype, cls, method = match.groups()
+
+        script = '''
+var mtype = '%(mtype)s';
+var cls = '%(cls)s';
+var method = '%(method)s';
+
+if (ObjC.available) {
+    var funs = {};
+    var funArgs = {
+        sel_registerName: 1,
+        class_getSuperclass: 1,
+        class_getMethodImplementation: 2,
+        object_getClass: 1
+    };
+    Object.keys(funArgs).forEach(function (name) {
+        var funPtr = Module.findExportByName('libobjc.A.dylib', name);
+        var args = funArgs[name];
+        var argsArr = [];
+        for (var i = 0; i !== args; i++) {
+            argsArr.push('pointer');
+        }
+        funs[name] = new NativeFunction(funPtr, 'pointer', argsArr);
+    });
+
+    var sel = funs.sel_registerName(Memory.allocUtf8String(method));
+
+    var classInfo = {};
+
+    var i;
+    for (i = 0; i !== ObjC.classes.length; i++) {
+        var name = ObjC.classes[i];
+        var clsPtr = ObjC.use(name).classHandle.toString();
+        classInfo[clsPtr] = {
+            name: name,
+            subclasses: []
+        };
+    }
+
+    for (i = 0; i !== ObjC.classes.length; i++) {
+        var name = ObjC.classes[i];
+        var clsHandle = ObjC.use(name).classHandle;
+        var clsPtr = clsHandle.toString();
+        var superCls = funs.class_getSuperclass(clsHandle);
+        if (!superCls.isNull()) {
+            var superClsPtr = superCls.toString();
+            classInfo[superClsPtr].subclasses.push(clsPtr);
+        }
+    }
+
+    var traceAddresses = {};
+
+    function addImps(clsPtr, superImpPtr) {
+        var info = classInfo[clsPtr];
+        var name = info.name;
+
+        var clsHandle = ptr(clsPtr);
+        if (mtype === '+') {
+            clsHandle = funs.object_getClass(clsHandle);
+        }
+
+        var imp = funs.class_getMethodImplementation(clsHandle, sel);
+        var impPtr = imp.toString();
+        if (impPtr !== superImpPtr) {
+            traceAddresses[name] = impPtr;
+        }
+
+        var subclasses = info.subclasses;
+        for (var i = 0; i !== subclasses.length; i++) {
+            addImps(subclasses[i], imp);
+        }
+    }
+
+    for (i = 0; i !== ObjC.classes.length; i++) {
+        var name = ObjC.classes[i];
+        if (name === cls) {
+            addImps(ObjC.use(name).classHandle.toString(), '');
+            break;
+        }
+    }
+
+    send({success: true, addresses: traceAddresses});
+} else {
+    send({success: false, error: 'Objective C runtime is not available'})
+}
+        ''' % {"mtype": mtype, "cls": cls, "method": method}
+
+        result = session._exec_script(script)
+
+        if not result['success']:
+            raise Exception(result['error'])
+
+        r = []
+        for name, adr in result['addresses'].items():
+            r.append(ObjCMethod(mtype, name, method, int(adr, 0)))
+
+        return r
 
 class Tracer(object):
     def __init__(self, reactor, repository, profile):
@@ -309,36 +421,50 @@ class Repository(object):
             self._on_update_callback(function, handler, source)
 
     def _create_stub_handler(self, function):
-        args = ""
-        argc = 0
-        varargs = False
-        try:
-            with open(os.devnull, 'w') as devnull:
-                output = subprocess.check_output(["man", "-P", "col -b", "2", function.name], stderr=devnull)
-            match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}" + function.name + r"\(.*\n(^.+$\n)*)(?:.|\n)*^DESCRIPTION", output.decode(), re.MULTILINE)
-            if match:
-                decl = match.group(1)
-                for argm in re.finditer(r"([^* ]*)\s*(,|\))", decl):
-                    arg = argm.group(1)
-                    if arg == 'void':
-                        continue
-                    if arg == '...':
-                        args += '+ ", ..."'
-                        varargs = True
-                        continue
+        if isinstance(function, ObjCMethod):
+            display_name = function.display_name()
+            _nonlocal_i = {'val': 2}
+            def objc_arg(m):
+                r = ':" + args[%d] + " ' % _nonlocal_i['val']
+                _nonlocal_i['val'] += 1
+                return r
 
-                    args += '%(pre)s%(arg)s=" + args[%(argc)s]' % {"arg": arg, "argc": argc, "pre": '"' if argc == 0 else '+ ", '}
-                    argc += 1
-        except (subprocess.CalledProcessError, OSError): # WindowsError or FileNotFoundError
-            pass
-        except AttributeError: # Python 2.6 support; which probably won't stay around for that much longer
-            pass
-        if args == "":
-            args = '""'
+            log_str = '"' + re.sub(r':', objc_arg, display_name) + '"'
+        else:
+            display_name = function.name
+
+            args = ""
+            argc = 0
+            varargs = False
+            try:
+                with open(os.devnull, 'w') as devnull:
+                    output = subprocess.check_output(["man", "-P", "col -b", "2", function.name], stderr=devnull)
+                match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}" + function.name + r"\(.*\n(^.+$\n)*)(?:.|\n)*^DESCRIPTION", output.decode(), re.MULTILINE)
+                if match:
+                    decl = match.group(1)
+                    for argm in re.finditer(r"([^* ]*)\s*(,|\))", decl):
+                        arg = argm.group(1)
+                        if arg == 'void':
+                            continue
+                        if arg == '...':
+                            args += '+ ", ..."'
+                            varargs = True
+                            continue
+
+                        args += '%(pre)s%(arg)s=" + args[%(argc)s]' % {"arg": arg, "argc": argc, "pre": '"' if argc == 0 else '+ ", '}
+                        argc += 1
+            except (subprocess.CalledProcessError, OSError): # WindowsError or FileNotFoundError
+                pass
+            except AttributeError: # Python 2.6 support; which probably won't stay around for that much longer
+                pass
+            if args == "":
+                args = '""'
+
+            log_str = '"%(name)s(" + %(args)s + ")"' % { "name": function.name, "args": args }
 
         return """\
 /*
- * Auto-generated by Frida. Please modify to match the signature of %(name)s.
+ * Auto-generated by Frida. Please modify to match the signature of %(display_name)s.
  * This stub is currently auto-generated from manpages when available.
  *
  * For full API reference, see: http://www.frida.re/docs/javascript-api/
@@ -346,7 +472,7 @@ class Repository(object):
 
 {
     /**
-     * Called synchronously when about to call %(name)s.
+     * Called synchronously when about to call %(display_name)s.
      *
      * @this {object} - Object allowing you to store state for use in onLeave.
      * @param {function} log - Call this function with a string to be presented to the user.
@@ -359,11 +485,11 @@ class Repository(object):
      * use "this" which is an object for keeping state local to an invocation.
      */
     onEnter: function onEnter(log, args, state) {
-        log("%(name)s(" + %(args)s + ")");
+        log(%(log_str)s);
     },
 
     /**
-     * Called synchronously when about to return from %(name)s.
+     * Called synchronously when about to return from %(display_name)s.
      *
      * See onEnter for details.
      *
@@ -375,7 +501,7 @@ class Repository(object):
     onLeave: function onLeave(log, retval, state) {
     }
 }
-""" % { "name": function.name, "args": args }
+""" % {"display_name": display_name, "log_str": log_str}
 
 class MemoryRepository(Repository):
     def __init__(self):
@@ -489,6 +615,8 @@ def main():
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include,))
             parser.add_option("-x", "--exclude", help="exclude FUNCTION", metavar="FUNCTION",
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.exclude,))
+            parser.add_option("-m", "--include-method", help="include OBJC_METHOD", metavar="OBJC_METHOD",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_objc_method,))
             parser.add_option("-a", "--add", help="add MODULE!OFFSET", metavar="MODULE!OFFSET",
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_rel_address,))
             self._profile_builder = pb
