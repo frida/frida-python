@@ -152,6 +152,8 @@ static int PySession_init (PySession * self);
 static void PySession_dealloc (PySession * self);
 static PyObject * PySession_detach (PySession * self);
 static PyObject * PySession_create_script (PySession * self, PyObject * args, PyObject * kw);
+static PyObject * PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw);
+static PyObject * PySession_disable_debugger (PySession * self, PyObject * args);
 static PyObject * PySession_on (PySession * self, PyObject * args);
 static PyObject * PySession_off (PySession * self, PyObject * args);
 static void PySession_on_detached (PySession * self, FridaSession * handle);
@@ -226,6 +228,8 @@ static PyMethodDef PySession_methods[] =
 {
   { "detach", (PyCFunction) PySession_detach, METH_NOARGS, "Detach session from the process." },
   { "create_script", (PyCFunction) PySession_create_script, METH_VARARGS | METH_KEYWORDS, "Create a new script." },
+  { "enable_debugger", (PyCFunction) PySession_enable_debugger, METH_VARARGS | METH_KEYWORDS, "Enable the Node.js compatible script debugger." },
+  { "disable_debugger", (PyCFunction) PySession_disable_debugger, METH_VARARGS, "Disable the Node.js compatible script debugger." },
   { "on", (PyCFunction) PySession_on, METH_VARARGS, "Add an event handler." },
   { "off", (PyCFunction) PySession_off, METH_VARARGS, "Remove an event handler." },
   { NULL }
@@ -1179,6 +1183,47 @@ PySession_create_script (PySession * self, PyObject * args, PyObject * kw)
   }
 
   return PyScript_from_handle (handle);
+}
+
+static PyObject *
+PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "port", NULL };
+  unsigned short int port = 0;
+  GError * error = NULL;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "|H", keywords, &port))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_session_enable_debugger_sync (self->handle, port, &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+  {
+    PyErr_SetString (PyExc_SystemError, error->message);
+    g_error_free (error);
+    return NULL;
+  }
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PySession_disable_debugger (PySession * self, PyObject * args)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_session_disable_debugger_sync (self->handle, &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+  {
+    PyErr_SetString (PyExc_SystemError, error->message);
+    g_error_free (error);
+    return NULL;
+  }
+
+  Py_RETURN_NONE;
 }
 
 static PyObject *

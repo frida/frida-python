@@ -183,6 +183,12 @@ recv(function (string) {
     def create_script(self, source, **kwargs):
         return self._impl.create_script(source, **kwargs)
 
+    def enable_debugger(self, **kwargs):
+        return self._impl.enable_debugger(**kwargs)
+
+    def disable_debugger(self):
+        return self._impl.disable_debugger()
+
     def on(self, signal, callback):
         self._impl.on(signal, callback)
 
