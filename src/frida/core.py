@@ -163,7 +163,7 @@ recv(function (data) {
 
         self._exec_script(script, send_data)
 
-    def read_utf8(self, address, length = -1):
+    def read_utf8(self, address, length=-1):
         return self._exec_script("send(Memory.readUtf8String(ptr(\"%u\"), %u));" % (address, length))
 
     def write_utf8(self, address, string):
@@ -195,7 +195,7 @@ recv(function (string) {
     def off(self, signal, callback):
         self._impl.off(signal, callback)
 
-    def _exec_script(self, script_source, post_hook = None):
+    def _exec_script(self, script_source, post_hook=None):
         script = self.create_script(script_source)
         return _execute_script(script, post_hook)
 
@@ -372,10 +372,10 @@ class ModuleMap(AddressMap):
         super(ModuleMap, self).__init__(modules, lambda m: m.base_address, lambda m: m.size)
 
 class FunctionMap(AddressMap):
-    def __init__(self, functions, get_address = lambda f: f.absolute_address):
+    def __init__(self, functions, get_address=lambda f: f.absolute_address):
         super(FunctionMap, self).__init__(functions, get_address, lambda f: 1)
 
-def _execute_script(script, post_hook = None):
+def _execute_script(script, post_hook=None):
     def on_message(message, data):
         if message['type'] == 'send':
             if data is not None:
