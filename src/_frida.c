@@ -1164,7 +1164,7 @@ PySession_detach (PySession * self)
 static PyObject *
 PySession_create_script (PySession * self, PyObject * args, PyObject * kw)
 {
-  static char * keywords[] = { "name", NULL };
+  static char * keywords[] = { "source", "name", NULL };
   const char * source, * name = NULL;
   GError * error = NULL;
   FridaScript * handle;

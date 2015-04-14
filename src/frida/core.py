@@ -180,11 +180,11 @@ recv(function (string) {
 
         self._exec_script(script, send_data)
 
-    def create_script(self, source, **kwargs):
-        return self._impl.create_script(source, **kwargs)
+    def create_script(self, *args, **kwargs):
+        return self._impl.create_script(*args, **kwargs)
 
-    def enable_debugger(self, **kwargs):
-        return self._impl.enable_debugger(**kwargs)
+    def enable_debugger(self, *args, **kwargs):
+        return self._impl.enable_debugger(*args, **kwargs)
 
     def disable_debugger(self):
         return self._impl.disable_debugger()
