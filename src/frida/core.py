@@ -208,7 +208,7 @@ recv(function (string) {
         if attr == 'session':
             raise KeyError("Please update your code from `.session.create_script()` to `.create_script()`")
         else:
-            return super(Session, self).__getattr__(self, attr)
+            return getattr(super(Session, self), attr)
 
 class Module(FunctionContainer):
     def __init__(self, name, base_address, size, path, session):
