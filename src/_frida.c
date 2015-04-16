@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 Ole André Vadla Ravnås <ole.andre.ravnas@tillitech.com>
+ * Copyright (C) 2013-2015 Ole André Vadla Ravnås <ole.andre.ravnas@tillitech.com>
  *
  * Licence: wxWindows Library Licence, Version 3.1
  */
@@ -767,7 +767,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args)
   GError * error = NULL;
   guint pid;
 
-  if (PyTuple_Size (args) == 1 && PySequence_Check (PyTuple_GetItem (args, 0)))
+  if (PyTuple_Size (args) == 1 && (PyTuple_Check (PyTuple_GetItem (args, 0)) || PyList_Check (PyTuple_GetItem (args, 0))))
   {
     PyObject * argv_elements;
     Py_ssize_t size, i;
