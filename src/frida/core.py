@@ -108,18 +108,17 @@ class Session(FunctionContainer):
 
     def enumerate_modules(self):
         if self._modules is None:
-            script = self.create_script(
-    """
-    var modules = [];
-    Process.enumerateModules({
-        onMatch: function (module) {
-            modules.push(module);
-        },
-        onComplete: function () {
-            send(modules);
-        }
-    });
-    """)
+            script = self.create_script(name="session-enumerate-modules", source="""\
+var modules = [];
+Process.enumerateModules({
+    onMatch: function (module) {
+        modules.push(module);
+    },
+    onComplete: function () {
+        send(modules);
+    }
+});
+""")
             self._modules = [Module(data['name'], int(data['base'], 16), data['size'], data['path'], self) for data in _execute_script(script)]
         return self._modules
 
@@ -127,8 +126,7 @@ class Session(FunctionContainer):
       @param protection example '--x'
     """
     def enumerate_ranges(self, protection):
-        script = self.create_script(
-"""
+        script = self.create_script(name="session-enumerate-ranges", source="""\
 var ranges = [];
 Process.enumerateRanges(\"%s\", {
     onMatch: function (range) {
@@ -195,8 +193,8 @@ recv(function (string) {
     def off(self, signal, callback):
         self._impl.off(signal, callback)
 
-    def _exec_script(self, script_source, post_hook=None):
-        script = self.create_script(script_source)
+    def _exec_script(self, source, post_hook=None):
+        script = self.create_script(name="exec", source=source)
         return _execute_script(script, post_hook)
 
     def _do_ensure_function(self, absolute_address):
@@ -243,8 +241,7 @@ class Module(FunctionContainer):
 
     def enumerate_exports(self):
         if self._exports is None:
-            script = self._session.create_script(
-"""
+            script = self._session.create_script(name="module-enumerate-exports", source="""\
 var exports = [];
 Module.enumerateExports(\"%s\", {
     onMatch: function (exp) {
@@ -268,8 +265,7 @@ Module.enumerateExports(\"%s\", {
       @param protection example '--x'
     """
     def enumerate_ranges(self, protection):
-        script = self._session.create_script(
-"""
+        script = self._session.create_script(name="module-enumerate-ranges", source="""\
 var ranges = [];
 Module.enumerateRanges(\"%s\", \"%s\", {
     onMatch: function (range) {

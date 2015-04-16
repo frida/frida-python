@@ -23,7 +23,7 @@ class TracerProfileBuilder(object):
 
     def exclude_modules(self, *module_name_globs):
         for m in module_name_globs:
-            self._spec.append(("exclude", 'module', m))
+            self._spec.append(('exclude', 'module', m))
         return self
 
     def include(self, *function_name_globs):
@@ -33,7 +33,7 @@ class TracerProfileBuilder(object):
 
     def exclude(self, *function_name_globs):
         for f in function_name_globs:
-            self._spec.append(("exclude", 'function', f))
+            self._spec.append(('exclude', 'function', f))
         return self
 
     def include_objc_method(self, *function_name_globs):
@@ -64,12 +64,12 @@ class TracerProfile(object):
             if scope == 'module':
                 if operation == 'include':
                     working_set = working_set.union(self._include_module(param, all_modules))
-                elif operation == "exclude":
+                elif operation == 'exclude':
                     working_set = self._exclude_module(param, working_set)
             elif scope == 'function':
                 if operation == 'include':
                     working_set = working_set.union(self._include_function(param, all_modules))
-                elif operation == "exclude":
+                elif operation == 'exclude':
                     working_set = self._exclude_function(param, working_set)
             elif scope == 'objc_method':
                 if operation == 'include':
@@ -118,10 +118,10 @@ class TracerProfile(object):
 
         mtype, cls, method = match.groups()
 
-        script = '''
-var mtype = '%(mtype)s';
-var cls = '%(cls)s';
-var method = '%(method)s';
+        script = """
+var mtype = "%(mtype)s";
+var cls = "%(cls)s";
+var method = "%(method)s";
 
 if (ObjC.available) {
     var funs = {};
@@ -132,7 +132,7 @@ if (ObjC.available) {
         object_getClass: 1
     };
     Object.keys(funArgs).forEach(function (name) {
-        var funPtr = Module.findExportByName('libobjc.A.dylib', name);
+        var funPtr = Module.findExportByName("libobjc.A.dylib", name);
         var args = funArgs[name];
         var argsArr = [];
         for (var i = 0; i !== args; i++) {
@@ -199,9 +199,9 @@ if (ObjC.available) {
 
     send({success: true, addresses: traceAddresses});
 } else {
-    send({success: false, error: 'Objective C runtime is not available'})
+    send({success: false, error: "Objective C runtime is not available"})
 }
-        ''' % {"mtype": mtype, "cls": cls, "method": method}
+        """ % {"mtype": mtype, "cls": cls, "method": method}
 
         result = session._exec_script(script)
 
@@ -248,9 +248,8 @@ class Tracer(object):
 
         ui.on_trace_progress('resolve')
         working_set = self._profile.resolve(session)
-        source = self._create_trace_script()
         ui.on_trace_progress('instrument')
-        self._script = session.create_script(source)
+        self._script = session.create_script(name="tracer", source=self._create_trace_script())
         self._script.on('message', on_message)
         self._script.load()
         for chunk in [working_set[i:i+1000] for i in range(0, len(working_set), 1000)]:

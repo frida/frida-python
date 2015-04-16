@@ -58,7 +58,7 @@ class TestCore(unittest.TestCase):
             result['address'] = int(message['payload'], 16)
             event.set()
 
-        script = self.session.create_script("""\
+        script = self.session.create_script(name="test-memory-access", source="""\
 hello = Memory.allocUtf8String("Hello");
 send(hello);
 """)

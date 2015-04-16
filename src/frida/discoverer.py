@@ -21,8 +21,7 @@ class Discoverer(object):
     def start(self, session, ui):
         def on_message(message, data):
             self._reactor.schedule(lambda: self._process_message(message, data, session, ui))
-        source = self._create_discover_script()
-        self._script = session.create_script(source)
+        self._script = session.create_script(name="discoverer", source=self._create_discover_script())
         self._script.on('message', on_message)
         self._script.load()
 
