@@ -57,6 +57,8 @@ def main():
             self._script.load()
             if self._spawned_argv is not None:
                 self._update_status("Spawned `%s`. Call resume() to let the main thread start executing!" % " ".join(self._spawned_argv))
+            else:
+                self._update_status("Attached")
             self._idle.set()
 
         def _stop(self):
