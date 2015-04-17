@@ -40,6 +40,8 @@ class ConsoleApplication(object):
                 type='string', action='callback', callback=store_target, callback_args=('name',))
             parser.add_option("-p", "--attach-pid", help="attach to PID", metavar="PID",
                 type='int', action='callback', callback=store_target, callback_args=('pid',))
+            parser.add_option("--debug", help="enable the Node.js compatible script debugger",
+                action='store_true', dest="enable_debugger", default=False)
         self._add_options(parser)
 
         (options, args) = parser.parse_args()
@@ -50,6 +52,7 @@ class ConsoleApplication(object):
         self._spawned_pid = None
         self._spawned_argv = None
         self._session = None
+        self._enable_debugger = options.enable_debugger
         self._schedule_on_session_detached = lambda: self._reactor.schedule(self._on_session_detached)
         self._started = False
         self._resumed = False
@@ -144,6 +147,11 @@ class ConsoleApplication(object):
                     attach_target = target_value
                     self._update_status("Attaching...")
                 self._session = self._device.attach(attach_target)
+                if self._enable_debugger:
+                    self._session.enable_debugger()
+                    self._update_status("")
+                    print("Debugger listening on port 5858\n")
+                    self._update_status("Attaching...")
                 self._session.on('detached', self._schedule_on_session_detached)
             except Exception as e:
                 self._update_status("Failed to attach: %s" % e)
