@@ -62,5 +62,6 @@ AC_CONFIG_FILES([
   Makefile
   src/Makefile
   src/frida/Makefile
+  src/scripts/Makefile
 ])
 AC_OUTPUT

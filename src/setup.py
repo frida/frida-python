@@ -57,10 +57,10 @@ setup(
     packages=['frida'],
     entry_points={
         'console_scripts': [
-            "frida-ps = frida.ps:main",
+            "frida = frida.repl:main",
             "frida-discover = frida.discoverer:main",
-            "frida-trace = frida.tracer:main",
-            "frida = frida.repl:main"
+            "frida-ps = frida.ps:main",
+            "frida-trace = frida.tracer:main"
         ]
     },
     ext_modules=[Extension('_frida', [])],
