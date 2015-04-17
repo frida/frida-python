@@ -1,4 +1,5 @@
 def main():
+    import frida
     from frida.application import ConsoleApplication
     from colorama import Fore, Style
     import json
@@ -275,7 +276,7 @@ def main():
         def _print_startup_message(self):
             print("""    _____
    (_____)
-    |   |    Frida v3.0 - A world-class dynamic instrumentation framework
+    |   |    Frida {version} - A world-class dynamic instrumentation framework
     |   |
     |`-'|    Commands:
     |   |        help      -> Displays the help system
@@ -285,7 +286,7 @@ def main():
     |   |    More info at http://www.frida.re/docs/home/
     `._.'
 
-""")
+""".format(version=frida.__version__))
 
         def _print_help(self, expression):
             # TODO: Figure out docstrings and implement here. This is real jankaty right now.
