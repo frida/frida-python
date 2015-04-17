@@ -31,5 +31,6 @@
 /src/frida.egg-info/
 /src/frida/Makefile
 /src/frida/Makefile.in
+/src/scripts/Makefile.in
 /stamp-h1
 .idea/
