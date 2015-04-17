@@ -24,7 +24,7 @@ class ConsoleApplication(object):
     def __init__(self, run_until_return=await_enter):
         colorama.init()
 
-        parser = OptionParser(usage=self._usage())
+        parser = OptionParser(usage=self._usage(), version=frida.__version__)
         parser.add_option("-U", "--usb", help="connect to USB device",
                 action='store_const', const='tether', dest="device_type", default='local')
         parser.add_option("-R", "--remote", help="connect to remote device",
