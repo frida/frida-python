@@ -1213,6 +1213,8 @@ PySession_disable_debugger (PySession * self, PyObject * args)
 {
   GError * error = NULL;
 
+  (void) args;
+
   Py_BEGIN_ALLOW_THREADS
   frida_session_disable_debugger_sync (self->handle, &error);
   Py_END_ALLOW_THREADS
