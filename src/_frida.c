@@ -1657,6 +1657,8 @@ MOD_INIT (_frida)
 
   MOD_DEF (module, "_frida", "Frida", NULL);
 
+  PyModule_AddStringConstant (module, "__version__", frida_version_string ());
+
   Py_INCREF (&PyDeviceManagerType);
   PyModule_AddObject (module, "DeviceManager", (PyObject *) &PyDeviceManagerType);
 
