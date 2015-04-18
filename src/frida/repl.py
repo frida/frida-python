@@ -44,7 +44,7 @@ def main():
             super(REPLApplication, self).__init__(self._process_input)
 
         def _add_options(self, parser):
-            parser.add_option("-r", "--run", help="run SCRIPT", metavar="SCRIPT",
+            parser.add_option("-l", "--load", help="load SCRIPT", metavar="SCRIPT",
                 type='string', action='store', dest="user_script", default=None)
 
         def _initialize(self, parser, options, args):
