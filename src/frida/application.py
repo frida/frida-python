@@ -52,7 +52,10 @@ class ConsoleApplication(object):
         self._spawned_pid = None
         self._spawned_argv = None
         self._session = None
-        self._enable_debugger = options.enable_debugger
+        if self._needs_target():
+            self._enable_debugger = options.enable_debugger
+        else:
+            self._enable_debugger = False
         self._schedule_on_session_detached = lambda: self._reactor.schedule(self._on_session_detached)
         self._started = False
         self._resumed = False
