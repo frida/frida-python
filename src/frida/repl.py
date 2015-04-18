@@ -35,12 +35,20 @@ def main():
                 except IOError:
                     pass
 
+            self._script = None
             self._ready = threading.Event()
             self._response_cond = threading.Condition()
             self._response_data = None
             self._completor_locals = []
 
             super(REPLApplication, self).__init__(self._process_input)
+
+        def _add_options(self, parser):
+            parser.add_option("-r", "--run", help="run SCRIPT", metavar="SCRIPT",
+                type='string', action='store', dest="user_script", default=None)
+
+        def _initialize(self, parser, options, args):
+            self._user_script = options.user_script
 
         def _usage(self):
             return "usage: %prog [options] target"
@@ -50,18 +58,33 @@ def main():
 
         def _start(self):
             self._prompt_string = self._create_prompt()
-            def on_message(message, data):
-                self._reactor.schedule(lambda: self._process_message(message, data))
-            self._script = self._session.create_script(name="repl", source=self._create_repl_script())
-            self._script.on('message', on_message)
-            self._script.load()
+            try:
+                self._load_script()
+            except Exception as e:
+                self._update_status("Failed to load script: {error}".format(error=e))
+                self._exit(1)
+                return
             if self._spawned_argv is not None:
                 self._update_status("Spawned `{command}`. Use %resume to let the main thread start executing!".format(command=" ".join(self._spawned_argv)))
             else:
-                self._update_status("Attached")
+                sys.stdout.write("\033[A")
             self._ready.set()
 
         def _stop(self):
+            self._unload_script()
+
+        def _load_script(self):
+            script = self._session.create_script(name="repl", source=self._create_repl_script())
+            self._unload_script()
+            self._script = script
+            def on_message(message, data):
+                self._reactor.schedule(lambda: self._process_message(message, data))
+            script.on('message', on_message)
+            script.load()
+
+        def _unload_script(self):
+            if self._script is None:
+                return
             try:
                 self._script.unload()
             except:
@@ -130,7 +153,6 @@ def main():
                     sys.stdout.write(output + "\n")
                     sys.stdout.flush()
 
-
         def _print_startup_message(self):
             print("""    _____
    (_____)
@@ -143,7 +165,6 @@ def main():
     |   |
     |   |    More info at http://www.frida.re/docs/home/
     `._.'
-
 """.format(version=frida.__version__))
 
         def _print_help(self, expression):
@@ -182,12 +203,43 @@ def main():
 
             print(help_text)
 
-        def _do_magic(self, command):
-            if command == 'resume':
+        def _do_magic(self, statement):
+            tokens = statement.split(" ")
+            command = tokens[0]
+            args = tokens[1:]
+
+            if command == 'resume' and len(args) == 0:
                 self._reactor.schedule(lambda: self._resume())
+            elif command == 'load' and len(args) == 1:
+                old_user_script = self._user_script
+                self._user_script = args[0]
+                if not self._reload():
+                    self._user_script = old_user_script
+            elif command == 'reload' and len(args) == 0:
+                self._reload()
+            elif command == 'unload' and len(args) == 0:
+                self._user_script = None
+                self._reload()
             else:
                 # TODO: Add local file read capabilities i.e. %run /tmp/script.txt, and other stuff?
                 print("Unknown command: {command}".format(command=command))
+
+        def _reload(self):
+            completed = threading.Event()
+            result = [None]
+            def do_reload():
+                try:
+                    self._load_script()
+                except Exception as e:
+                    result[0] = e
+                completed.set()
+            self._reactor.schedule(do_reload)
+            completed.wait()
+            if result[0] is None:
+                return True
+            else:
+                print("Failed to load script: {error}".format(error=result[0]))
+                return False
 
         def _create_prompt(self):
             device_type = self._device.type
@@ -256,7 +308,13 @@ def main():
                 print("message:", message, "data:", data)
 
         def _create_repl_script(self):
-            return """\
+            user_script = ""
+
+            if self._user_script is not None:
+                with open(self._user_script, 'rb') as f:
+                    user_script = f.read().rstrip("\r\n") + "\n\n// Frida REPL script:\n"
+
+            return user_script + """\
 (function () {
     "use strict";
 
