@@ -246,16 +246,14 @@ def main():
             type_name = self._target[0]
             target = self._target[1]
 
-            if device_type == 'local':
+            if device_type in ('local', 'remote'):
                 if self._target[0] == 'name':
                     type_name = "ProcName"
                 elif self._target[0] == 'pid':
                     type_name = "PID"
-                prompt_string = "%s::%s::%s" % ("Local", type_name, target)
-            elif device_type == 'tether':
-                prompt_string = "%s::%s::%s" % ("USB", self._device.name, target)
+                prompt_string = "%s::%s::%s" % (device_type.title(), type_name, target)
             else:
-                prompt_string = "%s::%s::%s" % (self._device.name, self._device.name, target)
+                prompt_string = "%s::%s::%s" % ("USB", self._device.name, target)
 
             return prompt_string
 
