@@ -36,6 +36,7 @@ def main():
                     pass
 
             self._script = None
+            self._seqno = 0
             self._ready = threading.Event()
             self._response_cond = threading.Condition()
             self._response_data = None
@@ -74,7 +75,8 @@ def main():
             self._unload_script()
 
         def _load_script(self):
-            script = self._session.create_script(name="repl", source=self._create_repl_script())
+            self._seqno += 1
+            script = self._session.create_script(name="repl%d" % self._seqno, source=self._create_repl_script())
             self._unload_script()
             self._script = script
             def on_message(message, data):
