@@ -28,16 +28,16 @@ def main():
                 readline.parse_and_bind("set show-all-if-unmodified on")
                 readline.parse_and_bind("set show-all-if-ambiguous on")
                 # Set our custom completer
-                readline.set_completer(self.completer)
+                readline.set_completer(self._completer)
 
                 try:
                     readline.read_history_file(HIST_FILE)
                 except IOError:
                     pass
 
-            self._idle = threading.Event()
-            self._cond = threading.Condition()
-            self._response = None
+            self._ready = threading.Event()
+            self._response_cond = threading.Condition()
+            self._response_data = None
             self._completor_locals = []
 
             super(REPLApplication, self).__init__(self._process_input)
@@ -56,10 +56,10 @@ def main():
             self._script.on('message', on_message)
             self._script.load()
             if self._spawned_argv is not None:
-                self._update_status("Spawned `%s`. Call resume() to let the main thread start executing!" % " ".join(self._spawned_argv))
+                self._update_status("Spawned `{command}`. Use %resume to let the main thread start executing!".format(command=" ".join(self._spawned_argv)))
             else:
                 self._update_status("Attached")
-            self._idle.set()
+            self._ready.set()
 
         def _stop(self):
             try:
@@ -68,126 +68,6 @@ def main():
                 pass
             self._script = None
 
-        def _create_repl_script(self):
-            return """
-(function () {
-    this.resume = function () {
-        send({ name: '+resume' });
-    };
-
-    Object.defineProperty(this, 'modules', {
-        enumerable: true,
-        get: function () {
-            var result = [];
-            Process.enumerateModules({
-                onMatch: function onMatch(mod) {
-                    result.push(mod);
-                },
-                onComplete: function onComplete() {
-                }
-            });
-            return result;
-        }
-    });
-
-    function onExpression(expression) {
-        try {
-            var result;
-            // If we passed in an object
-            // TODO: Fix this gross nonsense
-            if (typeof(expression) == "object"){
-                if (expression.eval){
-                    eval("result = " + expression.eval + ";");
-                }
-                send({ name: '+silent_result', payload: result });
-            // Otherwise expression is a string
-            } else {
-                eval("result = " + expression + ";");
-                var sentRaw = false;
-                if (result && result.hasOwnProperty('length')) {
-                    try {
-                        send({ name: '+result', payload: "OOB" }, result);
-                        sentRaw = true;
-                    } catch (e) {
-                    }
-                }
-                if (!sentRaw) {
-                    send({ name: '+result', payload: result });
-                }
-            }
-        } catch (e) {
-            send({ name: '+error', payload: e.toString() });
-        }
-        recv(onExpression);
-    }
-    recv(onExpression);
-}).call(this);
-"""
-
-        def _synchronous_evaluate(self, text):
-            self._reactor.schedule(lambda: self._send_expression({"eval": text}))
-            self._cond.acquire()
-            while self._response is None:
-                self._cond.wait()
-            response = self._response
-            self._response = None
-            self._cond.release()
-            # TODO: This is super gross, need to actually fix this and unify conventions
-            # once we know what we're doing with messages.
-            if "payload" not in response[0]:
-                response[0]['payload'] = None
-            return response[0]['payload']
-
-        def _create_prompt(self):
-            # Todo: Make this prompt less shitty and make sure all platforms are covered ;)
-            device_type = self._device.type
-            type_name = self._target[0]
-            target = self._target[1]
-
-            if device_type == "local":
-                if self._target[0] == "name":
-                    type_name = "ProcName"
-                elif self._target[0] == "pid":
-                    type_name = "PID"
-                prompt_string = "%s::%s::%s" % ("Local", type_name, target)
-
-            elif device_type == "tether" :
-                prompt_string = "%s::%s::%s" % ("USB", self._device.name, target)
-
-            else:
-                prompt_string = "%s::%s::%s" % (self._device.name, self._device.name, target)
-
-            return prompt_string
-
-        def completer(self, prefix, index):
-            # If it's the first loop, do the init
-            if index == 0:
-                # If nothing is in the readline buffer
-                if not prefix:
-                    # Give every key that doesn't start with a "_"
-                    self._completor_locals = [key for key in self._synchronous_evaluate("Object.keys(this)") if not key.startswith('_')]
-                else:
-                    if prefix.endswith("."):
-                        thing_to_check = prefix.split(' ')[0][:-1]
-                        self._completor_locals = self._synchronous_evaluate("Object.keys(" + thing_to_check + ")")
-                    else:
-                        if "." in prefix:
-                            # grab the last statement
-                            target = prefix.split(' ')[-1]
-                            needle = target.split('.')[-1]
-                            # Chop off everything
-                            target = ".".join(target.split('.')[:-1])
-                            self._completor_locals = [target + "." + key for key in self._synchronous_evaluate("Object.keys(" + target + ")") if key.startswith(needle)]
-                            # Do stuff
-                        # Give every key that starts with the root prefix
-                        else:
-                            self._completor_locals = [key for key in self._synchronous_evaluate("Object.keys(this)") if key.startswith(prefix)]
-
-            try:
-                return self._completor_locals[index]
-            except IndexError:
-                return None
-
         def _process_input(self):
             if sys.version_info[0] >= 3:
                 input_impl = input
@@ -195,9 +75,9 @@ def main():
                 input_impl = raw_input
 
             self._print_startup_message()
+            self._ready.wait()
 
             while True:
-                self._idle.wait()
                 expression = ""
                 line = ""
                 while len(expression) == 0 or line.endswith("\\"):
@@ -222,58 +102,29 @@ def main():
                         pass
 
                 if expression.endswith("?"):
-                    # Help feature
                     self._print_help(expression)
                 elif expression.startswith("%"):
-                    # "Magic" commands
-                    self._do_magic(expression)
-                elif expression in ("quit", "q", "exit"):
+                    self._do_magic(expression[1:].rstrip())
+                elif expression in ("exit", "quit", "q"):
                     print("Thank you for using Frida!")
                     return
                 elif expression == "help":
-                    print("Frida help 1.0!")
+                    print("Help: #TODO :)")
                 else:
-                    self._idle.clear()
-                    self._reactor.schedule(lambda: self._send_expression(expression))
-
-        def _send_expression(self, expression):
-            self._script.post_message(expression)
-
-        def _process_message(self, message, data):
-            handled = False
-
-            if message['type'] == 'send' and 'payload' in message:
-                stanza = message['payload']
-                if isinstance(stanza, dict):
-                    name = stanza.get('name')
-                    if name in ('+result', '+error'):
-                        if data is not None:
-                            output = hexdump(data).rstrip("\n")
+                    try:
+                        (t, value) = self._evaluate(expression)
+                        if t in ('function', 'undefined', 'null'):
+                            output = t
+                        elif t == 'raw':
+                            output = hexdump(value).rstrip("\n")
                         else:
-                            if 'payload' in stanza:
-                                value = stanza['payload']
-                                if stanza['name'] == '+result':
-                                    output = json.dumps(value, sort_keys=True, indent=4, separators=(",", ": "))
-                                else:
-                                    output = Fore.RED + Style.BRIGHT + value + Style.RESET_ALL
-                                sys.stdout.write(output + "\n")
-                                sys.stdout.flush()
+                            output = json.dumps(value, sort_keys=True, indent=4, separators=(",", ": "))
+                    except Exception as ex:
+                        error = ex.message
+                        output = Fore.RED + Style.BRIGHT + error['name'] + Style.RESET_ALL + ": " + error['message']
+                    sys.stdout.write(output + "\n")
+                    sys.stdout.flush()
 
-                    elif name == '+resume':
-                        self._resume()
-
-                    elif name == "+silent_result":
-                        # TODO: This is hacky as shit, need to make it cleaner/better
-                        self._cond.acquire()
-                        self._response = (stanza, data)
-                        self._cond.notify()
-                        self._cond.release()
-
-                    self._idle.set()
-                    handled = True
-
-            if not handled:
-                print("message:", message, "data:", data)
 
         def _print_startup_message(self):
             print("""    _____
@@ -297,11 +148,10 @@ def main():
                 expression = expression[:-2] + "?"
 
             obj_to_identify = [x for x in expression.split(' ') if x.endswith("?")][0][:-1]
-            obj_type = self._synchronous_evaluate("typeof(%s)" % obj_to_identify)
+            (obj_type, obj_value) = self._evaluate("typeof(%s)" % obj_to_identify)
 
             if obj_type == "function":
-
-                signature = self._synchronous_evaluate("%s.toString()" % obj_to_identify)
+                signature = self._evaluate("%s.toString()" % obj_to_identify)[1]
                 clean_signature = signature.split("{")[0][:-1].split('function ')[-1]
 
                 if "[native code]" in signature:
@@ -321,15 +171,155 @@ def main():
 
             elif obj_type == "string":
                 help_text += "Type:      Boolean\n"
-                help_text += "Text:      %s\n" % self._synchronous_evaluate("%s.toString()" % obj_to_identify)
+                help_text += "Text:      %s\n" % self._evaluate("%s.toString()" % obj_to_identify)[1]
                 help_text += "Docstring: #TODO :)"
 
             print(help_text)
 
+        def _do_magic(self, command):
+            if command == 'resume':
+                self._reactor.schedule(lambda: self._resume())
+            else:
+                # TODO: Add local file read capabilities i.e. %run /tmp/script.txt, and other stuff?
+                print("Unknown command: {command}".format(command=command))
 
-        def _do_magic(self, expression):
-            #TODO: add local file read capabilities i.e. %run /tmp/script.txt, and other stuff?
-            print("You thought I was sleeping, didn't you. Acting.")
+        def _create_prompt(self):
+            device_type = self._device.type
+            type_name = self._target[0]
+            target = self._target[1]
+
+            if device_type == 'local':
+                if self._target[0] == 'name':
+                    type_name = "ProcName"
+                elif self._target[0] == 'pid':
+                    type_name = "PID"
+                prompt_string = "%s::%s::%s" % ("Local", type_name, target)
+            elif device_type == 'tether':
+                prompt_string = "%s::%s::%s" % ("USB", self._device.name, target)
+            else:
+                prompt_string = "%s::%s::%s" % (self._device.name, self._device.name, target)
+
+            return prompt_string
+
+        def _completer(self, prefix, index):
+            if index == 0:
+                if not prefix:
+                    self._completor_locals = [key for key in self._evaluate("Object.keys(this)")[1] if not key.startswith('_')]
+                else:
+                    if prefix.endswith("."):
+                        thing_to_check = prefix.split(' ')[0][:-1]
+                        self._completor_locals = self._evaluate("Object.keys(" + thing_to_check + ")")[1]
+                    else:
+                        if "." in prefix:
+                            target = prefix.split(' ')[-1]
+                            needle = target.split('.')[-1]
+                            target = ".".join(target.split('.')[:-1])
+                            self._completor_locals = [target + "." + key for key in self._evaluate("Object.keys(" + target + ")")[1] if key.startswith(needle)]
+                        else:
+                            self._completor_locals = [key for key in self._evaluate("Object.keys(this)")[1] if key.startswith(prefix)]
+
+            try:
+                return self._completor_locals[index]
+            except IndexError:
+                return None
+
+        def _evaluate(self, text):
+            self._reactor.schedule(lambda: self._script.post_message({'name': '.evaluate', 'payload': {'expression': text}}))
+            with self._response_cond:
+                while self._response_data is None:
+                    self._response_cond.wait()
+                response = self._response_data
+                self._response_data = None
+            stanza, data = response
+            if data is not None:
+                return ('binary', data)
+            elif stanza['name'] == '+result':
+                payload = stanza['payload']
+                return (payload['type'], payload.get('value', None))
+            else:
+                assert stanza['name'] == '+error'
+                raise Exception(stanza['payload'])
+
+        def _process_message(self, message, data):
+            if message['type'] == 'send':
+                stanza = message['payload']
+                with self._response_cond:
+                    self._response_data = (stanza, data)
+                    self._response_cond.notify()
+            else:
+                print("message:", message, "data:", data)
+
+        def _create_repl_script(self):
+            return """\
+(function () {
+    "use strict";
+
+    Object.defineProperty(this, 'modules', {
+        enumerable: true,
+        get: function () {
+            var result = [];
+            Process.enumerateModules({
+                onMatch: function onMatch(mod) {
+                    result.push(mod);
+                },
+                onComplete: function onComplete() {
+                }
+            });
+            return result;
+        }
+    });
+
+    function onEvaluate(expression) {
+        try {
+            let result;
+            eval("result = " + expression + ";");
+
+            let sentBinary = false;
+            if (result && result.hasOwnProperty('length')) {
+                try {
+                    send({
+                        name: '+result',
+                        payload: {
+                            type: 'binary'
+                        }
+                    }, result);
+                    sentBinary = true;
+                } catch (e) {
+                }
+            }
+            if (!sentBinary) {
+                const type = (result === null) ? 'null' : typeof result;
+                send({
+                    name: '+result',
+                    payload: {
+                        type: type,
+                        value: result
+                    }
+                });
+            }
+        } catch (e) {
+            send({
+                name: '+error',
+                payload: {
+                    name: e.name,
+                    message: e.message
+                }
+            });
+        }
+    }
+
+    const onStanza = function (stanza) {
+        switch (stanza.name) {
+            case '.evaluate':
+                onEvaluate.call(this, stanza.payload.expression);
+                break;
+        }
+
+        recv(onStanza);
+    }.bind(this);
+    recv(onStanza);
+}).call(this);
+"""
 
     def hexdump(src, length=16):
         try:
@@ -353,6 +343,7 @@ def main():
 
     app = REPLApplication()
     app.run()
+
 
 if __name__ == '__main__':
     main()
