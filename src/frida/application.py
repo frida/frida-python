@@ -135,6 +135,7 @@ class ConsoleApplication(object):
             return
         self._device.on('lost', self._schedule_on_device_lost)
         if self._target is not None:
+            spawning = True
             try:
                 target_type, target_value = self._target
                 if target_type == 'file':
@@ -146,6 +147,7 @@ class ConsoleApplication(object):
                 else:
                     attach_target = target_value
                     self._update_status("Attaching...")
+                spawning = False
                 self._session = self._device.attach(attach_target)
                 if self._enable_debugger:
                     self._session.enable_debugger()
@@ -154,7 +156,10 @@ class ConsoleApplication(object):
                     self._update_status("Attaching...")
                 self._session.on('detached', self._schedule_on_session_detached)
             except Exception as e:
-                self._update_status("Failed to attach: %s" % e)
+                if spawning:
+                    self._update_status("Failed to spawn: %s" % e)
+                else:
+                    self._update_status("Failed to attach: %s" % e)
                 self._exit(1)
                 return
         self._start()
