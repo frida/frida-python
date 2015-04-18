@@ -102,7 +102,12 @@ def main():
                         pass
 
                 if expression.endswith("?"):
-                    self._print_help(expression)
+                    try:
+                        self._print_help(expression)
+                    except Exception as ex:
+                        error = ex.message
+                        sys.stdout.write(Fore.RED + Style.BRIGHT + error['name'] + Style.RESET_ALL + ": " + error['message'] + "\n")
+                        sys.stdout.flush()
                 elif expression.startswith("%"):
                     self._do_magic(expression[1:].rstrip())
                 elif expression in ("exit", "quit", "q"):
@@ -148,7 +153,7 @@ def main():
                 expression = expression[:-2] + "?"
 
             obj_to_identify = [x for x in expression.split(' ') if x.endswith("?")][0][:-1]
-            (obj_type, obj_value) = self._evaluate("typeof(%s)" % obj_to_identify)
+            (obj_type, obj_value) = self._evaluate(obj_to_identify)
 
             if obj_type == "function":
                 signature = self._evaluate("%s.toString()" % obj_to_identify)[1]
@@ -161,6 +166,7 @@ def main():
 
                 help_text += "Signature: %s\n" % clean_signature
                 help_text += "Docstring: #TODO :)"
+
             elif obj_type == "object":
                 help_text += "Type:      Object\n"
                 help_text += "Docstring: #TODO :)"
