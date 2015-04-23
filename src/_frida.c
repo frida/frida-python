@@ -759,54 +759,42 @@ PyDevice_enumerate_processes (PyDevice * self)
 static PyObject *
 PyDevice_spawn (PyDevice * self, PyObject * args)
 {
-  const char * command_line;
-  gint argc;
+  PyObject * elements;
+  gint argc, i;
   gchar ** argv;
   gchar ** envp;
   gint envp_length;
   GError * error = NULL;
   guint pid;
 
-  if (PyTuple_Size (args) == 1 && (PyTuple_Check (PyTuple_GetItem (args, 0)) || PyList_Check (PyTuple_GetItem (args, 0))))
+  if (PyTuple_Size (args) != 1 || (!PyList_Check (PyTuple_GetItem (args, 0)) &&
+      !PyTuple_Check (PyTuple_GetItem (args, 0))))
   {
-    PyObject * argv_elements;
-    Py_ssize_t size, i;
-
-    argv_elements = PyTuple_GetItem (args, 0);
-    size = PySequence_Size (argv_elements);
-    argc = size;
-    argv = g_new0 (gchar *, size + 1);
-    for (i = 0; i != size; i++)
-    {
-      PyObject * element;
-
-      element = PySequence_GetItem (argv_elements, i);
-      if (PyUnicode_Check (element))
-      {
-        Py_DECREF (element);
-        element = PyUnicode_AsUTF8String (element);
-      }
-      if (PyBytes_Check (element))
-        argv[i] = g_strdup (PyBytes_AsString (element));
-      Py_DECREF (element);
-
-      if (argv[i] == NULL)
-      {
-        g_strfreev (argv);
-        PyErr_SetString (PyExc_ValueError, "argv must be a sequence of strings");
-        return NULL;
-      }
-    }
+    PyErr_SetString (PyExc_TypeError, "expecting argv as a list or a tuple");
+    return NULL;
   }
-  else
-  {
-    if (!PyArg_ParseTuple (args, "s", &command_line))
-      return NULL;
 
-    if (!g_shell_parse_argv (command_line, &argc, &argv, &error))
+  elements = PyTuple_GetItem (args, 0);
+  argc = PySequence_Size (elements);
+  argv = g_new0 (gchar *, argc + 1);
+  for (i = 0; i != argc; i++)
+  {
+    PyObject * element;
+
+    element = PySequence_GetItem (elements, i);
+    if (PyUnicode_Check (element))
     {
-      PyErr_SetString (PyExc_SystemError, error->message);
-      g_error_free (error);
+      Py_DECREF (element);
+      element = PyUnicode_AsUTF8String (element);
+    }
+    if (PyBytes_Check (element))
+      argv[i] = g_strdup (PyBytes_AsString (element));
+    Py_DECREF (element);
+
+    if (argv[i] == NULL)
+    {
+      g_strfreev (argv);
+      PyErr_SetString (PyExc_TypeError, "argv must be a sequence of strings");
       return NULL;
     }
   }

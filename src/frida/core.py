@@ -56,8 +56,8 @@ class Device(object):
         else:
             raise ValueError("process not found")
 
-    def spawn(self, command_line):
-        return self._impl.spawn(command_line)
+    def spawn(self, argv):
+        return self._impl.spawn(argv)
 
     def resume(self, target):
         self._impl.resume(self._pid_of(target))

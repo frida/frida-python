@@ -27,8 +27,8 @@ except Exception as ex:
 
 __version__ = _frida.__version__
 
-def spawn(command_line, device_id = None):
-    return get_device_manager().get_device(device_id).spawn(command_line)
+def spawn(argv, device_id = None):
+    return get_device_manager().get_device(device_id).spawn(argv)
 
 def resume(target, device_id = None):
     get_device_manager().get_device(device_id).resume(target)
