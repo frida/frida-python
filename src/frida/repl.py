@@ -145,7 +145,7 @@ def main():
                         (t, value) = self._evaluate(expression)
                         if t in ('function', 'undefined', 'null'):
                             output = t
-                        elif t == 'raw':
+                        elif t == 'binary':
                             output = hexdump(value).rstrip("\n")
                         else:
                             output = json.dumps(value, sort_keys=True, indent=4, separators=(",", ": "))
