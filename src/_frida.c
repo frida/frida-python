@@ -49,6 +49,8 @@ static PyObject * frida_message_type_log;
 static PyObject * json_loads;
 static PyObject * json_dumps;
 
+static GHashTable * exception_by_error_code;
+
 typedef struct _PyDeviceManager  PyDeviceManager;
 typedef struct _PyDevice         PyDevice;
 typedef struct _PyProcess        PyProcess;
@@ -168,6 +170,7 @@ static PyObject * PyScript_on (PyScript * self, PyObject * args);
 static PyObject * PyScript_off (PyScript * self, PyObject * args);
 static void PyScript_on_message (PyScript * self, const gchar * message, const gchar * data, gint data_size, FridaScript * handle);
 
+static PyObject * PyFrida_raise (GError * error);
 static const gchar * PyFrida_device_type_to_string (FridaDeviceType type);
 static gboolean PyFrida_parse_signal_method_args (PyObject * args, const char ** signal, PyObject ** callback);
 
@@ -540,11 +543,7 @@ PyDeviceManager_enumerate_devices (PyDeviceManager * self)
   result = frida_device_manager_enumerate_devices_sync (self->handle, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
-  {
-    PyErr_SetString (PyExc_SystemError, error->message);
-    g_error_free (error);
-    return NULL;
-  }
+    return PyFrida_raise (error);
 
   result_length = frida_device_list_size (result);
   devices = PyList_New (result_length);
@@ -739,11 +738,7 @@ PyDevice_enumerate_processes (PyDevice * self)
   result = frida_device_enumerate_processes_sync (self->handle, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
-  {
-    PyErr_SetString (PyExc_SystemError, error->message);
-    g_error_free (error);
-    return NULL;
-  }
+    return PyFrida_raise (error);
 
   result_length = frida_process_list_size (result);
   processes = PyList_New (result_length);
@@ -810,11 +805,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args)
   g_strfreev (argv);
 
   if (error != NULL)
-  {
-    PyErr_SetString (PyExc_SystemError, error->message);
-    g_error_free (error);
-    return NULL;
-  }
+    return PyFrida_raise (error);
 
   return PyLong_FromLong (pid);
 }
@@ -832,11 +823,7 @@ PyDevice_resume (PyDevice * self, PyObject * args)
   frida_device_resume_sync (self->handle, (guint) pid, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
-  {
-    PyErr_SetString (PyExc_SystemError, error->message);
-    g_error_free (error);
-    return NULL;
-  }
+    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
@@ -854,11 +841,7 @@ PyDevice_kill (PyDevice * self, PyObject * args)
   frida_device_kill_sync (self->handle, (guint) pid, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
-  {
-    PyErr_SetString (PyExc_SystemError, error->message);
-    g_error_free (error);
-    return NULL;
-  }
+    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
@@ -877,11 +860,7 @@ PyDevice_attach (PyDevice * self, PyObject * args)
   handle = frida_device_attach_sync (self->handle, (guint) pid, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
-  {
-    PyErr_SetString (PyExc_SystemError, error->message);
-    g_error_free (error);
-    return NULL;
-  }
+    return PyFrida_raise (error);
 
   return PySession_from_handle (handle);
 }
@@ -1164,11 +1143,7 @@ PySession_create_script (PySession * self, PyObject * args, PyObject * kw)
   handle = frida_session_create_script_sync (self->handle, name, source, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
-  {
-    PyErr_SetString (PyExc_SystemError, error->message);
-    g_error_free (error);
-    return NULL;
-  }
+    return PyFrida_raise (error);
 
   return PyScript_from_handle (handle);
 }
@@ -1187,11 +1162,7 @@ PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw)
   frida_session_enable_debugger_sync (self->handle, port, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
-  {
-    PyErr_SetString (PyExc_SystemError, error->message);
-    g_error_free (error);
-    return NULL;
-  }
+    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
@@ -1207,11 +1178,7 @@ PySession_disable_debugger (PySession * self, PyObject * args)
   frida_session_disable_debugger_sync (self->handle, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
-  {
-    PyErr_SetString (PyExc_SystemError, error->message);
-    g_error_free (error);
-    return NULL;
-  }
+    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
@@ -1369,11 +1336,7 @@ PyScript_load (PyScript * self)
   frida_script_load_sync (self->handle, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
-  {
-    PyErr_SetString (PyExc_SystemError, error->message);
-    g_error_free (error);
-    return NULL;
-  }
+    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
@@ -1387,11 +1350,7 @@ PyScript_unload (PyScript * self)
   frida_script_unload_sync (self->handle, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
-  {
-    PyErr_SetString (PyExc_SystemError, error->message);
-    g_error_free (error);
-    return NULL;
-  }
+    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
@@ -1431,11 +1390,7 @@ PyScript_post_message (PyScript * self, PyObject * args)
   Py_DECREF (message_json);
 
   if (error != NULL)
-  {
-    PyErr_SetString (PyExc_SystemError, error->message);
-    g_error_free (error);
-    return NULL;
-  }
+    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
@@ -1573,6 +1528,34 @@ PyScript_on_message (PyScript * self, const gchar * message, const gchar * data,
 }
 
 
+static void
+PyFrida_object_decref (gpointer obj)
+{
+  PyObject * o = obj;
+  Py_DECREF (o);
+}
+
+static PyObject *
+PyFrida_raise (GError * error)
+{
+  PyObject * exception;
+  GString * message;
+
+  g_assert (error->domain == FRIDA_ERROR);
+  exception = g_hash_table_lookup (exception_by_error_code, GINT_TO_POINTER (error->code));
+  g_assert (exception != NULL);
+  message = g_string_new ("");
+  g_string_append_unichar (message, g_unichar_tolower (g_utf8_get_char (error->message)));
+  g_string_append (message, g_utf8_offset_to_pointer (error->message, 1));
+
+  PyErr_SetString (exception, message->str);
+
+  g_string_free (message, TRUE);
+  g_error_free (error);
+
+  return NULL;
+}
+
 static const gchar *
 PyFrida_device_type_to_string (FridaDeviceType type)
 {
@@ -1666,6 +1649,28 @@ MOD_INIT (_frida)
 
   Py_INCREF (&PyScriptType);
   PyModule_AddObject (module, "Script", (PyObject *) &PyScriptType);
+
+  exception_by_error_code = g_hash_table_new_full (NULL, NULL, NULL, PyFrida_object_decref);
+#define PYFRIDA_DECLARE_EXCEPTION(code, name) \
+    do \
+    { \
+      PyObject * exception = PyErr_NewException ("frida." name "Error", NULL, NULL); \
+      g_hash_table_insert (exception_by_error_code, GINT_TO_POINTER (G_PASTE (FRIDA_ERROR_, code)), exception); \
+      Py_INCREF (exception); \
+      PyModule_AddObject (module, name "Error", exception); \
+    } while (FALSE)
+  PYFRIDA_DECLARE_EXCEPTION (SERVER_NOT_RUNNING, "ServerNotRunning");
+  PYFRIDA_DECLARE_EXCEPTION (EXECUTABLE_NOT_FOUND, "ExecutableNotFound");
+  PYFRIDA_DECLARE_EXCEPTION (EXECUTABLE_NOT_SUPPORTED, "ExecutableNotSupported");
+  PYFRIDA_DECLARE_EXCEPTION (PROCESS_NOT_FOUND, "ProcessNotFound");
+  PYFRIDA_DECLARE_EXCEPTION (PROCESS_NOT_RESPONDING, "ProcessNotResponding");
+  PYFRIDA_DECLARE_EXCEPTION (INVALID_ARGUMENT, "InvalidArgument");
+  PYFRIDA_DECLARE_EXCEPTION (INVALID_OPERATION, "InvalidOperation");
+  PYFRIDA_DECLARE_EXCEPTION (PERMISSION_DENIED, "PermissionDenied");
+  PYFRIDA_DECLARE_EXCEPTION (ADDRESS_IN_USE, "AddressInUse");
+  PYFRIDA_DECLARE_EXCEPTION (TIMED_OUT, "TimedOut");
+  PYFRIDA_DECLARE_EXCEPTION (NOT_SUPPORTED, "NotSupported");
+  PYFRIDA_DECLARE_EXCEPTION (PROTOCOL, "Protocol");
 
   return MOD_SUCCESS_VAL (module);
 }

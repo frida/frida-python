@@ -27,6 +27,19 @@ except Exception as ex:
 
 __version__ = _frida.__version__
 
+ServerNotRunningError = _frida.ServerNotRunningError
+ExecutableNotFoundError = _frida.ExecutableNotFoundError
+ExecutableNotSupportedError = _frida.ExecutableNotSupportedError
+ProcessNotFoundError = _frida.ProcessNotFoundError
+ProcessNotRespondingError = _frida.ProcessNotRespondingError
+InvalidArgumentError = _frida.InvalidArgumentError
+InvalidOperationError = _frida.InvalidOperationError
+PermissionDeniedError = _frida.PermissionDeniedError
+AddressInUseError = _frida.AddressInUseError
+TimedOutError = _frida.TimedOutError
+NotSupportedError = _frida.NotSupportedError
+ProtocolError = _frida.ProtocolError
+
 def spawn(argv, device_id = None):
     return get_device_manager().get_device(device_id).spawn(argv)
 
@@ -68,14 +81,11 @@ def _get_device(type, timeout):
             device = result[0]
         mgr.off('changed', on_devices_changed)
         if device is None:
-            raise TimeoutError("timed out while waiting for device to appear")
+            raise TimedOutError("timed out while waiting for device to appear")
     return device
 
 def shutdown():
     get_device_manager()._impl.close()
-
-class TimeoutError(Exception):
-    pass
 
 
 global _device_manager

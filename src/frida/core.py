@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import _frida
 import bisect
 import fnmatch
 import numbers
@@ -24,7 +25,7 @@ class DeviceManager(object):
         for device in devices:
             if device.id == device_id:
                 return Device(device)
-        raise ValueError("device not found")
+        raise _frida.InvalidArgumentError("unable to find device with id %s" % device_id)
 
     def on(self, signal, callback):
         self._impl.on(signal, callback)
@@ -52,9 +53,9 @@ class Device(object):
         if len(matching) == 1:
             return matching[0]
         elif len(matching) > 1:
-            raise ValueError("ambiguous name; it matches: %s" % ", ".join(["%s (pid: %d)" % (process.name, process.pid) for process in matching]))
+            raise _frida.ProcessNotFoundError("ambiguous name; it matches: %s" % ", ".join(["%s (pid: %d)" % (process.name, process.pid) for process in matching]))
         else:
-            raise ValueError("process not found")
+            raise _frida.ProcessNotFoundError("unable to find process with name “%s”" % process_name)
 
     def spawn(self, argv):
         return self._impl.spawn(argv)
