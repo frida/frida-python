@@ -4,15 +4,19 @@ def main():
     from colorama import Fore, Style
     import json
     import platform
-    try:
-        if platform.system() == "Darwin":
-            # We really want to avoid libedit
+    HAVE_READLINE = True
+    if platform.system() == "Darwin":
+        # We really want to avoid libedit
+        try:
             import gnureadline as readline
-        else:
-            import readline
-        HAVE_READLINE = True
-    except:
-        HAVE_READLINE = False
+        except Exception as e:
+            HAVE_READLINE = False
+            print(Fore.RED + Style.BRIGHT + """
+WARNING: Unable to find package 'gnureadline' needed for tab completion;
+         please brace yourself for a massively degraded user experience!
+""" + Style.RESET_ALL)
+    else:
+        import readline
     import sys
     import threading
     import os
