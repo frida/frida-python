@@ -39,6 +39,7 @@ AddressInUseError = _frida.AddressInUseError
 TimedOutError = _frida.TimedOutError
 NotSupportedError = _frida.NotSupportedError
 ProtocolError = _frida.ProtocolError
+TransportError = _frida.TransportError
 
 def spawn(argv, device_id = None):
     return get_device_manager().get_device(device_id).spawn(argv)
