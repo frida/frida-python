@@ -6,6 +6,7 @@ import time
 import re
 import binascii
 import subprocess
+import platform 
 
 from frida.core import ModuleFunction, ObjCMethod
 
@@ -437,7 +438,11 @@ class Repository(object):
             varargs = False
             try:
                 with open(os.devnull, 'w') as devnull:
-                    output = subprocess.check_output(["man", "-E", "UTF-8", "-P", "col -b", "2", function.name], stderr=devnull)
+                    output_argv=["man"]
+                    if platform.system() != "Darwin":
+                        output_argv.extend(["-E","UTF-8"])
+                    output_argv.extend(["-P", "col -b", "2", function.name])
+                    output = subprocess.check_output(output_argv, stderr=devnull)
                 match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}" + function.name + r"\(.*\n(^.+$\n)*)(?:.|\n)*^DESCRIPTION", output.decode("UTF-8",errors="replace"), re.MULTILINE)
                 if match:
                     decl = match.group(1)
