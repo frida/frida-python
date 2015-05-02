@@ -437,8 +437,8 @@ class Repository(object):
             varargs = False
             try:
                 with open(os.devnull, 'w') as devnull:
-                    output = subprocess.check_output(["man", "-P", "col -b", "2", function.name], stderr=devnull)
-                match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}" + function.name + r"\(.*\n(^.+$\n)*)(?:.|\n)*^DESCRIPTION", output.decode(errors="replace"), re.MULTILINE)
+                    output = subprocess.check_output(["man", "-E", "UTF-8", "-P", "col -b", "2", function.name], stderr=devnull)
+                match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}" + function.name + r"\(.*\n(^.+$\n)*)(?:.|\n)*^DESCRIPTION", output.decode("UTF-8",errors="replace"), re.MULTILINE)
                 if match:
                     decl = match.group(1)
                     for argm in re.finditer(r"([^* ]*)\s*(,|\))", decl):
