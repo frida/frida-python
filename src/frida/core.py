@@ -118,6 +118,15 @@ class Session(FunctionContainer):
             self._modules = [Module(data['name'], int(data['base'], 16), data['size'], data['path'], self) for data in response['modules']]
         return self._modules
 
+    def prefetch_modules(self):
+        modules = self.enumerate_modules()
+        pending = [m for m in modules if m._exports is None]
+        response = self._request('process:enumerate-module-exports', {
+            'module_paths': [m.path for m in pending]
+        })
+        for i, exports in enumerate(response['exports']):
+            pending[i]._update_exports(exports)
+
     """
       @param protection example '--x'
     """
@@ -246,6 +255,23 @@ handlers['process:enumerate-modules'] = function () {
         resolve({ modules: modules });
       }
     });
+  });
+};
+
+handlers['process:enumerate-module-exports'] = function (payload) {
+  return new Promise(function (resolve, reject) {
+    const result = payload.module_paths.map(function (modulePath) {
+      const exports = [];
+      Module.enumerateExports(modulePath, {
+        onMatch: function (e) {
+          exports.push(e);
+        },
+        onComplete: function () {
+        }
+      });
+      return exports;
+    });
+    resolve({ exports: result });
   });
 };
 
@@ -400,14 +426,10 @@ class Module(FunctionContainer):
 
     def enumerate_exports(self):
         if self._exports is None:
-            self._exports = []
             response = self._session._request('module:enumerate-exports', {
                 'module_path': self.path
             })
-            for export in response['exports']:
-                relative_address = int(export["address"], 16) - self.base_address
-                mf = ModuleFunction(self, export["name"], relative_address, True)
-                self._exports.append(mf)
+            self._update_exports(response['exports'])
         return self._exports
 
     """
@@ -419,6 +441,13 @@ class Module(FunctionContainer):
             'protection': protection
         })
         return [Range(int(data['base'], 16), data['size'], data['protection']) for data in response['ranges']]
+
+    def _update_exports(self, exports):
+        self._exports = []
+        for export in exports:
+            relative_address = int(export["address"], 16) - self.base_address
+            mf = ModuleFunction(self, export["name"], relative_address, True)
+            self._exports.append(mf)
 
     def _do_ensure_function(self, relative_address):
         if self._exports is None:

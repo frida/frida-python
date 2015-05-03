@@ -59,6 +59,7 @@ class TracerProfile(object):
         self._spec = spec
 
     def resolve(self, session):
+        session.prefetch_modules()
         all_modules = session.enumerate_modules()
         working_set = set()
         for (operation, scope, param) in self._spec:
