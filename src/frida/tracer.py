@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 
-import os
-import fnmatch
-import time
-import re
 import binascii
+import fnmatch
+import os
+import platform 
+import re
 import subprocess
+import time
 
 from frida.core import ModuleFunction, ObjCMethod
 
@@ -437,8 +438,12 @@ class Repository(object):
             varargs = False
             try:
                 with open(os.devnull, 'w') as devnull:
-                    output = subprocess.check_output(["man", "-P", "col -b", "2", function.name], stderr=devnull)
-                match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}" + function.name + r"\(.*\n(^.+$\n)*)(?:.|\n)*^DESCRIPTION", output.decode(), re.MULTILINE)
+                    man_argv = ["man"]
+                    if platform.system() != "Darwin":
+                        man_argv.extend(["-E", "UTF-8"])
+                    man_argv.extend(["-P", "col -b", "2", function.name])
+                    output = subprocess.check_output(man_argv, stderr=devnull)
+                match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}" + function.name + r"\(.*\n(^.+$\n)*)(?:.|\n)*^DESCRIPTION", output.decode('UTF-8', errors='replace'), re.MULTILINE)
                 if match:
                     decl = match.group(1)
                     for argm in re.finditer(r"([^* ]*)\s*(,|\))", decl):
