@@ -3,7 +3,7 @@
 import binascii
 import fnmatch
 import os
-import platform 
+import platform
 import re
 import subprocess
 import time
