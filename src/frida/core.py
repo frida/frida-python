@@ -104,80 +104,59 @@ class Session(FunctionContainer):
         self._modules = None
         self._module_map = None
 
+        self._script = None
+        self._pending = {}
+        self._next_request_id = 1
+        self._cond = threading.Condition()
+
     def detach(self):
         self._impl.detach()
 
     def enumerate_modules(self):
         if self._modules is None:
-            script = self.create_script(name="session-enumerate-modules", source="""\
-var modules = [];
-Process.enumerateModules({
-    onMatch: function (module) {
-        modules.push(module);
-    },
-    onComplete: function () {
-        send(modules);
-    }
-});
-""")
-            self._modules = [Module(data['name'], int(data['base'], 16), data['size'], data['path'], self) for data in _execute_script(script)]
+            response = self._request('process:enumerate-modules')
+            self._modules = [Module(data['name'], int(data['base'], 16), data['size'], data['path'], self) for data in response['modules']]
         return self._modules
 
     """
       @param protection example '--x'
     """
     def enumerate_ranges(self, protection):
-        script = self.create_script(name="session-enumerate-ranges", source="""\
-var ranges = [];
-Process.enumerateRanges(\"%s\", {
-    onMatch: function (range) {
-        ranges.push(range);
-    },
-    onComplete: function () {
-        send(ranges);
-    }
-});
-""" % protection)
-        return [Range(int(data['base'], 16), data['size'], data['protection']) for data in _execute_script(script)]
+        response = self._request('process:enumerate-ranges', {
+            'protection': protection
+        })
+        return [Range(int(data['base'], 16), data['size'], data['protection']) for data in response['ranges']]
 
     def find_base_address(self, module_name):
-        return int(self._exec_script("var p = Module.findBaseAddress(\"%s\"); send(p !== null ? p.toString() : \"0\");" % module_name), 16)
+        response = self._request('module:find-base-address', {
+            'module_name': module_name
+        })
+        return int(response['base_address'], 16)
 
-    def read_bytes(self, address, length):
-        return self._exec_script("send(null, Memory.readByteArray(ptr(\"%u\"), %u));" % (address, length))
+    def read_bytes(self, address, size):
+        return self._request('memory:read-byte-array', {
+            'address': "0x%x" % address,
+            'size': size
+        })
 
     def write_bytes(self, address, data):
-        script = \
-"""
-recv(function (data) {
-    var base = ptr("%u");
-    for (var i = 0; i !== data.length; i++)
-        Memory.writeU8(base.add(i), data[i]);
-    send(true);
-});
-""" % address
-
-        def send_data(script):
-            script.post_message([x for x in iterbytes(data)])
-
-        self._exec_script(script, send_data)
+        self._request('memory:write-byte-array', {
+            'address': "0x%x" % address,
+            'data': [x for x in iterbytes(data)]
+        })
 
     def read_utf8(self, address, length=-1):
-        return self._exec_script("send(Memory.readUtf8String(ptr(\"%u\"), %u));" % (address, length))
+        response = self._request('memory:read-utf8', {
+            'address': "0x%x" % address,
+            'length': length
+        })
+        return response['string']
 
     def write_utf8(self, address, string):
-        script = \
-"""
-recv(function (string) {
-    Memory.writeUtf8String(ptr("%u"), string);
-    send(true);
-});
-""" % address
-
-        def send_data(script):
-            script.post_message(string)
-
-        self._exec_script(script, send_data)
+        self._request('memory:write-utf8', {
+            'address': "0x%x" % address,
+            'string': string
+        })
 
     def create_script(self, *args, **kwargs):
         return self._impl.create_script(*args, **kwargs)
@@ -197,6 +176,185 @@ recv(function (string) {
     def _exec_script(self, source, post_hook=None):
         script = self.create_script(name="exec", source=source)
         return _execute_script(script, post_hook)
+
+    def _request(self, name, payload = {}):
+        result = [False, None, None]
+        def on_complete(data, error):
+            with self._cond:
+                result[0] = True
+                result[1] = data
+                result[2] = error
+                self._cond.notifyAll()
+
+        with self._cond:
+            request_id = self._next_request_id
+            self._next_request_id += 1
+            self._pending[request_id] = on_complete
+            script = self._get_script()
+            script.post_message({
+                'id': request_id,
+                'name': name,
+                'payload': payload
+            })
+            while not result[0]:
+                self._cond.wait()
+
+        if result[2] is not None:
+            raise result[2]
+
+        return result[1]
+
+    def _get_script(self):
+        if self._script is None:
+            self._script = self._impl.create_script(name="session", source=self._create_session_script())
+            self._script.on('message', self._on_message)
+            self._script.load()
+        return self._script
+
+    def _on_message(self, message, data):
+        if message['type'] == 'send':
+            stanza = message['payload']
+            callback = self._pending.pop(stanza['id'])
+            name = stanza['name']
+            payload = stanza['payload']
+            if name == 'request:result':
+                if data is None:
+                    callback(payload, None)
+                else:
+                    callback(data, None)
+            elif name == 'request:error':
+                callback(None, Exception(payload))
+            else:
+                raise NotImplementedError("unhandled stanza")
+        else:
+            print("[session]", message, data)
+
+    def _create_session_script(self):
+        return """\
+"use strict";
+
+const handlers = {};
+
+handlers['process:enumerate-modules'] = function () {
+  return new Promise(function (resolve, reject) {
+    const modules = [];
+    Process.enumerateModules({
+      onMatch: function (m) {
+        modules.push(m);
+      },
+      onComplete: function () {
+        resolve({ modules: modules });
+      }
+    });
+  });
+};
+
+handlers['process:enumerate-ranges'] = function (payload) {
+  return new Promise(function (resolve, reject) {
+    const ranges = [];
+    Process.enumerateRanges(payload.protection, {
+      onMatch: function (r) {
+        ranges.push(r);
+      },
+      onComplete: function () {
+        resolve({ ranges: ranges });
+      }
+    });
+  });
+};
+
+handlers['module:find-base-address'] = function (payload) {
+  return new Promise(function (resolve, reject) {
+    const address = Module.findBaseAddress(payload.module_name);
+    resolve({ base_address: (address !== null) ? address : "0" });
+  });
+};
+
+handlers['memory:read-byte-array'] = function (payload) {
+  return new Promise(function (resolve, reject) {
+    const data = Memory.readByteArray(ptr(payload.address), payload.size);
+    resolve([{}, data]);
+  });
+};
+
+handlers['memory:write-byte-array'] = function (payload) {
+  return new Promise(function (resolve, reject) {
+    const base = ptr(payload.address);
+    const data = payload.data;
+    for (let i = 0; i !== data.length; i++) {
+      Memory.writeU8(base.add(i), data[i]);
+    }
+    resolve({});
+  });
+};
+
+handlers['memory:read-utf8'] = function (payload) {
+  return new Promise(function (resolve, reject) {
+    resolve({
+      string: Memory.readUtf8String(ptr(payload.address), payload.length)
+    });
+  });
+};
+
+handlers['memory:write-utf8'] = function (payload) {
+  return new Promise(function (resolve, reject) {
+    Memory.writeUtf8String(ptr(payload.address), payload.string);
+    resolve({});
+  });
+};
+
+handlers['module:enumerate-exports'] = function (payload) {
+  return new Promise(function (resolve, reject) {
+    const exports = [];
+    Module.enumerateExports(payload.module_path, {
+      onMatch: function (e) {
+        exports.push(e);
+      },
+      onComplete: function () {
+        resolve({ exports: exports });
+      }
+    });
+  });
+};
+
+handlers['module:enumerate-ranges'] = function (payload) {
+  return new Promise(function (resolve, reject) {
+    const ranges = [];
+    Module.enumerateRanges(payload.module_path, payload.protection, {
+      onMatch: function (r) {
+        ranges.push(r);
+      },
+      onComplete: function () {
+        resolve({ ranges: ranges });
+      }
+    });
+  });
+};
+
+function onStanza(stanza) {
+  const handler = handlers[stanza.name];
+  handler(stanza.payload)
+  .then(function (result) {
+    const payload = result.length === 2 ? result[0] : result;
+    const data = result.length === 2 ? result[1] : null;
+    send({
+      id: stanza.id,
+      name: 'request:result',
+      payload: payload
+    }, data);
+  })
+  .catch(function (error) {
+    send({
+      id: stanza.id,
+      name: 'request:error',
+      payload: error.stack
+    });
+  });
+
+  recv(onStanza);
+}
+recv(onStanza);
+"""
 
     def _do_ensure_function(self, absolute_address):
         if self._module_map is None:
@@ -242,21 +400,11 @@ class Module(FunctionContainer):
 
     def enumerate_exports(self):
         if self._exports is None:
-            script = self._session.create_script(name="module-enumerate-exports", source="""\
-var exports = [];
-Module.enumerateExports(\"%s\", {
-    onMatch: function (exp) {
-        if (exp.type === 'function') {
-            exports.push(exp);
-        }
-    },
-    onComplete: function () {
-        send(exports);
-    }
-});
-""" % self.path.replace("\\", "\\\\"))
             self._exports = []
-            for export in _execute_script(script):
+            response = self._session._request('module:enumerate-exports', {
+                'module_path': self.path
+            })
+            for export in response['exports']:
                 relative_address = int(export["address"], 16) - self.base_address
                 mf = ModuleFunction(self, export["name"], relative_address, True)
                 self._exports.append(mf)
@@ -266,18 +414,11 @@ Module.enumerateExports(\"%s\", {
       @param protection example '--x'
     """
     def enumerate_ranges(self, protection):
-        script = self._session.create_script(name="module-enumerate-ranges", source="""\
-var ranges = [];
-Module.enumerateRanges(\"%s\", \"%s\", {
-    onMatch: function (range) {
-        ranges.push(range);
-    },
-    onComplete: function () {
-        send(ranges);
-    }
-});
-""" % (self.path.replace("\\", "\\\\"), protection))
-        return [Range(int(data['base'], 16), data['size'], data['protection']) for data in _execute_script(script)]
+        response = self._session._request('module:enumerate-ranges', {
+            'module_path': self.path,
+            'protection': protection
+        })
+        return [Range(int(data['base'], 16), data['size'], data['protection']) for data in response['ranges']]
 
     def _do_ensure_function(self, relative_address):
         if self._exports is None:
