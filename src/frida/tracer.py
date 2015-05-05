@@ -88,7 +88,7 @@ class TracerProfile(object):
         data = result[0]
 
         modules = {}
-        for module_id, m in data['modules'].iteritems():
+        for module_id, m in data['modules'].items():
             module = Module(m['name'], int(m['base'], 16), m['size'], m['path'], session)
             modules[int(module_id)] = module
 
