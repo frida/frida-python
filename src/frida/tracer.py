@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 
 import binascii
-import fnmatch
 import os
 import platform
 import re
 import subprocess
+import threading
 import time
 
-from frida.core import ModuleFunction, ObjCMethod
+from frida.core import Module, ModuleFunction, ObjCMethod
 
 
 class TracerProfileBuilder(object):
@@ -37,19 +37,27 @@ class TracerProfileBuilder(object):
             self._spec.append(('exclude', 'function', f))
         return self
 
-    def include_objc_method(self, *function_name_globs):
-        for f in function_name_globs:
-            self._spec.append(('include', 'objc_method', f))
-        return self
-
-    def include_rel_address(self, *address_rel_offsets):
+    def include_relative_address(self, *address_rel_offsets):
         for f in address_rel_offsets:
             m = TracerProfileBuilder._RE_REL_ADDRESS.search(f)
             if m is None:
                 continue
-            self._spec.append(('include', "rel_address",
-                               {'module': m.group('module'),
-                                'offset': int(m.group('offset'), base=16)}))
+            self._spec.append(('include', 'relative_function', {
+                'module': m.group('module'),
+                'offset': int(m.group('offset'), base=16)
+            }))
+
+    def include_objc_method(self, *function_name_globs):
+        for f in function_name_globs:
+            match = re.search(r"([+-])\[(\S+)\s+(\S+)\]", f)
+            if not match:
+                raise Exception("Format: -[Class foo:bar:] or +[Class baz]")
+            mtype, cls, name = match.groups()
+            self._spec.append(('include', 'objc_method', {
+                'type': mtype,
+                'cls': cls,
+                'name': name
+            }))
 
     def build(self):
         return TracerProfile(self._spec)
@@ -59,162 +67,829 @@ class TracerProfile(object):
         self._spec = spec
 
     def resolve(self, session):
-        session.prefetch_modules()
-        all_modules = session.enumerate_modules()
-        working_set = set()
-        for (operation, scope, param) in self._spec:
-            if scope == 'module':
-                if operation == 'include':
-                    working_set = working_set.union(self._include_module(param, all_modules))
-                elif operation == 'exclude':
-                    working_set = self._exclude_module(param, working_set)
-            elif scope == 'function':
-                if operation == 'include':
-                    working_set = working_set.union(self._include_function(param, all_modules))
-                elif operation == 'exclude':
-                    working_set = self._exclude_function(param, working_set)
-            elif scope == 'objc_method':
-                if operation == 'include':
-                    working_set = working_set.union(self._include_objc_method(param, session))
-            elif scope == 'rel_address':
-                if operation == 'include':
-                    abs_address = session.find_base_address(param['module']) + param['offset']
-                    working_set.add(session.ensure_function(abs_address))
-        return list(working_set)
+        script = session.create_script(name="profile-resolver", source=self._create_resolver_script())
+        result = [None, None]
+        completed = threading.Event()
+        def on_message(message, data):
+            assert message['type'] == 'send'
+            stanza = message['payload']
+            if stanza['name'] == '+result':
+                result[0] = stanza['payload']
+            else:
+                result[1] = Exception(stanza['payload'])
+            completed.set()
+        script.on('message', on_message)
+        script.load()
+        script.post_message(self._spec)
+        completed.wait()
+        if result[1] is not None:
+            raise result[1]
 
-    def _include_module(self, glob, all_modules):
-        r = []
-        for module in all_modules:
-            if fnmatch.fnmatchcase(module.name, glob):
-                for export in module.enumerate_exports():
-                    r.append(export)
-        return r
+        data = result[0]
 
-    def _exclude_module(self, glob, working_set):
-        r = []
-        for export in working_set:
-            if not fnmatch.fnmatchcase(export.module.name, glob):
-                r.append(export)
-        return set(r)
+        modules = {}
+        for module_id, m in data['modules'].iteritems():
+            module = Module(m['name'], int(m['base'], 16), m['size'], m['path'], session)
+            modules[int(module_id)] = module
 
-    def _include_function(self, glob, all_modules):
-        r = []
-        for module in all_modules:
-            for export in module.enumerate_exports():
-                if fnmatch.fnmatchcase(export.name, glob):
-                    r.append(export)
-        return r
+        working_set = []
+        for target in data['targets']:
+            module_id = target.get('module')
+            if module_id is not None:
+                module = modules[module_id]
+                relative_address = int(target["address"], 16) - module.base_address
+                exported = not target.get('private', False)
+                mf = ModuleFunction(module, target["name"], relative_address, exported)
+                working_set.append(mf)
+            else:
+                objc = target['objc']
+                method = objc['method']
+                of = ObjCMethod(method['type'], objc['className'], method['name'], int(target['address'], 16))
+                working_set.append(of)
+        return working_set
 
-    def _exclude_function(self, glob, working_set):
-        r = []
-        for export in working_set:
-            if not fnmatch.fnmatchcase(export.name, glob):
-                r.append(export)
-        return set(r)
+    def _create_resolver_script(self):
+        return """\
+"use strict";
 
-    def _include_objc_method(self, glob, session):
-        match = re.search(r'([+-])\[(\S+)\s+(\S+)\]', glob)
+recv(function (spec) {
+    try {
+        send({
+            name: '+result',
+            payload: resolve(spec)
+        });
+    } catch (e) {
+        send({
+            name: '+error',
+            payload: e.stack
+        });
+    }
+});
 
-        if not match:
-            raise Exception('Format: -[Class foo:bar:] or +[Class baz]')
+function resolve(spec) {
+    const workingSet = spec.reduce(function (workingSet, item) {
+        const operation = item[0];
+        const scope = item[1];
+        const param = item[2];
+        switch (scope) {
+            case 'module':
+                if (operation === 'include')
+                    workingSet = includeModule(param, workingSet);
+                else if (operation === 'exclude')
+                    workingSet = excludeModule(param, workingSet);
+                break;
+            case 'function':
+                if (operation === 'include')
+                    workingSet = includeFunction(param, workingSet);
+                else if (operation === 'exclude')
+                    workingSet = excludeFunction(param, workingSet);
+                break;
+            case 'relative_function':
+                if (operation === 'include')
+                    workingSet = includeRelativeFunction(param, workingSet);
+                break;
+            case 'objc_method':
+                if (operation === 'include')
+                    workingSet = includeObjCMethod(param, workingSet);
+                break;
+        }
+        return workingSet;
+    }, {});
 
-        mtype, cls, method = match.groups()
+    const modules = {};
+    const targets = [];
+    for (let address in workingSet) {
+        if (workingSet.hasOwnProperty(address)) {
+            const target = workingSet[address];
+            const moduleId = target.module;
+            if (moduleId !== undefined && !modules.hasOwnProperty(moduleId)) {
+                const m = allModules()[moduleId];
+                delete m._cachedFunctionExports;
+                modules[moduleId] = m;
+            }
+            targets.push(target);
+        }
+    }
+    return {
+        modules: modules,
+        targets: targets
+    };
+}
 
-        script = """
-var mtype = "%(mtype)s";
-var cls = "%(cls)s";
-var method = "%(method)s";
+function includeModule(pattern, workingSet) {
+    const mm = new Minimatch(pattern);
+    const modules = allModules();
+    for (let moduleIndex = 0; moduleIndex !== modules.length; moduleIndex++) {
+        const module = modules[moduleIndex];
+        if (mm.match(module.name)) {
+            const functions = allFunctionExports(module);
+            for (let functionIndex = 0; functionIndex !== functions.length; functionIndex++) {
+                const func = functions[functionIndex];
+                workingSet[func.address.toString()] = func;
+            }
+        }
+    }
+    return workingSet;
+}
 
-if (ObjC.available) {
-    var funs = {};
-    var funArgs = {
+function excludeModule(pattern, workingSet) {
+    const mm = new Minimatch(pattern);
+    const modules = allModules();
+    for (let address in workingSet) {
+        if (workingSet.hasOwnProperty(address)) {
+            const target = workingSet[address];
+            const moduleId = target.module;
+            if (moduleId !== undefined) {
+                const module = modules[moduleId];
+                if (mm.match(module.name))
+                    delete workingSet[address];
+            }
+        }
+    }
+    return workingSet;
+}
+
+function includeFunction(pattern, workingSet) {
+    const mm = new Minimatch(pattern);
+    const modules = allModules();
+    for (let moduleIndex = 0; moduleIndex !== modules.length; moduleIndex++) {
+        const functions = allFunctionExports(modules[moduleIndex]);
+        for (let functionIndex = 0; functionIndex !== functions.length; functionIndex++) {
+            const func = functions[functionIndex];
+            if (mm.match(func.name))
+                workingSet[func.address.toString()] = func;
+        }
+    }
+    return workingSet;
+}
+
+function excludeFunction(pattern, workingSet) {
+    const mm = new Minimatch(pattern);
+    for (let address in workingSet) {
+        if (workingSet.hasOwnProperty(address)) {
+            const target = workingSet[address];
+            if (mm.match(target.name))
+                delete workingSet[address];
+        }
+    }
+    return workingSet;
+}
+
+function includeRelativeFunction(func, workingSet) {
+    const relativeToModule = func.module;
+    const modules = allModules();
+    for (let moduleIndex = 0; moduleIndex !== modules.length; moduleIndex++) {
+        const module = modules[moduleIndex];
+        if (module.path === relativeToModule || module.name === relativeToModule) {
+            const relativeAddress = ptr(func.offset);
+            const absoluteAddress = module.base.add(relativeAddress);
+            workingSet[absoluteAddress] = {
+                name: "sub_" + relativeAddress.toString(16),
+                address: absoluteAddress,
+                module: moduleIndex,
+                private: true
+            };
+        }
+    }
+    return workingSet;
+}
+
+let cachedObjCState = null;
+function includeObjCMethod(method, workingSet) {
+    if (!ObjC.available)
+        throw new Error("Objective C runtime is not available");
+
+    if (cachedObjCState === null)
+        cachedObjCState = getObjCState();
+    const api = cachedObjCState.api;
+    const classInfo = cachedObjCState.classInfo;
+
+    const type = method.type;
+    const cls = method.cls;
+    const sel = api.sel_registerName(Memory.allocUtf8String(method.name));
+
+    function addImps(clsPtr, superImpPtr) {
+        const info = classInfo[clsPtr];
+        const name = info.name;
+
+        let clsHandle = ptr(clsPtr);
+        if (type === '+') {
+            clsHandle = api.object_getClass(clsHandle);
+        }
+
+        const imp = api.class_getMethodImplementation(clsHandle, sel);
+        const impPtr = imp.toString();
+        if (impPtr !== superImpPtr) {
+            workingSet[impPtr] = {
+                objc: {
+                    className: name,
+                    method: {
+                        type: type,
+                        name: method.name
+                    }
+                },
+                address: impPtr
+            };
+        }
+
+        const subclasses = info.subclasses;
+        for (let i = 0; i !== subclasses.length; i++)
+            addImps(subclasses[i], impPtr);
+    }
+
+    for (let i = 0; i !== ObjC.classes.length; i++) {
+        const name = ObjC.classes[i];
+        if (name === cls) {
+            addImps(ObjC.use(name).classHandle.toString(), "");
+            break;
+        }
+    }
+
+    return workingSet;
+}
+
+function getObjCState() {
+    const api = {};
+    const apiSpec = {
         sel_registerName: 1,
         class_getSuperclass: 1,
         class_getMethodImplementation: 2,
         object_getClass: 1
     };
-    Object.keys(funArgs).forEach(function (name) {
-        var funPtr = Module.findExportByName("libobjc.A.dylib", name);
-        var args = funArgs[name];
-        var argsArr = [];
-        for (var i = 0; i !== args; i++) {
-            argsArr.push('pointer');
-        }
-        funs[name] = new NativeFunction(funPtr, 'pointer', argsArr);
+    Object.keys(apiSpec).forEach(function (name) {
+        const funPtr = Module.findExportByName("libobjc.A.dylib", name);
+        const argCount = apiSpec[name];
+        const argTypes = [];
+        for (let i = 0; i !== argCount; i++)
+            argTypes.push('pointer');
+        api[name] = new NativeFunction(funPtr, 'pointer', argTypes);
     });
 
-    var sel = funs.sel_registerName(Memory.allocUtf8String(method));
-
-    var classInfo = {};
-
-    var i;
-    for (i = 0; i !== ObjC.classes.length; i++) {
-        var name = ObjC.classes[i];
-        var clsPtr = ObjC.use(name).classHandle.toString();
+    const classInfo = {};
+    const allClasses = ObjC.classes;
+    let name, clsPtr;
+    for (let i = 0; i !== allClasses.length; i++) {
+        name = allClasses[i];
+        clsPtr = ObjC.use(name).classHandle.toString();
         classInfo[clsPtr] = {
             name: name,
             subclasses: []
         };
     }
-
-    for (i = 0; i !== ObjC.classes.length; i++) {
-        var name = ObjC.classes[i];
-        var clsHandle = ObjC.use(name).classHandle;
-        var clsPtr = clsHandle.toString();
-        var superCls = funs.class_getSuperclass(clsHandle);
+    for (let i = 0; i !== allClasses.length; i++) {
+        name = allClasses[i];
+        const clsHandle = ObjC.use(name).classHandle;
+        clsPtr = clsHandle.toString();
+        const superCls = api.class_getSuperclass(clsHandle);
         if (!superCls.isNull()) {
-            var superClsPtr = superCls.toString();
+            const superClsPtr = superCls.toString();
             classInfo[superClsPtr].subclasses.push(clsPtr);
         }
     }
 
-    var traceAddresses = {};
-
-    function addImps(clsPtr, superImpPtr) {
-        var info = classInfo[clsPtr];
-        var name = info.name;
-
-        var clsHandle = ptr(clsPtr);
-        if (mtype === '+') {
-            clsHandle = funs.object_getClass(clsHandle);
-        }
-
-        var imp = funs.class_getMethodImplementation(clsHandle, sel);
-        var impPtr = imp.toString();
-        if (impPtr !== superImpPtr) {
-            traceAddresses[name] = impPtr;
-        }
-
-        var subclasses = info.subclasses;
-        for (var i = 0; i !== subclasses.length; i++) {
-            addImps(subclasses[i], imp);
-        }
-    }
-
-    for (i = 0; i !== ObjC.classes.length; i++) {
-        var name = ObjC.classes[i];
-        if (name === cls) {
-            addImps(ObjC.use(name).classHandle.toString(), '');
-            break;
-        }
-    }
-
-    send({success: true, addresses: traceAddresses});
-} else {
-    send({success: false, error: "Objective C runtime is not available"})
+    return {
+        api: api,
+        classInfo: classInfo
+    };
 }
-        """ % {"mtype": mtype, "cls": cls, "method": method}
 
-        result = session._exec_script(script)
+let cachedModules = null;
+function allModules() {
+    if (cachedModules === null)
+        cachedModules = Process.enumerateModulesSync();
+    return cachedModules;
+}
 
-        if not result['success']:
-            raise Exception(result['error'])
+function allFunctionExports(module) {
+    if (!module.hasOwnProperty('_cachedFunctionExports')) {
+        const moduleId = allModules().indexOf(module);
+        module._cachedFunctionExports = Module.enumerateExportsSync(module.path)
+            .filter(isFunctionExport)
+            .map(function (e) {
+                e.module = moduleId;
+                return e;
+            });
+    }
 
-        r = []
-        for name, adr in result['addresses'].items():
-            r.append(ObjCMethod(mtype, name, method, int(adr, 0)))
+    return module._cachedFunctionExports;
+}
 
-        return r
+function isFunctionExport(e) {
+    return e.type === 'function';
+}
+
+
+// MINIMATCH BEGIN
+//
+// Copyright 2009, 2010, 2011 Isaac Z. Schlueter.
+// All rights reserved.
+//
+// Permission is hereby granted, free of charge, to any person
+// obtaining a copy of this software and associated documentation
+// files (the "Software"), to deal in the Software without
+// restriction, including without limitation the rights to use,
+// copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+// OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+// HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+// OTHER DEALINGS IN THE SOFTWARE.
+//
+const GLOBSTAR = Minimatch.GLOBSTAR = {};
+const qmark = '[^/]';
+const star = qmark + '*?';
+const twoStarDot = '(?:(?!(?:\\\/|^)(?:\\.{1,2})($|\\\/)).)*?';
+const twoStarNoDot = '(?:(?!(?:\\\/|^)\\.).)*?';
+const reSpecials = charSet('().*{}+?[]^$\\!');
+
+function charSet(s) {
+    return s.split("").reduce(function (set, c) {
+        set[c] = true;
+        return set;
+    }, {});
+}
+
+const slashSplit = /\/+/;
+
+function ext(a, b) {
+    a = a || {};
+    b = b || {};
+    const t = {};
+    Object.keys(b).forEach(function (k) {
+        t[k] = b[k];
+    });
+    Object.keys(a).forEach(function (k) {
+        t[k] = a[k];
+    });
+    return t;
+}
+
+function Minimatch(pattern, options) {
+    if (!options)
+        options = {};
+    pattern = pattern.trim();
+
+    this.options = options;
+    this.set = [];
+    this.pattern = pattern;
+    this.regexp = null;
+    this.negate = false;
+    this.comment = false;
+    this.empty = false;
+
+    this.make();
+}
+
+Minimatch.prototype.make = function () {
+    if (this._made)
+        return;
+
+    const pattern = this.pattern;
+    const options = this.options;
+
+    if (!options.nocomment && pattern.charAt(0) === '#') {
+        this.comment = true;
+        return;
+    }
+    if (!pattern) {
+        this.empty = true;
+        return;
+    }
+
+    this.parseNegate();
+
+    let set = this.globSet = [this.pattern];
+
+    set = this.globParts = set.map(function (s) {
+        return s.split(slashSplit);
+    });
+
+    set = set.map(function (s, si, set) {
+        return s.map(this.parse, this);
+    }, this);
+
+    set = set.filter(function (s) {
+        return s.indexOf(false) === -1;
+    });
+
+    this.set = set;
+};
+
+Minimatch.prototype.parseNegate = function () {
+    const pattern = this.pattern;
+    let negate = false;
+    const options = this.options;
+    let negateOffset = 0;
+
+    if (options.nonegate)
+        return;
+
+    for (let i = 0, l = pattern.length; i < l && pattern.charAt(i) === '!'; i++) {
+        negate = !negate;
+        negateOffset++;
+    }
+
+    if (negateOffset)
+        this.pattern = pattern.substr(negateOffset);
+    this.negate = negate;
+};
+
+const SUBPARSE = {};
+Minimatch.prototype.parse = function (pattern, isSub) {
+    const options = this.options;
+
+    if (!options.noglobstar && pattern === '**')
+        return GLOBSTAR;
+    if (pattern === '')
+        return '';
+
+    let re = '';
+    let hasMagic = !!options.nocase;
+    let escaping = false;
+    const patternListStack = [];
+    let stateChar;
+    let inClass = false;
+    let reClassStart = -1;
+    let classStart = -1;
+    let plType, cs;
+    const patternStart = pattern.charAt(0) === '.' ? '' : options.dot ? '(?!(?:^|\\\/)\\.{1,2}(?:$|\\\/))' : '(?!\\.)';
+
+    function clearStateChar () {
+        if (stateChar) {
+            switch (stateChar) {
+                case '*':
+                    re += star;
+                    hasMagic = true;
+                    break;
+                case '?':
+                    re += qmark;
+                    hasMagic = true;
+                    break;
+                default:
+                    re += '\\' + stateChar;
+                    break;
+            }
+            stateChar = false;
+        }
+    }
+
+    for (let i = 0, len = pattern.length, c; (i < len) && (c = pattern.charAt(i)); i++) {
+        if (escaping && reSpecials[c]) {
+            re += '\\' + c;
+            escaping = false;
+            continue;
+        }
+
+        switch (c) {
+            case '/':
+                return false;
+
+            case '\\':
+                clearStateChar();
+                escaping = true;
+                continue;
+
+            case '?':
+            case '*':
+            case '+':
+            case '@':
+            case '!':
+                if (inClass) {
+                    if (c === '!' && i === classStart + 1)
+                        c = '^';
+                    re += c;
+                    continue;
+                }
+
+                clearStateChar();
+                stateChar = c;
+
+                if (options.noext)
+                    clearStateChar();
+
+                continue;
+
+            case '(': {
+                if (inClass) {
+                    re += '(';
+                    continue;
+                }
+
+                if (!stateChar) {
+                    re += '\\(';
+                    continue;
+                }
+
+                plType = stateChar;
+                patternListStack.push({ type: plType, start: i - 1, reStart: re.length });
+                re += stateChar === '!' ? '(?:(?!' : '(?:';
+                stateChar = false;
+
+                continue;
+            }
+            case ')': {
+                if (inClass || !patternListStack.length) {
+                    re += '\\)';
+                    continue;
+                }
+
+                clearStateChar();
+                hasMagic = true;
+                re += ')';
+                plType = patternListStack.pop().type;
+                switch (plType) {
+                    case '!':
+                        re += '[^/]*?)';
+                        break;
+                    case '?':
+                    case '+':
+                    case '*':
+                        re += plType;
+                        break;
+                    case '@':
+                        break;
+                }
+
+                continue;
+            }
+            case '|':
+                if (inClass || !patternListStack.length || escaping) {
+                    re += '\\|';
+                    escaping = false;
+                    continue;
+                }
+
+                clearStateChar();
+                re += '|';
+
+                continue;
+
+            case '[':
+                clearStateChar();
+
+                if (inClass) {
+                    re += '\\' + c;
+                    continue;
+                }
+
+                inClass = true;
+                classStart = i;
+                reClassStart = re.length;
+                re += c;
+
+                continue;
+
+            case ']':
+                if (i === classStart + 1 || !inClass) {
+                    re += '\\' + c;
+                    escaping = false;
+                    continue;
+                }
+
+                if (inClass) {
+                    cs = pattern.substring(classStart + 1, i);
+                    try {
+                        new RegExp('[' + cs + ']');
+                    } catch (er) {
+                        const sp = this.parse(cs, SUBPARSE);
+                        re = re.substr(0, reClassStart) + '\\[' + sp[0] + '\\]';
+                        hasMagic = hasMagic || sp[1];
+                        inClass = false;
+                        continue;
+                    }
+                }
+
+                hasMagic = true;
+                inClass = false;
+                re += c;
+
+                continue;
+
+            default:
+                clearStateChar();
+
+                if (escaping)
+                    escaping = false;
+                else if (reSpecials[c] && !(c === '^' && inClass))
+                    re += '\\';
+
+                re += c;
+        }
+    }
+
+    if (inClass) {
+        cs = pattern.substr(classStart + 1);
+        const sp = this.parse(cs, SUBPARSE);
+        re = re.substr(0, reClassStart) + '\\[' + sp[0];
+        hasMagic = hasMagic || sp[1];
+    }
+
+    for (let pl = patternListStack.pop(); pl; pl = patternListStack.pop()) {
+        let tail = re.slice(pl.reStart + 3);
+        tail = tail.replace(/((?:\\{2})*)(\\?)\|/g, function (_, $1, $2) {
+            if (!$2)
+                $2 = '\\';
+
+            return $1 + $1 + $2 + '|';
+        });
+
+        const t = pl.type === '*' ? star : pl.type === '?' ? qmark : '\\' + pl.type;
+        hasMagic = true;
+        re = re.slice(0, pl.reStart) + t + '\\(' + tail;
+    }
+
+    clearStateChar();
+    if (escaping)
+        re += '\\\\';
+
+    let addPatternStart = false;
+    switch (re.charAt(0)) {
+        case '.':
+        case '[':
+        case '(':
+            addPatternStart = true;
+    }
+
+    if (re !== '' && hasMagic)
+        re = '(?=.)' + re;
+
+    if (addPatternStart)
+        re = patternStart + re;
+
+    if (isSub === SUBPARSE)
+        return [re, hasMagic];
+
+    if (!hasMagic)
+        return globUnescape(pattern);
+
+    const flags = options.nocase ? 'i' : '';
+    const regExp = new RegExp('^' + re + '$', flags);
+
+    regExp._glob = pattern;
+    regExp._src = re;
+
+    return regExp;
+};
+
+Minimatch.prototype.makeRe = function () {
+    if (this.regexp || this.regexp === false)
+        return this.regexp;
+
+    const set = this.set;
+
+    if (!set.length) {
+        this.regexp = false;
+        return this.regexp;
+    }
+    const options = this.options;
+
+    const twoStar = options.noglobstar ? star : options.dot ? twoStarDot : twoStarNoDot;
+    const flags = options.nocase ? 'i' : '';
+
+    let re = set.map(function (pattern) {
+        return pattern.map(function (p) {
+            return (p === GLOBSTAR) ? twoStar : (typeof p === 'string') ? regExpEscape(p) : p._src;
+        }).join('\\\/');
+    }).join('|');
+
+    re = '^(?:' + re + ')$';
+
+    if (this.negate)
+        re = '^(?!' + re + ').*$';
+
+    try {
+        this.regexp = new RegExp(re, flags);
+    } catch (ex) {
+        this.regexp = false;
+    }
+    return this.regexp;
+};
+
+Minimatch.prototype.match = function (f, partial) {
+    if (this.comment)
+        return false;
+    if (this.empty)
+        return f === '';
+
+    if (f === '/' && partial)
+        return true;
+
+    const options = this.options;
+
+    f = f.split(slashSplit);
+
+    const set = this.set;
+
+    let filename;
+    let i;
+    for (i = f.length - 1; i >= 0; i--) {
+        filename = f[i];
+        if (filename)
+            break;
+    }
+
+    for (i = 0; i < set.length; i++) {
+        const pattern = set[i];
+        const file = (options.matchBase && pattern.length === 1) ? [filename] : f;
+        const hit = this.matchOne(file, pattern, partial);
+        if (hit) {
+            if (options.flipNegate)
+                return true;
+            return !this.negate;
+        }
+    }
+
+    if (options.flipNegate)
+        return false;
+    return this.negate;
+};
+
+Minimatch.prototype.matchOne = function (file, pattern, partial) {
+    const options = this.options;
+
+    let fi, pi, fl, pl;
+    for (fi = 0, pi = 0, fl = file.length, pl = pattern.length; (fi < fl) && (pi < pl); fi++, pi++) {
+        const p = pattern[pi];
+        const f = file[fi];
+
+        if (p === false)
+            return false;
+
+        if (p === GLOBSTAR) {
+            let fr = fi;
+            const pr = pi + 1;
+
+            if (pr === pl) {
+                for (; fi < fl; fi++) {
+                    if (file[fi] === '.' || file[fi] === '..' || (!options.dot && file[fi].charAt(0) === '.'))
+                        return false;
+                }
+                return true;
+            }
+
+            while (fr < fl) {
+                const swallowee = file[fr];
+
+                if (this.matchOne(file.slice(fr), pattern.slice(pr), partial)) {
+                    return true;
+                } else {
+                    if (swallowee === '.' || swallowee === '..' || (!options.dot && swallowee.charAt(0) === '.'))
+                        break;
+                    fr++;
+                }
+            }
+
+            if (partial && fr === fl)
+                return true;
+
+            return false;
+        }
+
+        let hit;
+        if (typeof p === 'string') {
+            if (options.nocase)
+                hit = f.toLowerCase() === p.toLowerCase();
+            else
+                hit = f === p;
+        } else {
+            hit = f.match(p);
+        }
+
+        if (!hit)
+            return false;
+    }
+
+    if (fi === fl && pi === pl) {
+        return true;
+    } else if (fi === fl) {
+        return partial;
+    } else if (pi === pl) {
+        const emptyFileEnd = (fi === fl - 1) && (file[fi] === '');
+        return emptyFileEnd;
+    }
+
+    throw new Error('wtf?');
+};
+
+function globUnescape(s) {
+    return s.replace(/\\(.)/g, '$1');
+}
+
+function regExpEscape(s) {
+    return s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+}
+// MINIMATCH END
+"""
 
 class Tracer(object):
     def __init__(self, reactor, repository, profile):
@@ -620,10 +1295,10 @@ def main():
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include,))
             parser.add_option("-x", "--exclude", help="exclude FUNCTION", metavar="FUNCTION",
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.exclude,))
-            parser.add_option("-m", "--include-method", help="include OBJC_METHOD", metavar="OBJC_METHOD",
-                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_objc_method,))
             parser.add_option("-a", "--add", help="add MODULE!OFFSET", metavar="MODULE!OFFSET",
-                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_rel_address,))
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_relative_address,))
+            parser.add_option("-m", "--include-objc-method", help="include OBJC_METHOD", metavar="OBJC_METHOD",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_objc_method,))
             self._profile_builder = pb
 
         def _usage(self):
