@@ -109,8 +109,7 @@ class TracerProfile(object):
         return working_set
 
     def _create_resolver_script(self):
-        return """\
-"use strict";
+        return r""""use strict";
 
 recv(function (spec) {
     try {
