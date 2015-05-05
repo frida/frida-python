@@ -449,11 +449,10 @@ class Module(FunctionContainer):
             relative_address = int(export["address"], 16) - self.base_address
             mf = ModuleFunction(self, export["name"], relative_address, True)
             self._exports.append(mf)
+            self._functions[relative_address] = mf
 
     def _do_ensure_function(self, relative_address):
-        if self._exports is None:
-            for mf in self.enumerate_exports():
-                self._functions[mf.relative_address] = mf
+        self.enumerate_exports()
         mf = self._functions.get(relative_address)
         if mf is None:
             mf = ModuleFunction(self, "sub_%x" % relative_address, relative_address, False)
