@@ -322,21 +322,6 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
 (function () {
     "use strict";
 
-    Object.defineProperty(this, 'modules', {
-        enumerable: true,
-        get: function () {
-            var result = [];
-            Process.enumerateModules({
-                onMatch: function onMatch(mod) {
-                    result.push(mod);
-                },
-                onComplete: function onComplete() {
-                }
-            });
-            return result;
-        }
-    });
-
     function onEvaluate(expression) {
         try {
             let result;
@@ -400,7 +385,7 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
             chars = src[c:c + length]
             hex = " ".join(["%02x" % x for x in iterbytes(chars)])
             printable = ''.join(["%s" % ((x <= 127 and FILTER[x]) or ".") for x in iterbytes(chars)])
-            lines.append("%04x  %-*s  %s\n" % (c, length*3, hex, printable))
+            lines.append("%04x  %-*s  %s\n" % (c, length * 3, hex, printable))
         return "".join(lines)
 
     if sys.version_info[0] >= 3:
