@@ -334,7 +334,8 @@ handlers['module:enumerate-exports'] = function (payload) {
     const exports = [];
     Module.enumerateExports(payload.module_path, {
       onMatch: function (e) {
-        exports.push(e);
+        if (e.type === 'function')
+          exports.push(e);
       },
       onComplete: function () {
         resolve({ exports: exports });
