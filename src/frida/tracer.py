@@ -265,7 +265,7 @@ function includeObjCMethod(method, workingSet) {
 
     const type = method.type;
     const cls = method.cls;
-    const sel = api.sel_registerName(Memory.allocUtf8String(method.name));
+    const sel = ObjC.selector(method.name);
 
     function addImps(clsPtr, superImpPtr) {
         const info = classInfo[clsPtr];
@@ -310,7 +310,6 @@ function includeObjCMethod(method, workingSet) {
 function getObjCState() {
     const api = {};
     const apiSpec = {
-        sel_registerName: 1,
         class_getSuperclass: 1,
         class_getMethodImplementation: 2,
         object_getClass: 1
