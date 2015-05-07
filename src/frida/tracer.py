@@ -296,13 +296,7 @@ function includeObjCMethod(method, workingSet) {
             addImps(subclasses[i], impPtr);
     }
 
-    for (let i = 0; i !== ObjC.classes.length; i++) {
-        const name = ObjC.classes[i];
-        if (name === cls) {
-            addImps(ObjC.use(name).classHandle.toString(), "");
-            break;
-        }
-    }
+    addImps(ObjC.classes[cls].handle.toString(), "");
 
     return workingSet;
 }
@@ -324,20 +318,17 @@ function getObjCState() {
     });
 
     const classInfo = {};
-    const allClasses = ObjC.classes;
-    let name, clsPtr;
-    for (let i = 0; i !== allClasses.length; i++) {
-        name = allClasses[i];
-        clsPtr = ObjC.use(name).classHandle.toString();
-        classInfo[clsPtr] = {
-            name: name,
+    const classes = ObjC.classes;
+    for (let className in classes) {
+        const klass = classes[className];
+        classInfo[klass.handle.toString()] = {
+            name: className,
             subclasses: []
         };
     }
-    for (let i = 0; i !== allClasses.length; i++) {
-        name = allClasses[i];
-        const clsHandle = ObjC.use(name).classHandle;
-        clsPtr = clsHandle.toString();
+    for (let className in classes) {
+        const clsHandle = classes[className].handle;
+        const clsPtr = clsHandle.toString();
         const superCls = api.class_getSuperclass(clsHandle);
         if (!superCls.isNull()) {
             const superClsPtr = superCls.toString();
