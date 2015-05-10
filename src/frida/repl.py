@@ -16,7 +16,10 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
          please brace yourself for a massively degraded user experience!
 """ + Style.RESET_ALL)
     else:
-        import readline
+        try:
+            import readline
+        except Exception as e:
+            HAVE_READLINE = False
     import sys
     import threading
     import os
