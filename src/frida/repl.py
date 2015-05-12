@@ -230,7 +230,6 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
                 self._user_script = None
                 self._reload()
             else:
-                # TODO: Add local file read capabilities i.e. %run /tmp/script.txt, and other stuff?
                 print("Unknown command: {command}".format(command=command))
 
         def _reload(self):
