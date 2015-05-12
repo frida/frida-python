@@ -321,13 +321,12 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
                     user_script = f.read().rstrip("\r\n") + "\n\n// Frida REPL script:\n"
 
             return user_script + """\
-(function () {
-    "use strict";
+"use strict";
 
+(function () {
     function onEvaluate(expression) {
         try {
-            let result;
-            eval("result = " + expression + ";");
+            let result = (1, eval)(expression);
 
             let sentBinary = false;
             if (result && result.hasOwnProperty('length')) {
