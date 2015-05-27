@@ -321,9 +321,10 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
                     user_script = f.read().rstrip("\r\n") + "\n\n// Frida REPL script:\n"
 
             return user_script + """\
-"use strict";
 
 (function () {
+    "use strict";
+
     function onEvaluate(expression) {
         try {
             let result = (1, eval)(expression);
