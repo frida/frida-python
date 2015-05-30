@@ -53,6 +53,7 @@ static GHashTable * exception_by_error_code;
 
 typedef struct _PyDeviceManager  PyDeviceManager;
 typedef struct _PyDevice         PyDevice;
+typedef struct _PyApplication    PyApplication;
 typedef struct _PyProcess        PyProcess;
 typedef struct _PyIcon           PyIcon;
 typedef struct _PySession        PySession;
@@ -78,6 +79,16 @@ struct _PyDevice
   const gchar * type;
 
   GList * on_lost;
+};
+
+struct _PyApplication
+{
+  PyObject_HEAD
+
+  FridaApplication * handle;
+
+  const gchar * identifier;
+  const gchar * name;
 };
 
 struct _PyProcess
@@ -128,6 +139,7 @@ static PyObject * PyDevice_from_handle (FridaDevice * handle);
 static int PyDevice_init (PyDevice * self);
 static void PyDevice_dealloc (PyDevice * self);
 static PyObject * PyDevice_repr (PyDevice * self);
+static PyObject * PyDevice_enumerate_applications (PyDevice * self);
 static PyObject * PyDevice_enumerate_processes (PyDevice * self);
 static PyObject * PyDevice_spawn (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_resume (PyDevice * self, PyObject * args);
@@ -136,6 +148,13 @@ static PyObject * PyDevice_attach (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_on (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_off (PyDevice * self, PyObject * args);
 static void PyDevice_on_lost (PyDevice * self, FridaDevice * handle);
+
+static PyObject * PyApplication_from_handle (FridaApplication * handle);
+static int PyApplication_init (PyApplication * self);
+static void PyApplication_dealloc (PyApplication * self);
+static PyObject * PyApplication_repr (PyApplication * self);
+static PyObject * PyApplication_get_small_icon (PyApplication * self);
+static PyObject * PyApplication_get_large_icon (PyApplication * self);
 
 static PyObject * PyProcess_from_handle (FridaProcess * handle);
 static int PyProcess_init (PyProcess * self);
@@ -185,6 +204,7 @@ static PyMethodDef PyDeviceManager_methods[] =
 
 static PyMethodDef PyDevice_methods[] =
 {
+  { "enumerate_applications", (PyCFunction) PyDevice_enumerate_applications, METH_NOARGS, "Enumerate applications." },
   { "enumerate_processes", (PyCFunction) PyDevice_enumerate_processes, METH_NOARGS, "Enumerate processes." },
   { "spawn", (PyCFunction) PyDevice_spawn, METH_VARARGS, "Spawn a process into an attachable state." },
   { "resume", (PyCFunction) PyDevice_resume, METH_VARARGS, "Resume a process from the attachable state." },
@@ -201,6 +221,20 @@ static PyMemberDef PyDevice_members[] =
   { "name", T_STRING, G_STRUCT_OFFSET (PyDevice, name), READONLY, "Human-readable device name."},
   { "icon", T_OBJECT_EX, G_STRUCT_OFFSET (PyDevice, icon), READONLY, "Icon."},
   { "type", T_STRING, G_STRUCT_OFFSET (PyDevice, type), READONLY, "Device type. One of: local, tether, remote."},
+  { NULL }
+};
+
+static PyMethodDef PyApplication_methods[] =
+{
+  { "get_small_icon", (PyCFunction) PyApplication_get_small_icon, METH_NOARGS, "Small icon." },
+  { "get_large_icon", (PyCFunction) PyApplication_get_large_icon, METH_NOARGS, "Large icon." },
+  { NULL }
+};
+
+static PyMemberDef PyApplication_members[] =
+{
+  { "identifier", T_STRING, G_STRUCT_OFFSET (PyApplication, identifier), READONLY, "Application identifier."},
+  { "name", T_STRING, G_STRUCT_OFFSET (PyApplication, name), READONLY, "Human-readable process name."},
   { NULL }
 };
 
@@ -326,6 +360,46 @@ static PyTypeObject PyDeviceType =
   NULL,                                         /* tp_descr_set      */
   0,                                            /* tp_dictoffset     */
   (initproc) PyDevice_init,                     /* tp_init           */
+};
+
+static PyTypeObject PyApplicationType =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "_frida.Application",                         /* tp_name           */
+  sizeof (PyApplication),                       /* tp_basicsize      */
+  0,                                            /* tp_itemsize       */
+  (destructor) PyApplication_dealloc,           /* tp_dealloc        */
+  NULL,                                         /* tp_print          */
+  NULL,                                         /* tp_getattr        */
+  NULL,                                         /* tp_setattr        */
+  NULL,                                         /* tp_compare        */
+  (reprfunc) PyApplication_repr,                /* tp_repr           */
+  NULL,                                         /* tp_as_number      */
+  NULL,                                         /* tp_as_sequence    */
+  NULL,                                         /* tp_as_mapping     */
+  NULL,                                         /* tp_hash           */
+  NULL,                                         /* tp_call           */
+  NULL,                                         /* tp_str            */
+  NULL,                                         /* tp_getattro       */
+  NULL,                                         /* tp_setattro       */
+  NULL,                                         /* tp_as_buffer      */
+  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
+  "Frida Application",                          /* tp_doc            */
+  NULL,                                         /* tp_traverse       */
+  NULL,                                         /* tp_clear          */
+  NULL,                                         /* tp_richcompare    */
+  0,                                            /* tp_weaklistoffset */
+  NULL,                                         /* tp_iter           */
+  NULL,                                         /* tp_iternext       */
+  PyApplication_methods,                        /* tp_methods        */
+  PyApplication_members,                        /* tp_members        */
+  NULL,                                         /* tp_getset         */
+  NULL,                                         /* tp_base           */
+  NULL,                                         /* tp_dict           */
+  NULL,                                         /* tp_descr_get      */
+  NULL,                                         /* tp_descr_set      */
+  0,                                            /* tp_dictoffset     */
+  (initproc) PyApplication_init,                /* tp_init           */
 };
 
 static PyTypeObject PyProcessType =
@@ -727,6 +801,31 @@ PyDevice_repr (PyDevice * self)
 }
 
 static PyObject *
+PyDevice_enumerate_applications (PyDevice * self)
+{
+  GError * error = NULL;
+  FridaApplicationList * result;
+  gint result_length, i;
+  PyObject * applications;
+
+  Py_BEGIN_ALLOW_THREADS
+  result = frida_device_enumerate_applications_sync (self->handle, &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  result_length = frida_application_list_size (result);
+  applications = PyList_New (result_length);
+  for (i = 0; i != result_length; i++)
+  {
+    PyList_SET_ITEM (applications, i, PyApplication_from_handle (frida_application_list_get (result, i)));
+  }
+  g_object_unref (result);
+
+  return applications;
+}
+
+static PyObject *
 PyDevice_enumerate_processes (PyDevice * self)
 {
   GError * error = NULL;
@@ -959,6 +1058,61 @@ PyDevice_on_lost (PyDevice * self, FridaDevice * handle)
   }
 
   PyGILState_Release (gstate);
+}
+
+
+static PyObject *
+PyApplication_from_handle (FridaApplication * handle)
+{
+  PyObject * result;
+  PyApplication * application;
+
+  result = PyObject_CallFunction ((PyObject *) &PyApplicationType, NULL);
+
+  application = (PyApplication *) result;
+  application->handle = handle;
+  application->identifier = frida_application_get_identifier (handle);
+  application->name = frida_application_get_name (handle);
+
+  return result;
+}
+
+static int
+PyApplication_init (PyApplication * self)
+{
+  self->handle = NULL;
+
+  self->identifier = NULL;
+  self->name = NULL;
+
+  return 0;
+}
+
+static void
+PyApplication_dealloc (PyApplication * self)
+{
+  if (self->handle != NULL)
+    g_object_unref (self->handle);
+
+  Py_TYPE (self)->tp_free ((PyObject *) self);
+}
+
+static PyObject *
+PyApplication_repr (PyApplication * self)
+{
+  return PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\")", self->identifier, self->name);
+}
+
+static PyObject *
+PyApplication_get_small_icon (PyApplication * self)
+{
+  return PyIcon_from_handle (frida_application_get_small_icon (self->handle));
+}
+
+static PyObject *
+PyApplication_get_large_icon (PyApplication * self)
+{
+  return PyIcon_from_handle (frida_application_get_large_icon (self->handle));
 }
 
 
@@ -1612,6 +1766,10 @@ MOD_INIT (_frida)
   if (PyType_Ready (&PyDeviceType) < 0)
     return MOD_ERROR_VAL;
 
+  PyApplicationType.tp_new = PyType_GenericNew;
+  if (PyType_Ready (&PyApplicationType) < 0)
+    return MOD_ERROR_VAL;
+
   PyProcessType.tp_new = PyType_GenericNew;
   if (PyType_Ready (&PyProcessType) < 0)
     return MOD_ERROR_VAL;
@@ -1637,6 +1795,9 @@ MOD_INIT (_frida)
 
   Py_INCREF (&PyDeviceType);
   PyModule_AddObject (module, "Device", (PyObject *) &PyDeviceType);
+
+  Py_INCREF (&PyApplicationType);
+  PyModule_AddObject (module, "Application", (PyObject *) &PyApplicationType);
 
   Py_INCREF (&PyProcessType);
   PyModule_AddObject (module, "Process", (PyObject *) &PyProcessType);

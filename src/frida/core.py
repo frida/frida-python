@@ -44,6 +44,9 @@ class Device(object):
     def __repr__(self):
         return repr(self._impl)
 
+    def enumerate_applications(self):
+        return self._impl.enumerate_applications()
+
     def enumerate_processes(self):
         return self._impl.enumerate_processes()
 
