@@ -329,20 +329,14 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
         try {
             let result = (1, eval)(expression);
 
-            let sentBinary = false;
-            if (result && result.hasOwnProperty('length')) {
-                try {
-                    send({
-                        name: '+result',
-                        payload: {
-                            type: 'binary'
-                        }
-                    }, result);
-                    sentBinary = true;
-                } catch (e) {
-                }
-            }
-            if (!sentBinary) {
+            if (isByteArray(result)) {
+                send({
+                    name: '+result',
+                    payload: {
+                        type: 'binary'
+                    }
+                }, result);
+            } else {
                 const type = (result === null) ? 'null' : typeof result;
                 send({
                     name: '+result',
@@ -361,6 +355,14 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
                 }
             });
         }
+    }
+
+    function isByteArray(v) {
+        if (!v || !v.hasOwnProperty('length'))
+            return false;
+        return Array.prototype.every.call(v, function (e) {
+            return typeof e === 'number';
+        });
     }
 
     const onStanza = function (stanza) {
