@@ -1643,7 +1643,7 @@ PyScript_on_message (PyScript * self, const gchar * message, const gchar * data,
       log_message_utf8 = PyString_AsString (log_message);
 #endif
 
-      g_print ("%s\n", log_message_utf8);
+      PySys_WriteStdout ("%s\n", log_message_utf8);
 
       Py_DECREF (log_message);
     }
