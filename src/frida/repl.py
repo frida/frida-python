@@ -358,11 +358,15 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
     }
 
     function isByteArray(v) {
-        if (!v || !v.hasOwnProperty('length'))
+        if (!v || typeof v !== 'object' || typeof v.length !== 'number' || v.length < 1)
             return false;
-        return Array.prototype.every.call(v, function (e) {
-            return typeof e === 'number';
-        });
+        if (v instanceof Array) // Object returned by Memory.readByteArray() isn't an Array
+            return false;
+        for (var i = 0; i !== v.length; i++) {
+            if (typeof v[i] !== 'number')
+                return false;
+        }
+        return true;
     }
 
     const onStanza = function (stanza) {
