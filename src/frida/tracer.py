@@ -49,9 +49,9 @@ class TracerProfileBuilder(object):
 
     def include_objc_method(self, *function_name_globs):
         for f in function_name_globs:
-            match = re.search(r"([+-])\[(\S+)\s+(\S+)\]", f)
+            match = re.search(r"([+*-])\[(\S+)\s+(\S+)\]", f)
             if not match:
-                raise Exception("Format: -[Class foo:bar:] or +[Class baz]")
+                raise Exception("Format: -[NS*Number foo:bar:], +[Foo foo*] or *[Bar baz]")
             mtype, cls, name = match.groups()
             self._spec.append(('include', 'objc_method', {
                 'type': mtype,
@@ -264,39 +264,49 @@ function includeObjCMethod(method, workingSet) {
     const classInfo = cachedObjCState.classInfo;
 
     const type = method.type;
-    const cls = method.cls;
-    const sel = ObjC.selector(method.name);
+    const clsMm = new Minimatch(method.cls);
+    const methodMm = new Minimatch(method.name);
 
-    function addImps(clsPtr, superImpPtr) {
+    function addImps(clsPtr) {
         const info = classInfo[clsPtr];
         const name = info.name;
 
-        let clsHandle = ptr(clsPtr);
-        if (type === '+') {
-            clsHandle = api.object_getClass(clsHandle);
-        }
+        for (let i = 0; i != 2; i++) {
+            const currentType = i === 0? '-': '+';
+            const methods = i === 0? info.instanceMethods: info.classMethods;
+            if (type !== currentType && type !== '*') {
+                continue;
+            }
 
-        const imp = api.class_getMethodImplementation(clsHandle, sel);
-        const impPtr = imp.toString();
-        if (impPtr !== superImpPtr) {
-            workingSet[impPtr] = {
-                objc: {
-                    className: name,
-                    method: {
-                        type: type,
-                        name: method.name
+            for (let methodName in methods) {
+                if (methodMm.match(methodName)) {
+                    const impPtr = methods[methodName];
+                    if (!workingSet[impPtr]) {
+                        workingSet[impPtr] = {
+                            objc: {
+                                className: name,
+                                method: {
+                                    type: currentType,
+                                    name: methodName
+                                }
+                            },
+                            address: impPtr
+                        };
                     }
-                },
-                address: impPtr
-            };
+                }
+           }
         }
 
         const subclasses = info.subclasses;
         for (let i = 0; i !== subclasses.length; i++)
-            addImps(subclasses[i], impPtr);
+            addImps(subclasses[i]);
     }
 
-    addImps(ObjC.classes[cls].handle.toString(), "");
+    for (let className in ObjC.classes) {
+        if (clsMm.match(className)) {
+            addImps(ObjC.classes[className].handle.toString());
+        }
+    }
 
     return workingSet;
 }
@@ -305,8 +315,11 @@ function getObjCState() {
     const api = {};
     const apiSpec = {
         class_getSuperclass: 1,
-        class_getMethodImplementation: 2,
-        object_getClass: 1
+        class_copyMethodList: 2,
+        object_getClass: 1,
+        method_getName: 1,
+        method_getImplementation: 1,
+        sel_getName: 1
     };
     Object.keys(apiSpec).forEach(function (name) {
         const funPtr = Module.findExportByName("libobjc.A.dylib", name);
@@ -317,14 +330,41 @@ function getObjCState() {
         api[name] = new NativeFunction(funPtr, 'pointer', argTypes);
     });
 
+    const freePtr = Module.findExportByName("libSystem.B.dylib", "free");
+    const free = new NativeFunction(freePtr, 'void', ['pointer']);
+
+    const methodCountPtr = Memory.alloc(4);
+    function addMethods(clsHandle, methodObj) {
+        const methods = api.class_copyMethodList(clsHandle, methodCountPtr);
+        const methodCount = Memory.readU32(methodCountPtr);
+        for (let i = 0; i !== methodCount; i++) {
+            const method = Memory.readPointer(methods.add(i * Process.pointerSize));
+            const sel = api.method_getName(method);
+            const methodName = Memory.readUtf8String(api.sel_getName(sel));
+            const imp = api.method_getImplementation(method);
+            const impPtr = imp.toString();
+
+            methodObj[methodName] = impPtr;
+        }
+
+        free(methods);
+    }
+
     const classInfo = {};
     const classes = ObjC.classes;
     for (let className in classes) {
         const klass = classes[className];
-        classInfo[klass.handle.toString()] = {
+        const clsHandle = klass.handle;
+        const clsPtr = clsHandle.toString();
+        classInfo[clsPtr] = {
             name: className,
-            subclasses: []
+            subclasses: [],
+            instanceMethods: {},
+            classMethods: {}
         };
+
+        addMethods(clsHandle, classInfo[clsPtr].instanceMethods);
+        addMethods(api.object_getClass(clsHandle), classInfo[clsPtr].classMethods);
     }
     for (let className in classes) {
         const clsHandle = classes[className].handle;
