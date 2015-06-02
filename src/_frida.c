@@ -89,6 +89,7 @@ struct _PyApplication
 
   const gchar * identifier;
   const gchar * name;
+  guint pid;
 };
 
 struct _PyProcess
@@ -235,6 +236,7 @@ static PyMemberDef PyApplication_members[] =
 {
   { "identifier", T_STRING, G_STRUCT_OFFSET (PyApplication, identifier), READONLY, "Application identifier."},
   { "name", T_STRING, G_STRUCT_OFFSET (PyApplication, name), READONLY, "Human-readable process name."},
+  { "pid", T_UINT, G_STRUCT_OFFSET (PyApplication, pid), READONLY, "Process ID, or 0 if not running."},
   { NULL }
 };
 
@@ -1073,6 +1075,7 @@ PyApplication_from_handle (FridaApplication * handle)
   application->handle = handle;
   application->identifier = frida_application_get_identifier (handle);
   application->name = frida_application_get_name (handle);
+  application->pid = frida_application_get_pid (handle);
 
   return result;
 }
@@ -1100,7 +1103,10 @@ PyApplication_dealloc (PyApplication * self)
 static PyObject *
 PyApplication_repr (PyApplication * self)
 {
-  return PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\")", self->identifier, self->name);
+  if (self->pid != 0)
+    return PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\", pid=%u)", self->identifier, self->name, self->pid);
+  else
+    return PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\")", self->identifier, self->name);
 }
 
 static PyObject *
