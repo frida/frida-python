@@ -13,7 +13,6 @@ from colorama import Style
 
 import frida
 
-
 def await_enter():
     if sys.version_info[0] >= 3:
         input()
@@ -101,7 +100,9 @@ class ConsoleApplication(object):
         if self._device is not None:
             self._device.off('lost', self._schedule_on_device_lost)
         mgr.off('changed', on_devices_changed)
+        print('before frida.shutdown')
         frida.shutdown()
+        print('after frida.shutdown')
         sys.exit(self._exit_status)
 
     def _add_options(self, parser):
@@ -239,10 +240,13 @@ class Reactor(object):
         watcher_thread.start()
 
         running = True
+        should_stop = False
         while running:
             now = time.time()
             work = None
-            timeout = None
+            # We can't use None as then KeyboardInterrupt will not be raised from Condition.wait
+            # See https://bugs.python.org/issue8844
+            timeout = 1e10
             with self._lock:
                 for item in self._pending:
                     (f, when) = item
@@ -256,8 +260,15 @@ class Reactor(object):
                 work()
             with self._lock:
                 if self._running:
-                    self._cond.wait(timeout)
+                    try:
+                        self._cond.wait(timeout)
+                    except KeyboardInterrupt:
+                        should_stop = True
                 running = self._running
+
+            if should_stop:
+                self.stop()
+                return
 
     def stop(self):
         with self._lock:
