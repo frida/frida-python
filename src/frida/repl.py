@@ -76,7 +76,7 @@ def main():
                 pass
             self._script = None
 
-        def _process_input(self):
+        def _process_input(self, reactor):
             self._print_startup_message()
             self._ready.wait()
 

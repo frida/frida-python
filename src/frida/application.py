@@ -7,20 +7,44 @@ import platform
 import sys
 import threading
 import time
+from select import select
 
 import colorama
 from colorama import Style
 
 import frida
 
+if platform.system() == 'Windows':
+    import msvcrt
 
-def await_enter():
-    try:
-        if sys.version_info[0] >= 3:
-            input()
+def input_with_timeout(timeout):
+    if platform.system() == 'Windows':
+        start_time = time.time()
+        s = ''
+        while True:
+            while msvcrt.kbhit():
+                c = msvcrt.getche()
+                if ord(c) == 13: # enter_key
+                    break
+                elif ord(c) >= 32: #space_char
+                    s += c
+            if time.time() - start_time > timeout:
+                return None
+
+        return s
+    else:
+        rlist, _, _ = select([sys.stdin], [], [], timeout)
+        if rlist:
+            return sys.stdin.readline()
         else:
-            raw_input()
-    except (KeyboardInterrupt, EOFError):
+            return None
+
+def await_enter(reactor):
+    try:
+        while input_with_timeout(0.5) == None:
+            if not reactor._running:
+                break
+    except KeyboardInterrupt:
         print('')
         pass
 
@@ -134,8 +158,6 @@ class ConsoleApplication(object):
 
     def _exit(self, exit_status):
         self._exit_status = exit_status
-        # FIXME:
-        os.system('kill {}'.format(os.getpid()))
         self._reactor.stop()
 
     def _try_start(self):
@@ -243,7 +265,7 @@ class Reactor(object):
         watcher_thread.daemon = True
         watcher_thread.start()
 
-        self._run_until_return()
+        self._run_until_return(self)
         self.stop()
 
     def _run(self):
