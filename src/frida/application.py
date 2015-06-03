@@ -15,10 +15,14 @@ import frida
 
 
 def await_enter():
-    if sys.version_info[0] >= 3:
-        input()
-    else:
-        raw_input()
+    try:
+        if sys.version_info[0] >= 3:
+            input()
+        else:
+            raw_input()
+    except (KeyboardInterrupt, EOFError):
+        print('')
+        pass
 
 class ConsoleApplication(object):
     def __init__(self, run_until_return=await_enter):
@@ -101,6 +105,8 @@ class ConsoleApplication(object):
         if self._device is not None:
             self._device.off('lost', self._schedule_on_device_lost)
         mgr.off('changed', on_devices_changed)
+        # FIXME:
+        os.system('kill {}'.format(os.getpid()))
         frida.shutdown()
         sys.exit(self._exit_status)
 
@@ -128,6 +134,8 @@ class ConsoleApplication(object):
 
     def _exit(self, exit_status):
         self._exit_status = exit_status
+        # FIXME:
+        os.system('kill {}'.format(os.getpid()))
         self._reactor.stop()
 
     def _try_start(self):
@@ -231,13 +239,14 @@ class Reactor(object):
         with self._lock:
             self._running = True
 
-        def termination_watcher():
-            self._run_until_return()
-            self.stop()
-        watcher_thread = threading.Thread(target=termination_watcher)
+        watcher_thread = threading.Thread(target=self._run)
         watcher_thread.daemon = True
         watcher_thread.start()
 
+        self._run_until_return()
+        self.stop()
+
+    def _run(self):
         running = True
         while running:
             now = time.time()
