@@ -358,7 +358,7 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
     }
 
     function isByteArray(v) {
-        if (!v || typeof v !== 'object' || typeof v.length !== 'number' || v.length < 1)
+        if (!v || typeof v !== 'object' || !('length' in v) || typeof v.length !== 'number' || v.length < 1)
             return false;
         if (v instanceof Array) // Object returned by Memory.readByteArray() isn't an Array
             return false;
