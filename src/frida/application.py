@@ -7,18 +7,46 @@ import platform
 import sys
 import threading
 import time
+from select import select
 
 import colorama
 from colorama import Style
 
 import frida
 
+if platform.system() == 'Windows':
+    import msvcrt
 
-def await_enter():
-    if sys.version_info[0] >= 3:
-        input()
+def input_with_timeout(timeout):
+    if platform.system() == 'Windows':
+        start_time = time.time()
+        s = ''
+        while True:
+            while msvcrt.kbhit():
+                c = msvcrt.getche()
+                if ord(c) == 13: # enter_key
+                    break
+                elif ord(c) >= 32: #space_char
+                    s += c
+            if time.time() - start_time > timeout:
+                return None
+
+        return s
     else:
-        raw_input()
+        rlist, _, _ = select([sys.stdin], [], [], timeout)
+        if rlist:
+            return sys.stdin.readline()
+        else:
+            return None
+
+def await_enter(reactor):
+    try:
+        while input_with_timeout(0.5) == None:
+            if not reactor._running:
+                break
+    except KeyboardInterrupt:
+        print('')
+        pass
 
 class ConsoleApplication(object):
     def __init__(self, run_until_return=await_enter):
@@ -101,6 +129,8 @@ class ConsoleApplication(object):
         if self._device is not None:
             self._device.off('lost', self._schedule_on_device_lost)
         mgr.off('changed', on_devices_changed)
+        # FIXME:
+        os.system('kill {}'.format(os.getpid()))
         frida.shutdown()
         sys.exit(self._exit_status)
 
@@ -231,13 +261,14 @@ class Reactor(object):
         with self._lock:
             self._running = True
 
-        def termination_watcher():
-            self._run_until_return()
-            self.stop()
-        watcher_thread = threading.Thread(target=termination_watcher)
+        watcher_thread = threading.Thread(target=self._run)
         watcher_thread.daemon = True
         watcher_thread.start()
 
+        self._run_until_return(self)
+        self.stop()
+
+    def _run(self):
         running = True
         while running:
             now = time.time()

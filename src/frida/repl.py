@@ -1,53 +1,29 @@
+from __future__ import unicode_literals
 def main():
     import frida
     from frida.application import ConsoleApplication
     from colorama import Fore, Style
     import json
     import platform
-    HAVE_READLINE = True
-    if platform.system() == "Darwin":
-        # We really want to avoid libedit
-        try:
-            import gnureadline as readline
-        except Exception as e:
-            HAVE_READLINE = False
-            print(Fore.RED + Style.BRIGHT + """
-WARNING: Unable to find package 'gnureadline' needed for tab completion;
-         please brace yourself for a massively degraded user experience!
-""" + Style.RESET_ALL)
-    else:
-        try:
-            import readline
-        except Exception as e:
-            HAVE_READLINE = False
     import sys
     import threading
     import os
-
-    if HAVE_READLINE:
-       HIST_FILE = os.path.join(os.path.expanduser("~"), ".frida_history")
+    from prompt_toolkit.shortcuts import get_input
+    from prompt_toolkit.history import FileHistory
+    from prompt_toolkit.completion import Completion, Completer
+    from pygments.lexers import JavascriptLexer
+    from pygments.token import Token
 
     class REPLApplication(ConsoleApplication):
         def __init__(self):
-            if HAVE_READLINE:
-                readline.parse_and_bind("tab: complete")
-                # force completor to run on first tab press
-                readline.parse_and_bind("set show-all-if-unmodified on")
-                readline.parse_and_bind("set show-all-if-ambiguous on")
-                # Set our custom completer
-                readline.set_completer(self._completer)
-
-                try:
-                    readline.read_history_file(HIST_FILE)
-                except IOError:
-                    pass
-
             self._script = None
             self._seqno = 0
             self._ready = threading.Event()
             self._response_cond = threading.Condition()
             self._response_data = None
             self._completor_locals = []
+            self._history = FileHistory(os.path.join(os.path.expanduser('~'), '.frida_history'))
+            self._completer = FridaCompleter(self)
 
             super(REPLApplication, self).__init__(self._process_input)
 
@@ -100,12 +76,7 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
                 pass
             self._script = None
 
-        def _process_input(self):
-            if sys.version_info[0] >= 3:
-                input_impl = input
-            else:
-                input_impl = raw_input
-
+        def _process_input(self, reactor):
             self._print_startup_message()
             self._ready.wait()
 
@@ -114,24 +85,19 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
                 line = ""
                 while len(expression) == 0 or line.endswith("\\"):
                     try:
-                        if len(expression) == 0:
-                            line = input_impl("[%s]" % self._prompt_string + "-> ")
-                        else:
-                            line = input_impl("... ")
+                        prompt = "[%s]" % self._prompt_string + "-> " if len(expression) == 0 else "... "
+                        line = get_input(prompt, history=self._history, lexer=JavascriptLexer, completer=self._completer)
                     except EOFError:
                         # An extra newline after EOF to exit the REPL cleanly
                         print("\nThank you for using Frida!")
                         return
+                    except KeyboardInterrupt:
+                        line = ""
+                        continue
                     if len(line.strip()) > 0:
                         if len(expression) > 0:
                             expression += "\n"
                         expression += line.rstrip("\\")
-
-                if HAVE_READLINE:
-                    try:
-                        readline.write_history_file(HIST_FILE)
-                    except IOError:
-                        pass
 
                 if expression.endswith("?"):
                     try:
@@ -265,28 +231,6 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
 
             return prompt_string
 
-        def _completer(self, prefix, index):
-            if index == 0:
-                if not prefix:
-                    self._completor_locals = [key for key in self._evaluate("Object.keys(this)")[1] if not key.startswith('_')]
-                else:
-                    if prefix.endswith("."):
-                        thing_to_check = prefix.split(' ')[0][:-1]
-                        self._completor_locals = self._evaluate("Object.keys(" + thing_to_check + ")")[1]
-                    else:
-                        if "." in prefix:
-                            target = prefix.split(' ')[-1]
-                            needle = target.split('.')[-1]
-                            target = ".".join(target.split('.')[:-1])
-                            self._completor_locals = [target + "." + key for key in self._evaluate("Object.keys(" + target + ")")[1] if key.startswith(needle)]
-                        else:
-                            self._completor_locals = [key for key in self._evaluate("Object.keys(this)")[1] if key.startswith(prefix)]
-
-            try:
-                return self._completor_locals[index]
-            except IndexError:
-                return None
-
         def _evaluate(self, text):
             self._reactor.schedule(lambda: self._script.post_message({'name': '.evaluate', 'payload': {'expression': text}}))
             with self._response_cond:
@@ -381,6 +325,46 @@ WARNING: Unable to find package 'gnureadline' needed for tab completion;
     recv(onStanza);
 }).call(this);
 """
+
+    class FridaCompleter(Completer):
+        def __init__(self, repl):
+            self._repl = repl
+            self._lexer = JavascriptLexer()
+
+        def get_completions(self, document, complete_event):
+            prefix = document.text_before_cursor
+            tokens = list(self._lexer.get_tokens(prefix))[:-1]
+
+            word_tokens = 0
+            before_dot = ''
+            after_dot = ''
+            encountered_dot = False
+            for t in tokens[::-1]:
+                if t[0] == Token.Name.Other:
+                    before_dot = t[1] + before_dot
+                    word_tokens += 1
+                elif t[0] == Token.Punctuation and t[1] == '.':
+                    before_dot = '.' + before_dot
+                    if not encountered_dot:
+                        encountered_dot = True
+                        after_dot = before_dot[1:]
+                        before_dot = ''
+                    word_tokens += 1
+                else:
+                    break
+
+            try:
+                if encountered_dot:
+                    for key in self._repl._evaluate("Object.keys(" + before_dot + ")")[1]:
+                        if key.startswith(after_dot):
+                            yield Completion(key, -len(after_dot))
+                else:
+                    for key in self._repl._evaluate("Object.keys(this)")[1]:
+                        if not key.startswith(before_dot) or (key.startswith('_') and before_dot == ''):
+                            continue
+                        yield Completion(key, -len(before_dot))
+            except Exception:
+                pass
 
     def hexdump(src, length=16):
         try:
