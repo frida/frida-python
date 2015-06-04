@@ -129,8 +129,6 @@ class ConsoleApplication(object):
         if self._device is not None:
             self._device.off('lost', self._schedule_on_device_lost)
         mgr.off('changed', on_devices_changed)
-        # FIXME:
-        os.system('kill {}'.format(os.getpid()))
         frida.shutdown()
         sys.exit(self._exit_status)
 
