@@ -8,9 +8,10 @@ def main():
     import sys
     import threading
     import os
-    from prompt_toolkit.shortcuts import get_input
+    from prompt_toolkit.shortcuts import create_default_application, create_default_output, create_eventloop
     from prompt_toolkit.history import FileHistory
     from prompt_toolkit.completion import Completion, Completer
+    from prompt_toolkit.interface import CommandLineInterface
     from pygments.lexers import JavascriptLexer
     from pygments.token import Token
 
@@ -24,8 +25,9 @@ def main():
             self._completor_locals = []
             self._history = FileHistory(os.path.join(os.path.expanduser('~'), '.frida_history'))
             self._completer = FridaCompleter(self)
+            self._cli = None
 
-            super(REPLApplication, self).__init__(self._process_input)
+            super(REPLApplication, self).__init__(self._process_input, self._on_stop)
 
         def _add_options(self, parser):
             parser.add_option("-l", "--load", help="load SCRIPT", metavar="SCRIPT",
@@ -54,6 +56,15 @@ def main():
                 sys.stdout.write("\033[A")
             self._ready.set()
 
+        def _on_stop(self):
+            def set_return():
+                raise EOFError()
+
+            try:
+                self._cli.eventloop.call_from_executor(set_return)
+            except Exception:
+                pass
+
         def _stop(self):
             self._unload_script()
 
@@ -78,15 +89,37 @@ def main():
 
         def _process_input(self, reactor):
             self._print_startup_message()
-            self._ready.wait()
+            while self._ready.wait(0.5) != True:
+                if not reactor._running:
+                    return
 
             while True:
                 expression = ""
                 line = ""
                 while len(expression) == 0 or line.endswith("\\"):
+                    if not reactor._running:
+                        return
                     try:
                         prompt = "[%s]" % self._prompt_string + "-> " if len(expression) == 0 else "... "
-                        line = get_input(prompt, history=self._history, lexer=JavascriptLexer, completer=self._completer)
+
+                        # We create the prompt manually instead of using get_input,
+                        # so we can use the cli in the _on_stop method
+                        eventloop = create_eventloop()
+
+                        self._cli = CommandLineInterface(
+                            application=create_default_application(prompt, history=self._history, completer=self._completer, lexer=JavascriptLexer),
+                            eventloop=eventloop,
+                            output=create_default_output())
+
+                        try:
+                            line = None
+
+                            document = self._cli.run()
+
+                            if document:
+                                line = document.text
+                        finally:
+                            eventloop.close()
                     except EOFError:
                         # An extra newline after EOF to exit the REPL cleanly
                         print("\nThank you for using Frida!")
