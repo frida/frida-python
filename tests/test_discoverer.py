@@ -30,7 +30,7 @@ class TestDiscoverer(unittest.TestCase):
 
     def test_basics(self):
         test_ui = TestUI()
-        reactor = Reactor(test_ui.on_result.wait)
+        reactor = Reactor(lambda reactor: test_ui.on_result.wait())
         def start():
             d = Discoverer(reactor)
             d.start(self.session, test_ui)

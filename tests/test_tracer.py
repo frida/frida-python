@@ -29,14 +29,15 @@ class TestTracer(unittest.TestCase):
         cls.target.terminate()
 
     def test_basics(self):
-        never = threading.Event()
-        reactor = Reactor(never.wait)
+        done = threading.Event()
+        reactor = Reactor(lambda reactor: done.wait())
         def start():
             tp = TracerProfileBuilder().include("open*")
             t = Tracer(reactor, MemoryRepository(), tp.build())
             targets = t.start_trace(self.session, UI())
             t.stop()
             reactor.stop()
+            done.set()
         reactor.schedule(start)
         reactor.run()
 
