@@ -293,7 +293,7 @@ class Reactor(object):
                     self._cond.wait(timeout)
                 running = self._running
 
-        if self._on_stop:
+        if self._on_stop is not None:
             self._on_stop()
 
     def stop(self):
