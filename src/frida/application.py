@@ -42,11 +42,10 @@ def input_with_timeout(timeout):
 def await_enter(reactor):
     try:
         while input_with_timeout(0.5) == None:
-            if not reactor._running:
+            if not reactor.is_running():
                 break
     except KeyboardInterrupt:
         print('')
-        pass
 
 class ConsoleApplication(object):
     def __init__(self, run_until_return=await_enter, on_stop=None):
