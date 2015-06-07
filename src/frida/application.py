@@ -248,7 +248,7 @@ def expand_target(target):
 
 
 class Reactor(object):
-    def __init__(self, run_until_return, on_stop):
+    def __init__(self, run_until_return, on_stop=None):
         self._running = False
         self._run_until_return = run_until_return
         self._on_stop = on_stop
