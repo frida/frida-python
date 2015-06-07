@@ -100,8 +100,6 @@ class ConsoleApplication(object):
             target = expand_target(target)
             if target[0] == 'file':
                 argv = target[1]
-                if not os.path.isfile(argv[0]):
-                    parser.error("%s: file not found" % argv[0])
                 argv.extend(args)
             args = []
             self._target = target
