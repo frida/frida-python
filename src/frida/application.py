@@ -49,7 +49,7 @@ def await_enter(reactor):
         pass
 
 class ConsoleApplication(object):
-    def __init__(self, run_until_return=await_enter):
+    def __init__(self, run_until_return=await_enter, on_stop=None):
         colorama.init()
 
         parser = OptionParser(usage=self._usage(), version=frida.__version__)
@@ -87,7 +87,7 @@ class ConsoleApplication(object):
         self._schedule_on_session_detached = lambda: self._reactor.schedule(self._on_session_detached)
         self._started = False
         self._resumed = False
-        self._reactor = Reactor(run_until_return)
+        self._reactor = Reactor(run_until_return, on_stop)
         self._exit_status = None
         self._status_updated = False
 
@@ -248,9 +248,10 @@ def expand_target(target):
 
 
 class Reactor(object):
-    def __init__(self, run_until_return):
+    def __init__(self, run_until_return, on_stop):
         self._running = False
         self._run_until_return = run_until_return
+        self._on_stop = on_stop
         self._pending = collections.deque([])
         self._lock = threading.Lock()
         self._cond = threading.Condition(self._lock)
@@ -287,6 +288,9 @@ class Reactor(object):
                 if self._running:
                     self._cond.wait(timeout)
                 running = self._running
+
+        if self._on_stop:
+            self._on_stop()
 
     def stop(self):
         with self._lock:
