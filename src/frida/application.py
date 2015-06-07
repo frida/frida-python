@@ -256,6 +256,10 @@ class Reactor(object):
         self._lock = threading.Lock()
         self._cond = threading.Condition(self._lock)
 
+    def is_running(self):
+        with self._lock:
+            return self._running
+
     def run(self):
         with self._lock:
             self._running = True

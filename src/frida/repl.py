@@ -90,14 +90,14 @@ def main():
         def _process_input(self, reactor):
             self._print_startup_message()
             while self._ready.wait(0.5) != True:
-                if not reactor._running:
+                if not reactor.is_running():
                     return
 
             while True:
                 expression = ""
                 line = ""
                 while len(expression) == 0 or line.endswith("\\"):
-                    if not reactor._running:
+                    if not reactor.is_running():
                         return
                     try:
                         prompt = "[%s]" % self._prompt_string + "-> " if len(expression) == 0 else "... "
