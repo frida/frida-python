@@ -122,7 +122,10 @@ class ConsoleApplication(object):
             self._session.detach()
             self._session = None
         if self._spawned_pid is not None:
-            self._device.kill(self._spawned_pid)
+            try:
+                self._device.kill(self._spawned_pid)
+            except:
+                pass
         if self._device is not None:
             self._device.off('lost', self._schedule_on_device_lost)
         mgr.off('changed', on_devices_changed)
