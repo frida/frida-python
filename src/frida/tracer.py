@@ -1162,9 +1162,7 @@ class Repository(object):
 
                         args += '%(pre)s%(arg)s=" + args[%(argc)s]' % {"arg": arg, "argc": argc, "pre": '"' if argc == 0 else '+ ", '}
                         argc += 1
-            except (subprocess.CalledProcessError, OSError): # WindowsError or FileNotFoundError
-                pass
-            except AttributeError: # Python 2.6 support; which probably won't stay around for that much longer
+            except Exception as e:
                 pass
             if args == "":
                 args = '""'
