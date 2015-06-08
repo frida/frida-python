@@ -1309,9 +1309,12 @@ class UI(object):
 
 
 def main():
-    from frida.application import ConsoleApplication
+    from frida.application import ConsoleApplication, input_with_timeout
 
     class TracerApplication(ConsoleApplication, UI):
+        def __init__(self):
+            super(TracerApplication, self).__init__(self._await_ctrl_c)
+
         def _add_options(self, parser):
             pb = TracerProfileBuilder()
             def process_builder_arg(option, opt_str, value, parser, method, **kwargs):
@@ -1350,6 +1353,13 @@ def main():
             self._tracer.stop()
             self._tracer = None
 
+        def _await_ctrl_c(self, reactor):
+            while reactor.is_running():
+                try:
+                    input_with_timeout(0.5)
+                except KeyboardInterrupt:
+                    break
+
         def on_trace_progress(self, operation):
             if operation == 'resolve':
                 self._update_status("Resolving functions...")
@@ -1360,7 +1370,7 @@ def main():
                     plural = ""
                 else:
                     plural = "s"
-                self._update_status("Started tracing %d function%s. Press ENTER to stop." % (len(self._targets), plural))
+                self._update_status("Started tracing %d function%s. Press Ctrl+C to stop." % (len(self._targets), plural))
                 self._resume()
 
         def on_trace_events(self, events):
