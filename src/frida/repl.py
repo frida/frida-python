@@ -388,7 +388,8 @@ def main():
 
             try:
                 if encountered_dot:
-                    for key in self._repl._evaluate("Object.keys(" + before_dot + ")")[1]:
+                    for key in self._repl._evaluate("Object.keys(" + before_dot +
+                               ").concat(Object.getOwnPropertyNames(Object.getPrototypeOf(" + before_dot + ")))")[1]:
                         if key.startswith(after_dot):
                             yield Completion(key, -len(after_dot))
                 else:
