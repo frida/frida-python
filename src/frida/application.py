@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 
 import collections
+import errno
 from optparse import OptionParser
 import os
 import platform
+import select
 import sys
 import threading
 import time
-from select import select
 
 import colorama
 from colorama import Style
@@ -33,7 +34,13 @@ def input_with_timeout(timeout):
 
         return s
     else:
-        rlist, _, _ = select([sys.stdin], [], [], timeout)
+        while True:
+            try:
+                rlist, _, _ = select.select([sys.stdin], [], [], timeout)
+                break
+            except (OSError, select.error) as e:
+                if e.args[0] != errno.EINTR:
+                    raise e
         if rlist:
             return sys.stdin.readline()
         else:
