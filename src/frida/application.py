@@ -240,7 +240,7 @@ def infer_target(target_value):
 def expand_target(target):
     target_type, target_value = target
     if target_type == 'file':
-        target_value = [os.path.abspath(target_value[0])]
+        target_value = [target_value[0]]
     return (target_type, target_value)
 
 
