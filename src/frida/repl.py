@@ -155,6 +155,8 @@ def main():
                             output = hexdump(value).rstrip("\n")
                         else:
                             output = json.dumps(value, sort_keys=True, indent=4, separators=(",", ": "))
+                    except frida.InvalidOperationError:
+                        return
                     except Exception as ex:
                         error = ex.message
                         output = Fore.RED + Style.BRIGHT + error['name'] + Style.RESET_ALL + ": " + error['message']
@@ -268,7 +270,9 @@ def main():
             self._reactor.schedule(lambda: self._script.post_message({'name': '.evaluate', 'payload': {'expression': text}}))
             with self._response_cond:
                 while self._response_data is None:
-                    self._response_cond.wait()
+                    if not self._reactor.is_running():
+                        raise frida.InvalidOperationError("Invalid operation while stopping")
+                    self._response_cond.wait(0.5)
                 response = self._response_data
                 self._response_data = None
             stanza, data = response
