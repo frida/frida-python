@@ -148,10 +148,11 @@ def main():
             self._results_received = threading.Event()
             ConsoleApplication.__init__(self, self._await_keys)
 
-        def _await_keys(self):
-            await_enter()
-            self._reactor.schedule(lambda: self._discoverer.stop())
-            self._results_received.wait()
+        def _await_keys(self, reactor):
+            await_enter(reactor)
+            reactor.schedule(lambda: self._discoverer.stop())
+            while reactor.is_running() and not self._results_received.is_set():
+                self._results_received.wait(0.5)
 
         def _usage(self):
             return "usage: %prog [options] target"
