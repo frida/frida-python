@@ -271,12 +271,13 @@ class Reactor(object):
         with self._lock:
             self._running = True
 
-        watcher_thread = threading.Thread(target=self._run)
-        watcher_thread.daemon = True
-        watcher_thread.start()
+        worker = threading.Thread(target=self._run)
+        worker.start()
 
         self._run_until_return(self)
+
         self.stop()
+        worker.join()
 
     def _run(self):
         running = True
