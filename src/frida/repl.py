@@ -147,21 +147,24 @@ def main():
                 elif expression == "help":
                     print("Help: #TODO :)")
                 else:
-                    try:
-                        (t, value) = self._evaluate(expression)
-                        if t in ('function', 'undefined', 'null'):
-                            output = t
-                        elif t == 'binary':
-                            output = hexdump(value).rstrip("\n")
-                        else:
-                            output = json.dumps(value, sort_keys=True, indent=4, separators=(",", ": "))
-                    except frida.InvalidOperationError:
-                        return
-                    except Exception as ex:
-                        error = ex.message
-                        output = Fore.RED + Style.BRIGHT + error['name'] + Style.RESET_ALL + ": " + error['message']
-                    sys.stdout.write(output + "\n")
-                    sys.stdout.flush()
+                    self._eval_and_print(expression)
+
+        def _eval_and_print(self, expression):
+            try:
+                (t, value) = self._evaluate(expression)
+                if t in ('function', 'undefined', 'null'):
+                    output = t
+                elif t == 'binary':
+                    output = hexdump(value).rstrip("\n")
+                else:
+                    output = json.dumps(value, sort_keys=True, indent=4, separators=(",", ": "))
+            except frida.InvalidOperationError:
+                return
+            except Exception as ex:
+                error = ex.message
+                output = Fore.RED + Style.BRIGHT + error['name'] + Style.RESET_ALL + ": " + error['message']
+            sys.stdout.write(output + "\n")
+            sys.stdout.flush()
 
         def _print_startup_message(self):
             print("""    _____
@@ -230,6 +233,15 @@ def main():
             elif command == 'unload' and len(args) == 0:
                 self._user_script = None
                 self._reload()
+            elif command == 'time' and len(args) > 0:
+                self._eval_and_print('''
+                    (function() {{
+                        var _startTime = Date.now();
+                        var _result = {expression};
+                        var _endTime = Date.now();
+                        console.log('Time: ' + (_endTime - _startTime).toLocaleString() + ' ms.');
+                        return _result;
+                    }})();'''.format(expression=' '.join(args)))
             else:
                 print("Unknown command: {command}".format(command=command))
 
