@@ -384,32 +384,61 @@ def main():
             prefix = document.text_before_cursor
             tokens = list(self._lexer.get_tokens(prefix))[:-1]
 
-            word_tokens = 0
+            # 0.toString() is invalid syntax,
+            # but pygments doesn't seem to know that
+            for i in range(len(tokens) - 1):
+                if tokens[i][0] == Token.Literal.Number.Integer \
+                    and tokens[i + 1][0] == Token.Punctuation and tokens[i + 1][1] == '.':
+                    tokens[i] = (Token.Literal.Number.Float, tokens[i][1] + tokens[i + 1][1])
+                    del tokens[i + 1]
+
             before_dot = ''
             after_dot = ''
             encountered_dot = False
             for t in tokens[::-1]:
-                if t[0] == Token.Name.Other:
+                if t[0] in Token.Name.subtypes:
                     before_dot = t[1] + before_dot
-                    word_tokens += 1
                 elif t[0] == Token.Punctuation and t[1] == '.':
                     before_dot = '.' + before_dot
                     if not encountered_dot:
                         encountered_dot = True
                         after_dot = before_dot[1:]
                         before_dot = ''
-                    word_tokens += 1
                 else:
+                    if encountered_dot:
+                        # The value/contents of the string, number or array doesn't matter,
+                        # so we just use the simplest value with that type
+                        if t[0] in Token.Literal.String.subtypes:
+                            before_dot = '""' + before_dot
+                        elif t[0] in Token.Literal.Number.subtypes:
+                            before_dot = '0.0' + before_dot
+                        elif t[0] == Token.Punctuation and t[1] == ']':
+                            before_dot = '[]' + before_dot
+
                     break
 
             try:
                 if encountered_dot:
-                    for key in self._repl._evaluate("Object.keys(" + before_dot +
-                               ").concat(Object.getOwnPropertyNames(Object.getPrototypeOf(" + before_dot + ")))")[1]:
+                    for key in sorted(self._repl._evaluate("""(function(o) {
+                                    "use strict";
+                                    let k = Object.keys(o);
+                                    if (o !== null && o !== undefined) {
+                                        let p;
+                                        if (typeof o !== 'object') {
+                                            p = o.__proto__;
+                                        } else {
+                                            p = Object.getPrototypeOf(o);
+                                        }
+                                        if (p !== null && p !== undefined) {
+                                            k = k.concat(Object.getOwnPropertyNames(p));
+                                        }
+                                    }
+                                    return k;
+                                })(""" + before_dot + ");")[1]):
                         if key.startswith(after_dot):
                             yield Completion(key, -len(after_dot))
                 else:
-                    for key in self._repl._evaluate("Object.keys(this)")[1]:
+                    for key in sorted(self._repl._evaluate("Object.keys(this)")[1]):
                         if not key.startswith(before_dot) or (key.startswith('_') and before_dot == ''):
                             continue
                         yield Completion(key, -len(before_dot))
