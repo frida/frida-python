@@ -265,7 +265,10 @@ def main():
         def _create_prompt(self):
             device_type = self._device.type
             type_name = self._target[0]
-            target = self._target[1]
+            if self._target[0] == 'pid' and self._target[1] == 0:
+                target = 'Kernel'
+            else:
+                target = self._target[1]
 
             if device_type in ('local', 'remote'):
                 if self._target[0] == 'name':
