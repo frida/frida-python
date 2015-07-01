@@ -419,31 +419,45 @@ def main():
 
             try:
                 if encountered_dot:
-                    for key in sorted(self._repl._evaluate("""(function(o) {
+                    for key in self._get_keys("""(function(o) {
                                     "use strict";
-                                    let k = Object.keys(o);
-                                    if (o !== null && o !== undefined) {
-                                        let p;
-                                        if (typeof o !== 'object') {
-                                            p = o.__proto__;
-                                        } else {
-                                            p = Object.getPrototypeOf(o);
+                                    let k = [];
+                                    try {
+                                        k = Object.getOwnPropertyNames(o);
+                                    } catch(e) {}
+                                    try {
+                                        if (o !== null && o !== undefined) {
+                                            let p;
+                                            if (typeof o !== 'object') {
+                                                p = o.__proto__;
+                                            } else {
+                                                p = Object.getPrototypeOf(o);
+                                            }
+                                            if (p !== null && p !== undefined) {
+                                                k = k.concat(Object.getOwnPropertyNames(p));
+                                            }
                                         }
-                                        if (p !== null && p !== undefined) {
-                                            k = k.concat(Object.getOwnPropertyNames(p));
-                                        }
-                                    }
+                                    } catch(e) {}
                                     return k;
-                                })(""" + before_dot + ");")[1]):
+                                })(""" + before_dot + ");"):
                         if key.startswith(after_dot):
                             yield Completion(key, -len(after_dot))
                 else:
-                    for key in sorted(self._repl._evaluate("Object.keys(this)")[1]):
+                    for key in self._get_keys("Object.getOwnPropertyNames(this)"):
                         if not key.startswith(before_dot) or (key.startswith('_') and before_dot == ''):
                             continue
                         yield Completion(key, -len(before_dot))
-            except Exception:
-                pass
+            except Exception as e:
+                print e
+
+        def _get_keys(self, code):
+            return sorted(
+                    filter(self._is_valid_name,
+                     set(self._repl._evaluate(code)[1])))
+
+        def _is_valid_name(self, name):
+            tokens = list(self._lexer.get_tokens(name))
+            return len(tokens) == 2 and tokens[0][0] in Token.Name.subtypes
 
     def hexdump(src, length=16):
         try:
