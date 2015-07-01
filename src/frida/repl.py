@@ -451,7 +451,7 @@ def main():
                             continue
                         yield Completion(key, -len(before_dot))
             except Exception as e:
-                print e
+                print(e)
 
         def _get_keys(self, code):
             return sorted(
