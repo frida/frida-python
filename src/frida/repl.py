@@ -218,34 +218,59 @@ def main():
 
             print(help_text)
 
+        # Negative means at least abs(val) - 1
+        _magic_command_args = {
+            'resume': 0,
+            'load': 1,
+            'reload': 0,
+            'unload': 0,
+            'time': -2 # At least 1 arg
+        }
+
         def _do_magic(self, statement):
             tokens = statement.split(" ")
             command = tokens[0]
             args = tokens[1:]
 
-            if command == 'resume' and len(args) == 0:
+            required_args = self._magic_command_args.get(command)
+
+            if required_args == None:
+                print("Unknown command: {}".format(command))
+                print("Valid commands: {}".format(", ".join(self._magic_command_args.keys())))
+                return
+
+            atleast_args = False
+            if required_args < 0:
+                atleast_args = True
+                required_args = abs(required_args) - 1
+
+            if (not atleast_args and len(args) != required_args) or \
+               (atleast_args and len(args) < required_args):
+                print("{cmd} command expects {atleast}{n} argument{s}".format(
+                    cmd=command, atleast='atleast ' if atleast_args else '', n=required_args, s='' if required_args == 1 else ' '))
+                return
+
+            if command == 'resume':
                 self._reactor.schedule(lambda: self._resume())
-            elif command == 'load' and len(args) == 1:
+            elif command == 'load':
                 old_user_script = self._user_script
                 self._user_script = args[0]
                 if not self._reload():
                     self._user_script = old_user_script
-            elif command == 'reload' and len(args) == 0:
+            elif command == 'reload':
                 self._reload()
-            elif command == 'unload' and len(args) == 0:
+            elif command == 'unload':
                 self._user_script = None
                 self._reload()
-            elif command == 'time' and len(args) > 0:
+            elif command == 'time':
                 self._eval_and_print('''
                     (function() {{
                         var _startTime = Date.now();
-                        var _result = {expression};
+                        var _result = eval({expression});
                         var _endTime = Date.now();
                         console.log('Time: ' + (_endTime - _startTime).toLocaleString() + ' ms.');
                         return _result;
-                    }})();'''.format(expression=' '.join(args)))
-            else:
-                print("Unknown command: {command}".format(command=command))
+                    }})();'''.format(expression=json.dumps(' '.join(args))))
 
         def _reload(self):
             completed = threading.Event()
@@ -387,6 +412,9 @@ def main():
 
         def get_completions(self, document, complete_event):
             prefix = document.text_before_cursor
+
+            magic = len(prefix) > 0 and prefix[0] == '%' and not any(map(unicode.isspace, prefix))
+
             tokens = list(self._lexer.get_tokens(prefix))[:-1]
 
             # 0.toString() is invalid syntax,
@@ -448,7 +476,11 @@ def main():
                         if key.startswith(after_dot):
                             yield Completion(key, -len(after_dot))
                 else:
-                    for key in self._get_keys("Object.getOwnPropertyNames(this)"):
+                    if magic:
+                        keys = self._repl._magic_command_args.keys()
+                    else:
+                        keys = self._get_keys("Object.getOwnPropertyNames(this)")
+                    for key in keys:
                         if not key.startswith(before_dot) or (key.startswith('_') and before_dot == ''):
                             continue
                         yield Completion(key, -len(before_dot))
