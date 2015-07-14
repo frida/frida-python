@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
-from cStringIO import StringIO
+try:
+    from io import BytesIO
+except:
+    try:
+        from cStringIO import StringIO as BytesIO
+    except:
+        from StringIO import StringIO as BytesIO
 from setuptools import setup
 from setuptools.command.build_ext import build_ext
 from setuptools.extension import Extension
@@ -11,7 +17,10 @@ import re
 import shutil
 import struct
 import sys
-import urllib2
+try:
+    from urllib.request import urlopen
+except:
+    from urllib2 import urlopen
 import zipfile
 
 package_dir = os.path.dirname(os.path.realpath(__file__))
@@ -43,7 +52,7 @@ class FridaPrebuiltExt(build_ext):
             if system == 'Windows':
                 os_version = "win-amd64" if arch == 64 else "i686"
             elif system == 'Darwin':
-                os_version = "macosx-10.10-intel"
+                os_version = "macosx-10.6-intel" if sys.version_info[0] == 3 else "macosx-10.10-intel"
             elif system == 'Linux':
                 os_version = "x86_64" if arch == 64 else "i686"
             egg_url = "https://pypi.python.org/packages/{python_version}/f/frida/frida-{frida_version}-py{python_version}-{os_version}.egg".format(
@@ -53,8 +62,8 @@ class FridaPrebuiltExt(build_ext):
             )
 
             print('downloading prebuilt extension from', egg_url)
-            egg_data = urllib2.urlopen(egg_url).read()
-            egg_file = StringIO(egg_data)
+            egg_data = urlopen(egg_url).read()
+            egg_file = BytesIO(egg_data)
 
             print('extracting prebuilt extension')
             egg_zip = zipfile.ZipFile(egg_file)
