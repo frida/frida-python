@@ -1,33 +1,74 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import print_function
+from cStringIO import StringIO
 from setuptools import setup
 from setuptools.command.build_ext import build_ext
 from setuptools.extension import Extension
 import os
+import platform
 import re
 import shutil
+import struct
+import sys
+import urllib2
+import zipfile
 
-root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-version = os.environ['FRIDA_VERSION']
-long_description = open(os.path.join(root_dir, "README.md")).read()
-frida_extension = os.environ['FRIDA_EXTENSION']
+package_dir = os.path.dirname(os.path.realpath(__file__))
+pkg_info = os.path.join(package_dir, "PKG-INFO")
+in_source_package = os.path.isfile(pkg_info)
+if in_source_package:
+    with open(pkg_info, "r") as f:
+        version_line = [line for line in f.read().split("\n") if line.startswith("Version: ")][0]
+        frida_version = version_line[9:]
+    long_description = None
+else:
+    root_dir = os.path.dirname(package_dir)
+    frida_version = os.environ['FRIDA_VERSION']
+    long_description = open(os.path.join(root_dir, "README.md")).read()
+    frida_extension = os.environ['FRIDA_EXTENSION']
 
 class FridaPrebuiltExt(build_ext):
     def build_extension(self, ext):
         target = self.get_ext_fullpath(ext.name)
+        target_dir = os.path.dirname(target)
         try:
-            os.makedirs(os.path.dirname(target))
+            os.makedirs(target_dir)
         except:
             pass
-        shutil.copyfile(frida_extension, target)
+        if in_source_package:
+            python_version = "%d.%d" % sys.version_info[0:2]
+            system = platform.system()
+            arch = struct.calcsize('P') * 8
+            if system == 'Windows':
+                os_version = "win-amd64" if arch == 64 else "i686"
+            elif system == 'Darwin':
+                os_version = "macosx-10.10-intel"
+            elif system == 'Linux':
+                os_version = "x86_64" if arch == 64 else "i686"
+            egg_url = "https://pypi.python.org/packages/{python_version}/f/frida/frida-{frida_version}-py{python_version}-{os_version}.egg".format(
+                frida_version=frida_version,
+                python_version=python_version,
+                os_version=os_version
+            )
+
+            print('downloading prebuilt extension from', egg_url)
+            egg_data = urllib2.urlopen(egg_url).read()
+            egg_file = StringIO(egg_data)
+
+            print('extracting prebuilt extension')
+            egg_zip = zipfile.ZipFile(egg_file)
+            egg_zip.extract(os.path.basename(target), target_dir)
+        else:
+            shutil.copyfile(frida_extension, target)
 
 setup(
     name='frida',
-    version=version,
+    version=frida_version,
     description="Inject JavaScript to explore native apps on Windows, Mac, Linux, iOS and Android",
     long_description=long_description,
     author="Frida Developers",
-    author_email="ole.andre.ravnas@tillitech.com",
+    author_email="oleavr@nowsecure.com",
     url="http://www.frida.re",
     install_requires=[
         "colorama >= 0.2.7",
