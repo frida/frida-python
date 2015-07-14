@@ -16,6 +16,11 @@ AM_PROG_AR
 AC_PROG_INSTALL
 LT_INIT
 
+case $host_os in
+  darwin*) HAVE_DARWIN=yes ;;
+  *)                       ;;
+esac
+
 if echo $CC | grep -q "gcc"; then
   CFLAGS="$CFLAGS -fno-strict-aliasing"
 fi
@@ -47,7 +52,9 @@ if [[ "$PYTHON_EXEC_PREFIX" != "$PYTHON_PREFIX" ]]; then
   ADD_PYTHON_LIBDIR([${PYTHON_EXEC_PREFIX}/lib/python${PYTHON_VERSION}/config/])
   ADD_PYTHON_LIBDIR([${PYTHON_EXEC_PREFIX}/lib/python${PYTHON_VERSION}/config-${PYTHON_VERSION}${PYTHON_ABIFLAGS}/])
 fi
-PYTHON_LIBS="$PYTHON_LIBS -lpython${PYTHON_VERSION}${PYTHON_ABIFLAGS}"
+if [[ "x$HAVE_DARWIN" != "xyes" ]]; then
+  PYTHON_LIBS="$PYTHON_LIBS -lpython${PYTHON_VERSION}${PYTHON_ABIFLAGS}"
+fi
 
 AC_SUBST(PYTHON_CFLAGS)
 AC_SUBST(PYTHON_LDFLAGS)
