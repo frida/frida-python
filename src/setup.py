@@ -28,7 +28,7 @@ pkg_info = os.path.join(package_dir, "PKG-INFO")
 in_source_package = os.path.isfile(pkg_info)
 if in_source_package:
     with open(pkg_info, "r") as f:
-        version_line = [line for line in f.read().split("\n") if line.startswith("Version: ")][0]
+        version_line = [line.rstrip("\r") for line in f.read().split("\n") if line.startswith("Version: ")][0]
         frida_version = version_line[9:]
     long_description = None
 else:
