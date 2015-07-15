@@ -413,7 +413,7 @@ def main():
         def get_completions(self, document, complete_event):
             prefix = document.text_before_cursor
 
-            magic = len(prefix) > 0 and prefix[0] == '%' and not any(map(unicode.isspace, prefix))
+            magic = len(prefix) > 0 and prefix[0] == '%' and not any(map(lambda c: c.isspace(), prefix))
 
             tokens = list(self._lexer.get_tokens(prefix))[:-1]
 
