@@ -45,6 +45,9 @@ class Device(object):
     def __repr__(self):
         return repr(self._impl)
 
+    def get_frontmost_application(self):
+        return self._impl.get_frontmost_application()
+
     def enumerate_applications(self):
         return self._impl.enumerate_applications()
 

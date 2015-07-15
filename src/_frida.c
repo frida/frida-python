@@ -140,6 +140,7 @@ static PyObject * PyDevice_from_handle (FridaDevice * handle);
 static int PyDevice_init (PyDevice * self);
 static void PyDevice_dealloc (PyDevice * self);
 static PyObject * PyDevice_repr (PyDevice * self);
+static PyObject * PyDevice_get_frontmost_application (PyDevice * self);
 static PyObject * PyDevice_enumerate_applications (PyDevice * self);
 static PyObject * PyDevice_enumerate_processes (PyDevice * self);
 static PyObject * PyDevice_spawn (PyDevice * self, PyObject * args);
@@ -205,6 +206,7 @@ static PyMethodDef PyDeviceManager_methods[] =
 
 static PyMethodDef PyDevice_methods[] =
 {
+  { "get_frontmost_application", (PyCFunction) PyDevice_get_frontmost_application, METH_NOARGS, "Get details about the frontmost application." },
   { "enumerate_applications", (PyCFunction) PyDevice_enumerate_applications, METH_NOARGS, "Enumerate applications." },
   { "enumerate_processes", (PyCFunction) PyDevice_enumerate_processes, METH_NOARGS, "Enumerate processes." },
   { "spawn", (PyCFunction) PyDevice_spawn, METH_VARARGS, "Spawn a process into an attachable state." },
@@ -800,6 +802,24 @@ static PyObject *
 PyDevice_repr (PyDevice * self)
 {
   return PyRepr_FromFormat ("Device(id=%u, name=\"%s\", type='%s')", self->id, self->name, self->type);
+}
+
+static PyObject *
+PyDevice_get_frontmost_application (PyDevice * self)
+{
+  GError * error = NULL;
+  FridaApplication * result;
+
+  Py_BEGIN_ALLOW_THREADS
+  result = frida_device_get_frontmost_application_sync (self->handle, &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  if (result != NULL)
+    return PyApplication_from_handle (result);
+  else
+    Py_RETURN_NONE;
 }
 
 static PyObject *
