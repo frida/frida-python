@@ -2,20 +2,21 @@
 from __future__ import unicode_literals, print_function
 
 def main():
+    import codecs
+    from colorama import Fore, Style
     import frida
     from frida.application import ConsoleApplication
-    from colorama import Fore, Style
     import json
-    import platform
-    import sys
-    import threading
     import os
+    import platform
     from prompt_toolkit.shortcuts import create_default_application, create_default_output, create_eventloop
     from prompt_toolkit.history import FileHistory
     from prompt_toolkit.completion import Completion, Completer
     from prompt_toolkit.interface import CommandLineInterface
     from pygments.lexers import JavascriptLexer
     from pygments.token import Token
+    import sys
+    import threading
 
     class REPLApplication(ConsoleApplication):
         def __init__(self):
@@ -340,7 +341,7 @@ def main():
             user_script = ""
 
             if self._user_script is not None:
-                with open(self._user_script, 'rb') as f:
+                with codecs.open(self._user_script, 'rb', 'utf-8') as f:
                     user_script = f.read().rstrip("\r\n") + "\n\n// Frida REPL script:\n"
 
             return user_script + """\
