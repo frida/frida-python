@@ -112,7 +112,7 @@ class TracerProfile(object):
     def _create_resolver_script(self):
         return r""""use strict";
 
-recv(function (spec) {
+recv(spec => {
     try {
         send({
             name: '+result',
@@ -127,7 +127,7 @@ recv(function (spec) {
 });
 
 function resolve(spec) {
-    const workingSet = spec.reduce(function (workingSet, item) {
+    const workingSet = spec.reduce((workingSet, item) => {
         const operation = item[0];
         const scope = item[1];
         const param = item[2];
@@ -322,7 +322,7 @@ function getObjCState() {
         method_getImplementation: 1,
         sel_getName: 1
     };
-    Object.keys(apiSpec).forEach(function (name) {
+    Object.keys(apiSpec).forEach(name => {
         const funPtr = Module.findExportByName("libobjc.A.dylib", name);
         const argCount = apiSpec[name];
         const argTypes = [];
@@ -395,7 +395,7 @@ function allFunctionExports(module) {
         const moduleId = allModules().indexOf(module);
         module._cachedFunctionExports = Module.enumerateExportsSync(module.path)
             .filter(isFunctionExport)
-            .map(function (e) {
+            .map(e => {
                 e.module = moduleId;
                 return e;
             });
@@ -443,7 +443,7 @@ const twoStarNoDot = '(?:(?!(?:\\\/|^)\\.).)*?';
 const reSpecials = charSet('().*{}+?[]^$\\!');
 
 function charSet(s) {
-    return s.split("").reduce(function (set, c) {
+    return s.split("").reduce((set, c) => {
         set[c] = true;
         return set;
     }, {});
@@ -455,10 +455,10 @@ function ext(a, b) {
     a = a || {};
     b = b || {};
     const t = {};
-    Object.keys(b).forEach(function (k) {
+    Object.keys(b).forEach(k => {
         t[k] = b[k];
     });
-    Object.keys(a).forEach(function (k) {
+    Object.keys(a).forEach(k => {
         t[k] = a[k];
     });
     return t;
@@ -480,7 +480,7 @@ function Minimatch(pattern, options) {
     this.make();
 }
 
-Minimatch.prototype.make = function () {
+Minimatch.prototype.make = () => {
     if (this._made)
         return;
 
@@ -500,22 +500,22 @@ Minimatch.prototype.make = function () {
 
     let set = this.globSet = [this.pattern];
 
-    set = this.globParts = set.map(function (s) {
+    set = this.globParts = set.map(s => {
         return s.split(slashSplit);
     });
 
-    set = set.map(function (s, si, set) {
+    set = set.map((s, si, set) => {
         return s.map(this.parse, this);
     }, this);
 
-    set = set.filter(function (s) {
+    set = set.filter(s => {
         return s.indexOf(false) === -1;
     });
 
     this.set = set;
 };
 
-Minimatch.prototype.parseNegate = function () {
+Minimatch.prototype.parseNegate = () => {
     const pattern = this.pattern;
     let negate = false;
     const options = this.options;
@@ -535,7 +535,7 @@ Minimatch.prototype.parseNegate = function () {
 };
 
 const SUBPARSE = {};
-Minimatch.prototype.parse = function (pattern, isSub) {
+Minimatch.prototype.parse = (pattern, isSub) => {
     const options = this.options;
 
     if (!options.noglobstar && pattern === '**')
@@ -726,7 +726,7 @@ Minimatch.prototype.parse = function (pattern, isSub) {
 
     for (let pl = patternListStack.pop(); pl; pl = patternListStack.pop()) {
         let tail = re.slice(pl.reStart + 3);
-        tail = tail.replace(/((?:\\{2})*)(\\?)\|/g, function (_, $1, $2) {
+        tail = tail.replace(/((?:\\{2})*)(\\?)\|/g, (_, $1, $2) => {
             if (!$2)
                 $2 = '\\';
 
@@ -771,7 +771,7 @@ Minimatch.prototype.parse = function (pattern, isSub) {
     return regExp;
 };
 
-Minimatch.prototype.makeRe = function () {
+Minimatch.prototype.makeRe = () => {
     if (this.regexp || this.regexp === false)
         return this.regexp;
 
@@ -786,8 +786,8 @@ Minimatch.prototype.makeRe = function () {
     const twoStar = options.noglobstar ? star : options.dot ? twoStarDot : twoStarNoDot;
     const flags = options.nocase ? 'i' : '';
 
-    let re = set.map(function (pattern) {
-        return pattern.map(function (p) {
+    let re = set.map(pattern => {
+        return pattern.map(p => {
             return (p === GLOBSTAR) ? twoStar : (typeof p === 'string') ? regExpEscape(p) : p._src;
         }).join('\\\/');
     }).join('|');
@@ -805,7 +805,7 @@ Minimatch.prototype.makeRe = function () {
     return this.regexp;
 };
 
-Minimatch.prototype.match = function (f, partial) {
+Minimatch.prototype.match = (f, partial) => {
     if (this.comment)
         return false;
     if (this.empty)
@@ -844,7 +844,7 @@ Minimatch.prototype.match = function (f, partial) {
     return this.negate;
 };
 
-Minimatch.prototype.matchOne = function (file, pattern, partial) {
+Minimatch.prototype.matchOne = (file, pattern, partial) => {
     const options = this.options;
 
     let fi, pi, fl, pl;
@@ -943,6 +943,7 @@ class Tracer(object):
                 'name': '+update',
                 'payload': {
                     'items': [{
+                        'name': function.name,
                         'absolute_address': hex(function.absolute_address),
                         'handler': handler
                     }]
@@ -961,6 +962,7 @@ class Tracer(object):
         self._script.load()
         for chunk in [working_set[i:i+1000] for i in range(0, len(working_set), 1000)]:
             targets = [{
+                    'name': function.name,
                     'absolute_address': hex(function.absolute_address),
                     'handler': self._repository.ensure_handler(function)
                 } for function in chunk]
@@ -989,12 +991,13 @@ class Tracer(object):
             self._script = None
 
     def _create_trace_script(self):
-        return """\
-var started = new Date();
-var pending = [];
-var timer = null;
-var handlers = {};
-var state = {};
+        return """"use strict";
+
+const started = Date.now();
+const pending = [];
+let timer = null;
+const handlers = {};
+const state = {};
 function onStanza(stanza) {
     if (stanza.to === "/targets") {
         if (stanza.name === '+add') {
@@ -1009,29 +1012,31 @@ function onStanza(stanza) {
     recv(onStanza);
 }
 function add(targets) {
-    targets.forEach(function (target) {
-        var targetAddress = target.absolute_address;
-        eval("var handler = " + target.handler);
+    targets.forEach(target => {
+        const handler = parseHandler(target);
+        if (handler === null)
+            return;
+        const targetAddress = target.absolute_address;
         target = null;
 
-        var h = [handler];
+        const h = [handler];
         handlers[targetAddress] = h;
         function log(message) {
             send({
                 from: "/events",
                 name: '+add',
                 payload: {
-                    items: [[new Date().getTime() - started.getTime(), targetAddress, message]]
+                    items: [[Date.now() - started, targetAddress, message]]
                 }
             });
         }
 
-        pending.push(function attachToTarget() {
+        pending.push(() => {
             Interceptor.attach(ptr(targetAddress), {
-                onEnter: function onEnter(args) {
+                onEnter(args) {
                     h[0].onEnter.call(this, log, args, state);
                 },
-                onLeave: function onLeave(retval) {
+                onLeave(retval) {
                     h[0].onLeave.call(this, log, retval, state);
                 }
             });
@@ -1041,13 +1046,26 @@ function add(targets) {
     scheduleNext();
 }
 function update(targets) {
-    targets.forEach(function (target) {
-        eval("var handler = " + target.handler);
-        handlers[target.absolute_address][0] = handler;
+    targets.forEach(target => {
+        handlers[target.absolute_address][0] = parseHandler(target);
     });
 }
+function parseHandler(target) {
+    try {
+        return (1, eval)("(" + target.handler + ")");
+    } catch (e) {
+        send({
+            from: "/targets",
+            name: '+error',
+            payload: {
+                message: "Invalid handler for '" + target.name + "': " + e.message
+            }
+        });
+        return null;
+    }
+}
 function start() {
-    pending.push(function acknowledgeStart() {
+    pending.push(() => {
         send({
             from: "/targets",
             name: '+started',
@@ -1065,7 +1083,7 @@ function processNext() {
     timer = null;
 
     if (pending.length > 0) {
-        var work = pending.shift();
+        const work = pending.shift();
         work();
         scheduleNext();
     }
@@ -1089,6 +1107,9 @@ recv(onStanza);
                 handled = True
             elif stanza['from'] == "/targets" and stanza['name'] == '+started':
                 ui.on_trace_progress('ready')
+                handled = True
+            elif stanza['from'] == "/targets" and stanza['name'] == '+error':
+                ui.on_trace_error(stanza['payload'])
                 handled = True
         if not handled:
             print(message)
@@ -1192,7 +1213,7 @@ class Repository(object):
      * However, do not use this to store function arguments across onEnter/onLeave, but instead
      * use "this" which is an object for keeping state local to an invocation.
      */
-    onEnter: function onEnter(log, args, state) {
+    onEnter(log, args, state) {
         log(%(log_str)s);
     },
 
@@ -1206,7 +1227,7 @@ class Repository(object):
      * @param {NativePointer} retval - Return value represented as a NativePointer object.
      * @param {object} state - Object allowing you to keep state across function calls.
      */
-    onLeave: function onLeave(log, retval, state) {
+    onLeave(log, retval, state) {
     }
 }
 """ % {"display_name": display_name, "log_str": log_str}
@@ -1297,6 +1318,9 @@ class UI(object):
     def on_trace_progress(self, operation):
         pass
 
+    def on_trace_error(self, error):
+        pass
+
     def on_trace_events(self, events):
         pass
 
@@ -1308,6 +1332,7 @@ class UI(object):
 
 
 def main():
+    from colorama import Fore, Style
     from frida.application import ConsoleApplication, input_with_timeout
 
     class TracerApplication(ConsoleApplication, UI):
@@ -1371,6 +1396,9 @@ def main():
                     plural = "s"
                 self._update_status("Started tracing %d function%s. Press Ctrl+C to stop." % (len(self._targets), plural))
                 self._resume()
+
+        def on_trace_error(self, error):
+            print(Fore.RED + Style.BRIGHT + "Error" + Style.RESET_ALL + ": " + error['message'])
 
         def on_trace_events(self, events):
             self._status_updated = False

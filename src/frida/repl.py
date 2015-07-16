@@ -265,10 +265,10 @@ def main():
                 self._reload()
             elif command == 'time':
                 self._eval_and_print('''
-                    (function() {{
-                        var _startTime = Date.now();
-                        var _result = eval({expression});
-                        var _endTime = Date.now();
+                    (() => {{
+                        const _startTime = Date.now();
+                        const _result = eval({expression});
+                        const _endTime = Date.now();
                         console.log('Time: ' + (_endTime - _startTime).toLocaleString() + ' ms.');
                         return _result;
                     }})();'''.format(expression=json.dumps(' '.join(args))))
@@ -346,7 +346,7 @@ def main():
 
             return user_script + """\
 
-(function () {
+(() => {
     "use strict";
 
     function onEvaluate(expression) {
@@ -386,7 +386,7 @@ def main():
             return false;
         if (v instanceof Array) // Object returned by Memory.readByteArray() isn't an Array
             return false;
-        for (var i = 0; i !== v.length; i++) {
+        for (let i = 0; i !== v.length; i++) {
             if (typeof v[i] !== 'number')
                 return false;
         }
@@ -453,7 +453,7 @@ def main():
 
             try:
                 if encountered_dot:
-                    for key in self._get_keys("""(function(o) {
+                    for key in self._get_keys("""(o => {
                                     "use strict";
                                     let k = [];
                                     try {

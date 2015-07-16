@@ -34,32 +34,32 @@ class Discoverer(object):
         })
 
     def _create_discover_script(self):
-        return """\
+        return """"use strict";\
+
 function Sampler() {
-    var threadIds = [];
-    var result = {};
+    let threadIds = [];
+    let result = {};
 
     function onStanza(stanza) {
         if (stanza.to === "/sampler") {
-            if (stanza.name === '+stop') {
+            if (stanza.name === '+stop')
                 stop();
-            }
         }
 
         recv(onStanza);
     }
 
-    this.start = function () {
+    this.start = () => {
         threadIds = [];
         Process.enumerateThreads({
-            onMatch: function (thread) {
+            onMatch(thread) {
                 threadIds.push(thread.id);
             },
-            onComplete: function () {
-                threadIds.forEach(function (threadId) {
+            onComplete() {
+                threadIds.forEach(threadId => {
                     Stalker.follow(threadId, {
                         events: { call: true },
-                        onCallSummary: function (summary) {
+                        onCallSummary(summary) {
                             for (var address in summary) {
                                 if (summary.hasOwnProperty(address)) {
                                     var count = result[address] || 0;
@@ -79,10 +79,10 @@ function Sampler() {
                 });
             }
         });
-    }
+    };
 
     function stop() {
-        threadIds.forEach(function (threadId) {
+        threadIds.forEach(threadId => {
             Stalker.unfollow(threadId);
         });
         threadIds = [];
@@ -100,8 +100,8 @@ function Sampler() {
     recv(onStanza);
 };
 
-sampler = new Sampler();
-setTimeout(function () { sampler.start(); }, 0);
+const sampler = new Sampler();
+setTimeout(() => { sampler.start(); }, 0);
 """
 
     def _process_message(self, message, data, session, ui):
