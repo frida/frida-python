@@ -29,7 +29,7 @@ def main():
                     self._exit(1)
                     return
                 if not self._include_all_applications:
-                    applications = filter(lambda app: app.pid != 0, applications)
+                    applications = list(filter(lambda app: app.pid != 0, applications))
                 if len(applications) > 0:
                     pid_column_width = max(map(lambda app: len("%d" % app.pid), applications))
                     name_column_width = max(map(lambda app: len(app.name), applications))
