@@ -1021,23 +1021,29 @@ function add(targets) {
 
         const h = [handler];
         handlers[targetAddress] = h;
-        function log(message) {
-            send({
-                from: "/events",
-                name: '+add',
-                payload: {
-                    items: [[Date.now() - started, targetAddress, message]]
-                }
-            });
+
+        function invokeCallback(callback, context, param) {
+            if (callback === undefined)
+                return;
+
+            const timestamp = Date.now() - started;
+            const threadId = context.threadId;
+            const depth = context.depth;
+
+            function log(message) {
+                emit([timestamp, threadId, depth, targetAddress, message]);
+            }
+
+            callback.call(context, log, param, state);
         }
 
         pending.push(() => {
             Interceptor.attach(ptr(targetAddress), {
                 onEnter(args) {
-                    h[0].onEnter.call(this, log, args, state);
+                    invokeCallback(h[0].onEnter, this, args);
                 },
                 onLeave(retval) {
-                    h[0].onLeave.call(this, log, retval, state);
+                    invokeCallback(h[0].onLeave, this, retval);
                 }
             });
         });
@@ -1048,6 +1054,15 @@ function add(targets) {
 function update(targets) {
     targets.forEach(target => {
         handlers[target.absolute_address][0] = parseHandler(target);
+    });
+}
+function emit(event) {
+    send({
+        from: "/events",
+        name: '+add',
+        payload: {
+            items: [event]
+        }
     });
 }
 function parseHandler(target) {
@@ -1096,11 +1111,11 @@ recv(onStanza);
         if message['type'] == 'send':
             stanza = message['payload']
             if stanza['from'] == "/events" and stanza['name'] == '+add':
-                events = [(timestamp, int(target_address.rstrip("L"), 16), message) for timestamp, target_address, message in stanza['payload']['items']]
+                events = [(timestamp, thread_id, depth, int(target_address.rstrip("L"), 16), message) for timestamp, thread_id, depth, target_address, message in stanza['payload']['items']]
 
                 ui.on_trace_events(events)
 
-                target_addresses = set([target_address for timestamp, target_address, message in events])
+                target_addresses = set([target_address for timestamp, thread_id, depth, target_address, message in events])
                 for target_address in target_addresses:
                     self._repository.sync_handler(target_address)
 
@@ -1338,6 +1353,10 @@ def main():
     class TracerApplication(ConsoleApplication, UI):
         def __init__(self):
             super(TracerApplication, self).__init__(self._await_ctrl_c)
+            self._palette = [Fore.CYAN, Fore.MAGENTA, Fore.YELLOW, Fore.GREEN, Fore.RED, Fore.BLUE]
+            self._nextColor = 0
+            self._attributes_by_thread_id = {}
+            self._last_event_tid = -1
 
         def _add_options(self, parser):
             pb = TracerProfileBuilder()
@@ -1402,14 +1421,31 @@ def main():
 
         def on_trace_events(self, events):
             self._status_updated = False
-            for timestamp, target_address, message in events:
-                print("%6d ms\t%s" % (timestamp, message))
+            no_attributes = Style.RESET_ALL
+            for timestamp, thread_id, depth, target_address, message in events:
+                indent = depth * "   | "
+                attributes = self._get_attributes(thread_id)
+                if thread_id != self._last_event_tid:
+                    print("%s           /* TID 0x%x */%s" % (attributes, thread_id, Style.RESET_ALL))
+                    self._last_event_tid = thread_id
+                print("%6d ms  %s%s%s%s" % (timestamp, attributes, indent, message, no_attributes))
 
         def on_trace_handler_create(self, function, handler, source):
             print("%s: Auto-generated handler at \"%s\"" % (function, source))
 
         def on_trace_handler_load(self, function, handler, source):
             print("%s: Loaded handler at \"%s\"" % (function, source))
+
+        def _get_attributes(self, thread_id):
+            attributes = self._attributes_by_thread_id.get(thread_id, None)
+            if attributes is None:
+                color = self._nextColor
+                self._nextColor += 1
+                attributes = self._palette[color % len(self._palette)]
+                if (1 + int(color / len(self._palette))) % 2 == 0:
+                    attributes += Style.BRIGHT
+                self._attributes_by_thread_id[thread_id] = attributes
+            return attributes
 
     app = TracerApplication()
     app.run()
