@@ -1016,6 +1016,7 @@ function add(targets) {
         const handler = parseHandler(target);
         if (handler === null)
             return;
+        const name = target.name;
         const targetAddress = target.absolute_address;
         target = null;
 
@@ -1038,14 +1039,24 @@ function add(targets) {
         }
 
         pending.push(() => {
-            Interceptor.attach(ptr(targetAddress), {
-                onEnter(args) {
-                    invokeCallback(h[0].onEnter, this, args);
-                },
-                onLeave(retval) {
-                    invokeCallback(h[0].onLeave, this, retval);
-                }
-            });
+            try {
+                Interceptor.attach(ptr(targetAddress), {
+                    onEnter(args) {
+                        invokeCallback(h[0].onEnter, this, args);
+                    },
+                    onLeave(retval) {
+                        invokeCallback(h[0].onLeave, this, retval);
+                    }
+                });
+            } catch (e) {
+                send({
+                    from: "/targets",
+                    name: '+error',
+                    payload: {
+                        message: "Skipping '" + name + "': " + e.message
+                    }
+                });
+            }
         });
     });
 
