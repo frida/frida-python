@@ -50,7 +50,7 @@ class FridaPrebuiltExt(build_ext):
             system = platform.system()
             arch = struct.calcsize('P') * 8
             if system == 'Windows':
-                os_version = "win-amd64" if arch == 64 else "i686"
+                os_version = "win-amd64" if arch == 64 else "win32"
             elif system == 'Darwin':
                 os_version = "macosx-10.6-intel" if sys.version_info[0] == 3 else "macosx-10.10-intel"
             elif system == 'Linux':
