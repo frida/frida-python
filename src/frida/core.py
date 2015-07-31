@@ -7,6 +7,7 @@ import fnmatch
 import numbers
 import sys
 import threading
+import traceback
 
 
 class DeviceManager(object):
@@ -175,7 +176,7 @@ class Session(FunctionContainer):
         })
 
     def create_script(self, *args, **kwargs):
-        return self._impl.create_script(*args, **kwargs)
+        return Script(self._impl.create_script(*args, **kwargs))
 
     def enable_debugger(self, *args, **kwargs):
         return self._impl.enable_debugger(*args, **kwargs)
@@ -222,7 +223,7 @@ class Session(FunctionContainer):
 
     def _get_script(self):
         if self._script is None:
-            self._script = self._impl.create_script(name="session", source=self._create_session_script())
+            self._script = self.create_script(name="session", source=self._create_session_script())
             self._script.on('message', self._on_message)
             self._script.load()
         return self._script
@@ -406,6 +407,107 @@ recv(onStanza);
             raise KeyError("Please update your code from `.session.create_script()` to `.create_script()`")
         else:
             return getattr(super(Session, self), attr)
+
+class Script(object):
+    def __init__(self, impl):
+        self.exports = ScriptExports(self)
+
+        self._impl = impl
+        self._on_message_callbacks = []
+
+        self._pending = {}
+        self._next_request_id = 1
+        self._cond = threading.Condition()
+
+        impl.on('message', self._on_message)
+
+    def __repr__(self):
+        return repr(self._impl)
+
+    def load(self):
+        self._impl.load()
+
+    def unload(self):
+        self._impl.unload()
+
+    def post_message(self, message):
+        self._impl.post_message(message)
+
+    def on(self, signal, callback):
+        if signal == 'message':
+            self._on_message_callbacks.append(callback)
+        else:
+            self._impl.on(signal, callback)
+
+    def off(self, signal, callback):
+        if signal == 'message':
+            self._on_message_callbacks.remove(callback)
+        else:
+            self._impl.off(signal, callback)
+
+    def _rpc_request(self, *args):
+        result = [False, None, None]
+        def on_complete(value, error):
+            with self._cond:
+                result[0] = True
+                result[1] = value
+                result[2] = error
+                self._cond.notifyAll()
+
+        with self._cond:
+            request_id = self._next_request_id
+            self._next_request_id += 1
+            self._pending[request_id] = on_complete
+            message = ['frida:rpc', request_id]
+            message.extend(args)
+            self.post_message(message)
+            while not result[0]:
+                self._cond.wait()
+
+        if result[2] is not None:
+            raise result[2]
+
+        return result[1]
+
+    def _on_rpc_message(self, request_id, operation, params):
+        if operation in ('ok', 'error'):
+            callback = self._pending.pop(request_id)
+
+            value = None
+            error = None
+            if operation == 'ok':
+                value = params[0]
+            else:
+                error = Exception(params[0])
+
+            callback(value, error)
+
+    def _on_message(self, message, data):
+        mtype = message['type']
+        payload = message.get('payload', None)
+        if mtype == 'log':
+            print(payload)
+        elif mtype == 'send' and isinstance(payload, list) and payload[0] == 'frida:rpc':
+            request_id = payload[1]
+            operation = payload[2]
+            params = payload[3:]
+            self._on_rpc_message(request_id, operation, params)
+        else:
+            for callback in self._on_message_callbacks[:]:
+                try:
+                    callback(message, data)
+                except:
+                    traceback.print_exc()
+
+class ScriptExports(object):
+    def __init__(self, script):
+        self._script = script
+
+    def __getattr__(self, name):
+        script = self._script
+        def method(*args):
+            return script._rpc_request('call', name, args)
+        return method
 
 class Module(FunctionContainer):
     def __init__(self, name, base_address, size, path, session):

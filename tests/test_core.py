@@ -97,6 +97,26 @@ send(hello);
         self.assertIsInstance(repr(r), str)
         self.assertIsInstance(str(r), str)
 
+    def test_rpc(self):
+        script = self.session.create_script(name="test-rpc", source="""\
+"use strict";
+
+rpc.exports = {
+    add(a, b) {
+        const result = a + b;
+        if (result < 0)
+          throw new Error("No");
+        return result;
+    },
+    sub(a, b) {
+        return a - b;
+    }
+};
+""")
+        script.load()
+        self.assertEqual(script.exports.add(2, 3), 5)
+        self.assertEqual(script.exports.sub(5, 3), 2)
+        self.assertRaises(Exception, lambda: script.exports.add(1, -2))
 
 if sys.version_info[0] >= 3:
     iterbytes = lambda x: iter(x)
