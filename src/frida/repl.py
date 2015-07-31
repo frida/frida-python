@@ -453,27 +453,24 @@ def main():
 
             try:
                 if encountered_dot:
-                    for key in self._get_keys("""(o => {
-                                    "use strict";
-                                    let k = [];
-                                    try {
-                                        k = Object.getOwnPropertyNames(o);
-                                    } catch(e) {}
-                                    try {
+                    for key in self._get_keys("""try {
+                                    (o => {
+                                        "use strict";
+                                        let k = Object.getOwnPropertyNames(o);
                                         if (o !== null && o !== undefined) {
                                             let p;
-                                            if (typeof o !== 'object') {
+                                            if (typeof o !== 'object')
                                                 p = o.__proto__;
-                                            } else {
+                                            else
                                                 p = Object.getPrototypeOf(o);
-                                            }
-                                            if (p !== null && p !== undefined) {
+                                            if (p !== null && p !== undefined)
                                                 k = k.concat(Object.getOwnPropertyNames(p));
-                                            }
                                         }
-                                    } catch(e) {}
-                                    return k;
-                                })(""" + before_dot + ");"):
+                                        return k;
+                                    })(""" + before_dot + """);
+                                } catch (e) {
+                                    [];
+                                }"""):
                         if key.startswith(after_dot):
                             yield Completion(key, -len(after_dot))
                 else:
