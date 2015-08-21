@@ -1310,16 +1310,20 @@ static PyObject *
 PySession_create_script (PySession * self, PyObject * args, PyObject * kw)
 {
   static char * keywords[] = { "source", "name", NULL };
-  const char * source, * name = NULL;
+  char * source, * name = NULL;
   GError * error = NULL;
   FridaScript * handle;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|s", keywords, &source, &name))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|es", keywords, "utf-8", &source, "utf-8", &name))
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
   handle = frida_session_create_script_sync (self->handle, name, source, &error);
   Py_END_ALLOW_THREADS
+
+  PyMem_Free (source);
+  PyMem_Free (name);
+
   if (error != NULL)
     return PyFrida_raise (error);
 
