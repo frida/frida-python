@@ -138,10 +138,12 @@ def main():
                 if expression.endswith("?"):
                     try:
                         self._print_help(expression)
-                    except Exception as ex:
-                        error = ex.message
+                    except JavaScriptError as e:
+                        error = e.error
                         sys.stdout.write(Fore.RED + Style.BRIGHT + error['name'] + Style.RESET_ALL + ": " + error['message'] + "\n")
                         sys.stdout.flush()
+                    except frida.InvalidOperationError:
+                        return
                 elif expression.startswith("%"):
                     self._do_magic(expression[1:].rstrip())
                 elif expression in ("exit", "quit", "q"):
@@ -161,11 +163,11 @@ def main():
                     output = hexdump(value).rstrip("\n")
                 else:
                     output = json.dumps(value, sort_keys=True, indent=4, separators=(",", ": "))
+            except JavaScriptError as e:
+                error = e.error
+                output = Fore.RED + Style.BRIGHT + error['name'] + Style.RESET_ALL + ": " + error['message']
             except frida.InvalidOperationError:
                 return
-            except Exception as ex:
-                error = ex.message
-                output = Fore.RED + Style.BRIGHT + error['name'] + Style.RESET_ALL + ": " + error['message']
             sys.stdout.write(output + "\n")
             sys.stdout.flush()
 
@@ -326,7 +328,7 @@ def main():
                 return (payload['type'], payload.get('value', None))
             else:
                 assert stanza['name'] == '+error'
-                raise Exception(stanza['payload'])
+                raise JavaScriptError(stanza['payload'])
 
         def _process_message(self, message, data):
             if message['type'] == 'send':
@@ -516,6 +518,12 @@ def main():
 
     app = REPLApplication()
     app.run()
+
+class JavaScriptError(Exception):
+    def __init__(self, error):
+        super(JavaScriptError, self).__init__(error['message'])
+
+        self.error = error
 
 
 if __name__ == '__main__':
