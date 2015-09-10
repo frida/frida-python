@@ -53,6 +53,7 @@ typedef struct _PyDeviceManager  PyDeviceManager;
 typedef struct _PyDevice         PyDevice;
 typedef struct _PyApplication    PyApplication;
 typedef struct _PyProcess        PyProcess;
+typedef struct _PySpawn          PySpawn;
 typedef struct _PyIcon           PyIcon;
 typedef struct _PySession        PySession;
 typedef struct _PyScript         PyScript;
@@ -76,6 +77,7 @@ struct _PyDevice
   PyObject * icon;
   const gchar * type;
 
+  GList * on_spawned;
   GList * on_lost;
 };
 
@@ -98,6 +100,16 @@ struct _PyProcess
 
   guint pid;
   const gchar * name;
+};
+
+struct _PySpawn
+{
+  PyObject_HEAD
+
+  FridaSpawn * handle;
+
+  guint pid;
+  const gchar * identifier;
 };
 
 struct _PyIcon
@@ -141,12 +153,16 @@ static PyObject * PyDevice_repr (PyDevice * self);
 static PyObject * PyDevice_get_frontmost_application (PyDevice * self);
 static PyObject * PyDevice_enumerate_applications (PyDevice * self);
 static PyObject * PyDevice_enumerate_processes (PyDevice * self);
+static PyObject * PyDevice_enable_spawn_gating (PyDevice * self);
+static PyObject * PyDevice_disable_spawn_gating (PyDevice * self);
+static PyObject * PyDevice_enumerate_pending_spawns (PyDevice * self);
 static PyObject * PyDevice_spawn (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_resume (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_kill (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_attach (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_on (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_off (PyDevice * self, PyObject * args);
+static void PyDevice_on_spawned (PyDevice * self, FridaSpawn * spawn, FridaDevice * handle);
 static void PyDevice_on_lost (PyDevice * self, FridaDevice * handle);
 
 static PyObject * PyApplication_from_handle (FridaApplication * handle);
@@ -162,6 +178,11 @@ static void PyProcess_dealloc (PyProcess * self);
 static PyObject * PyProcess_repr (PyProcess * self);
 static PyObject * PyProcess_get_small_icon (PyProcess * self);
 static PyObject * PyProcess_get_large_icon (PyProcess * self);
+
+static PyObject * PySpawn_from_handle (FridaSpawn * handle);
+static int PySpawn_init (PySpawn * self);
+static void PySpawn_dealloc (PySpawn * self);
+static PyObject * PySpawn_repr (PySpawn * self);
 
 static PyObject * PyIcon_from_handle (FridaIcon * handle);
 static int PyIcon_init (PyIcon * self);
@@ -207,6 +228,9 @@ static PyMethodDef PyDevice_methods[] =
   { "get_frontmost_application", (PyCFunction) PyDevice_get_frontmost_application, METH_NOARGS, "Get details about the frontmost application." },
   { "enumerate_applications", (PyCFunction) PyDevice_enumerate_applications, METH_NOARGS, "Enumerate applications." },
   { "enumerate_processes", (PyCFunction) PyDevice_enumerate_processes, METH_NOARGS, "Enumerate processes." },
+  { "enable_spawn_gating", (PyCFunction) PyDevice_enable_spawn_gating, METH_NOARGS, "Enable spawn gating." },
+  { "disable_spawn_gating", (PyCFunction) PyDevice_disable_spawn_gating, METH_NOARGS, "Disable spawn gating." },
+  { "enumerate_pending_spawns", (PyCFunction) PyDevice_enumerate_pending_spawns, METH_NOARGS, "Enumerate pending spawns." },
   { "spawn", (PyCFunction) PyDevice_spawn, METH_VARARGS, "Spawn a process into an attachable state." },
   { "resume", (PyCFunction) PyDevice_resume, METH_VARARGS, "Resume a process from the attachable state." },
   { "kill", (PyCFunction) PyDevice_kill, METH_VARARGS, "Kill a PID." },
@@ -251,6 +275,13 @@ static PyMemberDef PyProcess_members[] =
 {
   { "pid", T_UINT, G_STRUCT_OFFSET (PyProcess, pid), READONLY, "Process ID."},
   { "name", T_STRING, G_STRUCT_OFFSET (PyProcess, name), READONLY, "Human-readable process name."},
+  { NULL }
+};
+
+static PyMemberDef PySpawn_members[] =
+{
+  { "pid", T_UINT, G_STRUCT_OFFSET (PySpawn, pid), READONLY, "Process ID."},
+  { "identifier", T_STRING, G_STRUCT_OFFSET (PySpawn, identifier), READONLY, "Application identifier."},
   { NULL }
 };
 
@@ -442,6 +473,46 @@ static PyTypeObject PyProcessType =
   NULL,                                         /* tp_descr_set      */
   0,                                            /* tp_dictoffset     */
   (initproc) PyProcess_init,                    /* tp_init           */
+};
+
+static PyTypeObject PySpawnType =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "_frida.Spawn",                               /* tp_name           */
+  sizeof (PySpawn),                             /* tp_basicsize      */
+  0,                                            /* tp_itemsize       */
+  (destructor) PySpawn_dealloc,                 /* tp_dealloc        */
+  NULL,                                         /* tp_print          */
+  NULL,                                         /* tp_getattr        */
+  NULL,                                         /* tp_setattr        */
+  NULL,                                         /* tp_compare        */
+  (reprfunc) PySpawn_repr,                      /* tp_repr           */
+  NULL,                                         /* tp_as_number      */
+  NULL,                                         /* tp_as_sequence    */
+  NULL,                                         /* tp_as_mapping     */
+  NULL,                                         /* tp_hash           */
+  NULL,                                         /* tp_call           */
+  NULL,                                         /* tp_str            */
+  NULL,                                         /* tp_getattro       */
+  NULL,                                         /* tp_setattro       */
+  NULL,                                         /* tp_as_buffer      */
+  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
+  "Frida Spawn",                                /* tp_doc            */
+  NULL,                                         /* tp_traverse       */
+  NULL,                                         /* tp_clear          */
+  NULL,                                         /* tp_richcompare    */
+  0,                                            /* tp_weaklistoffset */
+  NULL,                                         /* tp_iter           */
+  NULL,                                         /* tp_iternext       */
+  NULL,                                         /* tp_methods        */
+  PySpawn_members,                              /* tp_members        */
+  NULL,                                         /* tp_getset         */
+  NULL,                                         /* tp_base           */
+  NULL,                                         /* tp_dict           */
+  NULL,                                         /* tp_descr_get      */
+  NULL,                                         /* tp_descr_set      */
+  0,                                            /* tp_dictoffset     */
+  (initproc) PySpawn_init,                      /* tp_init           */
 };
 
 static PyTypeObject PyIconType =
@@ -769,6 +840,7 @@ PyDevice_init (PyDevice * self)
   self->icon = NULL;
   self->type = NULL;
 
+  self->on_spawned = NULL;
   self->on_lost = NULL;
 
   return 0;
@@ -777,6 +849,12 @@ PyDevice_init (PyDevice * self)
 static void
 PyDevice_dealloc (PyDevice * self)
 {
+  if (self->on_spawned != NULL)
+  {
+    g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_spawned), self);
+    g_list_free_full (self->on_spawned, (GDestroyNotify) Py_DecRef);
+  }
+
   if (self->on_lost != NULL)
   {
     g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_lost), self);
@@ -868,6 +946,59 @@ PyDevice_enumerate_processes (PyDevice * self)
   g_object_unref (result);
 
   return processes;
+}
+
+static PyObject *
+PyDevice_enable_spawn_gating (PyDevice * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_device_enable_spawn_gating_sync (self->handle, &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyDevice_disable_spawn_gating (PyDevice * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_device_enable_spawn_gating_sync (self->handle, &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyDevice_enumerate_pending_spawns (PyDevice * self)
+{
+  GError * error = NULL;
+  FridaSpawnList * result;
+  gint result_length, i;
+  PyObject * spawns;
+
+  Py_BEGIN_ALLOW_THREADS
+  result = frida_device_enumerate_pending_spawns_sync (self->handle, &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  result_length = frida_spawn_list_size (result);
+  spawns = PyList_New (result_length);
+  for (i = 0; i != result_length; i++)
+  {
+    PyList_SET_ITEM (spawns, i, PySpawn_from_handle (frida_spawn_list_get (result, i)));
+  }
+  g_object_unref (result);
+
+  return spawns;
 }
 
 static PyObject *
@@ -993,7 +1124,17 @@ PyDevice_on (PyDevice * self, PyObject * args)
   if (!PyFrida_parse_signal_method_args (args, &signal, &callback))
     return NULL;
 
-  if (strcmp (signal, "lost") == 0)
+  if (strcmp (signal, "spawned") == 0)
+  {
+    if (self->on_spawned == NULL)
+    {
+      g_signal_connect_swapped (self->handle, "spawned", G_CALLBACK (PyDevice_on_spawned), self);
+    }
+
+    Py_INCREF (callback);
+    self->on_spawned = g_list_append (self->on_spawned, callback);
+  }
+  else if (strcmp (signal, "lost") == 0)
   {
     if (self->on_lost == NULL)
     {
@@ -1021,7 +1162,28 @@ PyDevice_off (PyDevice * self, PyObject * args)
   if (!PyFrida_parse_signal_method_args (args, &signal, &callback))
     return NULL;
 
-  if (strcmp (signal, "lost") == 0)
+  if (strcmp (signal, "spawned") == 0)
+  {
+    GList * entry;
+
+    entry = g_list_find (self->on_spawned, callback);
+    if (entry != NULL)
+    {
+      self->on_spawned = g_list_delete_link (self->on_spawned, entry);
+      Py_DECREF (callback);
+    }
+    else
+    {
+      PyErr_SetString (PyExc_ValueError, "unknown callback");
+      return NULL;
+    }
+
+    if (self->on_spawned == NULL)
+    {
+      g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_spawned), self);
+    }
+  }
+  else if (strcmp (signal, "lost") == 0)
   {
     GList * entry;
 
@@ -1049,6 +1211,41 @@ PyDevice_off (PyDevice * self, PyObject * args)
   }
 
   Py_RETURN_NONE;
+}
+
+static void
+PyDevice_on_spawned (PyDevice * self, FridaSpawn * spawn, FridaDevice * handle)
+{
+  PyGILState_STATE gstate;
+
+  gstate = PyGILState_Ensure ();
+
+  if (g_object_get_data (G_OBJECT (handle), "pyobject") == self)
+  {
+    PyObject * args;
+    GList * callbacks, * cur;
+
+    g_object_ref (spawn);
+    args = PyTuple_Pack (1, PySpawn_from_handle (spawn));
+
+    g_list_foreach (self->on_spawned, (GFunc) Py_IncRef, NULL);
+    callbacks = g_list_copy (self->on_spawned);
+
+    for (cur = callbacks; cur != NULL; cur = cur->next)
+    {
+      PyObject * result = PyObject_CallObject ((PyObject *) cur->data, args);
+      if (result == NULL)
+        PyErr_Print ();
+      else
+        Py_DECREF (result);
+    }
+
+    g_list_free_full (callbacks, (GDestroyNotify) Py_DecRef);
+
+    Py_DECREF (args);
+  }
+
+  PyGILState_Release (gstate);
 }
 
 static void
@@ -1192,6 +1389,52 @@ static PyObject *
 PyProcess_get_large_icon (PyProcess * self)
 {
   return PyIcon_from_handle (frida_process_get_large_icon (self->handle));
+}
+
+
+static PyObject *
+PySpawn_from_handle (FridaSpawn * handle)
+{
+  PyObject * result;
+  PySpawn * spawn;
+
+  result = PyObject_CallFunction ((PyObject *) &PySpawnType, NULL);
+
+  spawn = (PySpawn *) result;
+  spawn->handle = handle;
+  spawn->pid = frida_spawn_get_pid (handle);
+  spawn->identifier = frida_spawn_get_identifier (handle);
+
+  return result;
+}
+
+static int
+PySpawn_init (PySpawn * self)
+{
+  self->handle = NULL;
+
+  self->pid = 0;
+  self->identifier = NULL;
+
+  return 0;
+}
+
+static void
+PySpawn_dealloc (PySpawn * self)
+{
+  if (self->handle != NULL)
+    g_object_unref (self->handle);
+
+  Py_TYPE (self)->tp_free ((PyObject *) self);
+}
+
+static PyObject *
+PySpawn_repr (PySpawn * self)
+{
+  if (self->identifier != NULL)
+    return PyRepr_FromFormat ("Spawn(pid=%u, identifier=\"%s\")", self->pid, self->identifier);
+  else
+    return PyRepr_FromFormat ("Spawn(pid=%u)", self->pid);
 }
 
 
@@ -1768,6 +2011,10 @@ MOD_INIT (_frida)
   if (PyType_Ready (&PyProcessType) < 0)
     return MOD_ERROR_VAL;
 
+  PySpawnType.tp_new = PyType_GenericNew;
+  if (PyType_Ready (&PySpawnType) < 0)
+    return MOD_ERROR_VAL;
+
   PyIconType.tp_new = PyType_GenericNew;
   if (PyType_Ready (&PyIconType) < 0)
     return MOD_ERROR_VAL;
@@ -1795,6 +2042,9 @@ MOD_INIT (_frida)
 
   Py_INCREF (&PyProcessType);
   PyModule_AddObject (module, "Process", (PyObject *) &PyProcessType);
+
+  Py_INCREF (&PySpawnType);
+  PyModule_AddObject (module, "Spawn", (PyObject *) &PySpawnType);
 
   Py_INCREF (&PyIconType);
   PyModule_AddObject (module, "Icon", (PyObject *) &PyIconType);

@@ -65,6 +65,15 @@ class Device(object):
         else:
             raise _frida.ProcessNotFoundError("unable to find process with name '%s'" % process_name)
 
+    def enable_spawn_gating(self):
+        return self._impl.enable_spawn_gating()
+
+    def disable_spawn_gating(self):
+        return self._impl.disable_spawn_gating()
+
+    def enumerate_pending_spawns(self):
+        return self._impl.enumerate_pending_spawns()
+
     def spawn(self, argv):
         return self._impl.spawn(argv)
 
