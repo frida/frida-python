@@ -480,7 +480,7 @@ function Minimatch(pattern, options) {
     this.make();
 }
 
-Minimatch.prototype.make = () => {
+Minimatch.prototype.make = function () {
     if (this._made)
         return;
 
@@ -506,7 +506,7 @@ Minimatch.prototype.make = () => {
 
     set = set.map((s, si, set) => {
         return s.map(this.parse, this);
-    }, this);
+    });
 
     set = set.filter(s => {
         return s.indexOf(false) === -1;
@@ -515,7 +515,7 @@ Minimatch.prototype.make = () => {
     this.set = set;
 };
 
-Minimatch.prototype.parseNegate = () => {
+Minimatch.prototype.parseNegate = function () {
     const pattern = this.pattern;
     let negate = false;
     const options = this.options;
@@ -535,7 +535,7 @@ Minimatch.prototype.parseNegate = () => {
 };
 
 const SUBPARSE = {};
-Minimatch.prototype.parse = (pattern, isSub) => {
+Minimatch.prototype.parse = function (pattern, isSub) {
     const options = this.options;
 
     if (!options.noglobstar && pattern === '**')
@@ -771,7 +771,7 @@ Minimatch.prototype.parse = (pattern, isSub) => {
     return regExp;
 };
 
-Minimatch.prototype.makeRe = () => {
+Minimatch.prototype.makeRe = function () {
     if (this.regexp || this.regexp === false)
         return this.regexp;
 
@@ -805,7 +805,7 @@ Minimatch.prototype.makeRe = () => {
     return this.regexp;
 };
 
-Minimatch.prototype.match = (f, partial) => {
+Minimatch.prototype.match = function (f, partial) {
     if (this.comment)
         return false;
     if (this.empty)
@@ -844,7 +844,7 @@ Minimatch.prototype.match = (f, partial) => {
     return this.negate;
 };
 
-Minimatch.prototype.matchOne = (file, pattern, partial) => {
+Minimatch.prototype.matchOne = function (file, pattern, partial) {
     const options = this.options;
 
     let fi, pi, fl, pl;
