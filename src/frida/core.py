@@ -20,7 +20,7 @@ class DeviceManager(object):
     def enumerate_devices(self):
         return [Device(device) for device in self._impl.enumerate_devices()]
 
-    def get_device(self, device_id):
+    def get_device(self, device_id = None):
         devices = self._impl.enumerate_devices()
         if device_id is None:
             return Device(devices[0])

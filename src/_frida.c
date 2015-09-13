@@ -72,7 +72,7 @@ struct _PyDevice
 
   FridaDevice * handle;
 
-  guint id;
+  const gchar * id;
   const gchar * name;
   PyObject * icon;
   const gchar * type;
@@ -242,7 +242,7 @@ static PyMethodDef PyDevice_methods[] =
 
 static PyMemberDef PyDevice_members[] =
 {
-  { "id", T_UINT, G_STRUCT_OFFSET (PyDevice, id), READONLY, "Device ID."},
+  { "id", T_STRING, G_STRUCT_OFFSET (PyDevice, id), READONLY, "Device ID."},
   { "name", T_STRING, G_STRUCT_OFFSET (PyDevice, name), READONLY, "Human-readable device name."},
   { "icon", T_OBJECT_EX, G_STRUCT_OFFSET (PyDevice, icon), READONLY, "Icon."},
   { "type", T_STRING, G_STRUCT_OFFSET (PyDevice, type), READONLY, "Device type. One of: local, tether, remote."},
@@ -835,7 +835,7 @@ PyDevice_init (PyDevice * self)
 {
   self->handle = NULL;
 
-  self->id = 0;
+  self->id = NULL;
   self->name = NULL;
   self->icon = NULL;
   self->type = NULL;
@@ -877,7 +877,7 @@ PyDevice_dealloc (PyDevice * self)
 static PyObject *
 PyDevice_repr (PyDevice * self)
 {
-  return PyRepr_FromFormat ("Device(id=%u, name=\"%s\", type='%s')", self->id, self->name, self->type);
+  return PyRepr_FromFormat ("Device(id=\"%s\", name=\"%s\", type='%s')", self->id, self->name, self->type);
 }
 
 static PyObject *

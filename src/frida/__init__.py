@@ -42,42 +42,48 @@ NotSupportedError = _frida.NotSupportedError
 ProtocolError = _frida.ProtocolError
 TransportError = _frida.TransportError
 
-def spawn(argv, device_id = None):
-    return get_device_manager().get_device(device_id).spawn(argv)
+def spawn(argv):
+    return get_device_manager().get_device().spawn(argv)
 
-def resume(target, device_id = None):
-    get_device_manager().get_device(device_id).resume(target)
+def resume(target):
+    get_device_manager().get_device().resume(target)
 
-def kill(target, device_id = None):
-    get_device_manager().get_device(device_id).kill(target)
+def kill(target):
+    get_device_manager().get_device().kill(target)
 
-def attach(target, device_id = None):
-    return get_device_manager().get_device(device_id).attach(target)
+def attach(target):
+    return get_device_manager().get_device().attach(target)
+
+def enumerate_devices():
+    return get_device_manager().enumerate_devices()
+
+def get_device(id, timeout = 0):
+    return _get_device(lambda device: device.id == id, timeout)
 
 def get_usb_device(timeout = 0):
-    return _get_device('tether', timeout)
+    return _get_device(lambda device: device.type == 'tether', timeout)
 
 def get_remote_device(timeout = 0):
-    return _get_device('remote', timeout)
+    return _get_device(lambda device: device.type == 'remote', timeout)
 
-def _get_device(type, timeout):
+def _get_device(predicate, timeout):
     mgr = get_device_manager()
-    def find_usb_device():
-        usb_devices = [device for device in mgr.enumerate_devices() if device.type == type]
+    def find_matching_device():
+        usb_devices = [device for device in mgr.enumerate_devices() if predicate(device)]
         if len(usb_devices) > 0:
             return usb_devices[0]
         else:
             return None
-    device = find_usb_device()
+    device = find_matching_device()
     if device is None:
         result = [None]
         event = threading.Event()
         def on_devices_changed():
-            result[0] = find_usb_device()
+            result[0] = find_matching_device()
             if result[0] is not None:
                 event.set()
         mgr.on('changed', on_devices_changed)
-        device = find_usb_device()
+        device = find_matching_device()
         if device is None:
             event.wait(timeout)
             device = result[0]
