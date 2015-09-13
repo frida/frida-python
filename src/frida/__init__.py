@@ -43,28 +43,31 @@ ProtocolError = _frida.ProtocolError
 TransportError = _frida.TransportError
 
 def spawn(argv):
-    return get_device_manager().get_device().spawn(argv)
+    return get_local_device().spawn(argv)
 
 def resume(target):
-    get_device_manager().get_device().resume(target)
+    get_local_device().resume(target)
 
 def kill(target):
-    get_device_manager().get_device().kill(target)
+    get_local_device().kill(target)
 
 def attach(target):
-    return get_device_manager().get_device().attach(target)
+    return get_local_device().attach(target)
 
 def enumerate_devices():
     return get_device_manager().enumerate_devices()
 
-def get_device(id, timeout = 0):
-    return _get_device(lambda device: device.id == id, timeout)
+def get_local_device():
+    return _get_device(lambda device: device.type == 'local', timeout=0)
 
 def get_usb_device(timeout = 0):
     return _get_device(lambda device: device.type == 'tether', timeout)
 
-def get_remote_device(timeout = 0):
-    return _get_device(lambda device: device.type == 'remote', timeout)
+def get_remote_device():
+    return _get_device(lambda device: device.type == 'remote', timeout=0)
+
+def get_device(id, timeout = 0):
+    return _get_device(lambda device: device.id == id, timeout)
 
 def _get_device(predicate, timeout):
     mgr = get_device_manager()
