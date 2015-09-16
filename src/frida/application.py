@@ -60,10 +60,12 @@ class ConsoleApplication(object):
         colorama.init()
 
         parser = OptionParser(usage=self._usage(), version=frida.__version__)
+        parser.add_option("-D", "--device", help="connect to device with the given ID",
+                metavar="ID", type='string', action='store', dest="device_id", default=None)
         parser.add_option("-U", "--usb", help="connect to USB device",
-                action='store_const', const='tether', dest="device_type", default='local')
+                action='store_const', const='tether', dest="device_type", default=None)
         parser.add_option("-R", "--remote", help="connect to remote device",
-                action='store_const', const='remote', dest="device_type", default='local')
+                action='store_const', const='remote', dest="device_type", default=None)
         if self._needs_target():
             def store_target(option, opt_str, target_value, parser, target_type, *args, **kwargs):
                 if target_type == 'file':
@@ -81,6 +83,7 @@ class ConsoleApplication(object):
 
         (options, args) = parser.parse_args()
 
+        self._device_id = options.device_id
         self._device_type = options.device_type
         self._device = None
         self._schedule_on_device_lost = lambda: self._reactor.schedule(self._on_device_lost)
@@ -97,6 +100,9 @@ class ConsoleApplication(object):
         self._reactor = Reactor(run_until_return, on_stop)
         self._exit_status = None
         self._status_updated = False
+
+        if self._device_id is not None and self._device_type is not None:
+            parser.error("-D cannot be used with -U and -R")
 
         if self._needs_target():
             target = getattr(options, 'target', None)
@@ -169,9 +175,19 @@ class ConsoleApplication(object):
     def _try_start(self):
         if self._device is not None:
             return
-        self._device = find_device(self._device_type)
-        if self._device is None:
-            return
+        if self._device_id is not None:
+            try:
+                self._device = frida.get_device(self._device_id)
+            except:
+                self._update_status("Device '%s' not found" % self._device_id)
+                self._exit(1)
+                return
+        elif self._device_type is not None:
+            self._device = find_device(self._device_type)
+            if self._device is None:
+                return
+        else:
+            self._device = frida.get_local_device()
         self._device.on('lost', self._schedule_on_device_lost)
         if self._target is not None:
             spawning = True
@@ -227,7 +243,7 @@ class ConsoleApplication(object):
         self._status_updated = True
 
 def find_device(type):
-    for device in frida.get_device_manager().enumerate_devices():
+    for device in frida.enumerate_devices():
         if device.type == type:
             return device
     return None
