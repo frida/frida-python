@@ -29,6 +29,9 @@
     <None Include="src\frida\application.py">
       <Filter>Source Files\frida</Filter>
     </None>
+    <None Include="src\frida\lsd.py">
+      <Filter>Source Files\frida</Filter>
+    </None>
     <None Include="src\frida\ps.py">
       <Filter>Source Files\frida</Filter>
     </None>

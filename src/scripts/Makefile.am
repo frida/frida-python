@@ -1,12 +1,14 @@
 bin_SCRIPTS = \
 	frida \
 	frida-discover \
+	frida-ls-devices \
 	frida-ps \
 	frida-trace
 CLEANFILES = $(bin_SCRIPTS)
 EXTRA_DIST = \
 	frida.in \
 	frida-discover.in \
+	frida-ls-devices.in \
 	frida-ps.in \
 	frida-trace.in
 
@@ -22,6 +24,10 @@ frida: frida.in Makefile
 
 frida-discover: frida-discover.in Makefile
 	$(do_substitution) < $(srcdir)/frida-discover.in > $@
+	chmod +x $@
+
+frida-ls-devices: frida-ls-devices.in Makefile
+	$(do_substitution) < $(srcdir)/frida-ls-devices.in > $@
 	chmod +x $@
 
 frida-ps: frida-ps.in Makefile

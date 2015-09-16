@@ -1,0 +1,9 @@
+#!@PYTHON@
+
+import sys
+sys.path.insert(1, '@pythondir@')
+
+import frida.lsd
+
+if __name__ == '__main__':
+    frida.lsd.main()
