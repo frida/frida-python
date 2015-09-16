@@ -38,16 +38,17 @@ def main():
                     pid_column_width = 0
                     name_column_width = 0
                     identifier_column_width = 0
-                header_format = "%" + str(pid_column_width) + "s " + \
-                    "%-" + str(name_column_width) + "s " + \
+                header_format = "%" + str(pid_column_width) + "s  " + \
+                    "%-" + str(name_column_width) + "s  " + \
                     "%-" + str(identifier_column_width) + "s"
-                print(header_format % ("PID", "NAME", "IDENTIFIER"))
-                line_format = "%" + str(pid_column_width) + "s " + \
-                    "%-" + str(name_column_width) + "s " + \
+                print(header_format % ("PID", "Name", "Identifier"))
+                print("%s  %s  %s" % (pid_column_width * "-", name_column_width * "-", identifier_column_width * "-"))
+                line_format = "%" + str(pid_column_width) + "s  " + \
+                    "%-" + str(name_column_width) + "s  " + \
                     "%-" + str(identifier_column_width) + "s"
                 for app in sorted(applications, key=cmp_to_key(compare_applications)):
                     if app.pid == 0:
-                        print(line_format % ("", app.name, app.identifier))
+                        print(line_format % ("-", app.name, app.identifier))
                     else:
                         print(line_format % (app.pid, app.name, app.identifier))
             else:
@@ -58,9 +59,11 @@ def main():
                     self._exit(1)
                     return
                 pid_column_width = max(map(lambda p: len("%d" % p.pid), processes))
-                header_format = "%" + str(pid_column_width) + "s %s"
-                print(header_format % ("PID", "NAME"))
-                line_format = "%" + str(pid_column_width) + "d %s"
+                name_column_width = max(map(lambda p: len(p.name), processes))
+                header_format = "%" + str(pid_column_width) + "s  %s"
+                print(header_format % ("PID", "Name"))
+                print("%s  %s" % (pid_column_width * "-", name_column_width * "-"))
+                line_format = "%" + str(pid_column_width) + "d  %s"
                 for process in sorted(processes, key=cmp_to_key(compare_processes)):
                     print(line_format % (process.pid, process.name))
             self._exit(0)
