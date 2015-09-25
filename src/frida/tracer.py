@@ -69,6 +69,10 @@ class TracerProfileBuilder(object):
         return TracerProfile(self._spec)
 
 class TracerProfile(object):
+    _BLACKLIST = set([
+        "libSystem.B.dylib!dyld_stub_binder"
+    ])
+
     def __init__(self, spec):
         self._spec = spec
 
@@ -107,13 +111,18 @@ class TracerProfile(object):
                 relative_address = int(target["address"], 16) - module.base_address
                 exported = not target.get('private', False)
                 mf = ModuleFunction(module, target["name"], relative_address, exported)
-                working_set.append(mf)
+                if not self._is_blacklisted(mf):
+                    working_set.append(mf)
             else:
                 objc = target['objc']
                 method = objc['method']
                 of = ObjCMethod(method['type'], objc['className'], method['name'], int(target['address'], 16))
                 working_set.append(of)
         return working_set
+
+    def _is_blacklisted(self, module_function):
+        key = module_function.module.name + "!" + module_function.name
+        return key in TracerProfile._BLACKLIST
 
     def _create_resolver_script(self):
         return r""""use strict";
