@@ -48,6 +48,11 @@ class TracerProfileBuilder(object):
                 'offset': int(m.group('offset'), base=16)
             }))
 
+    def include_imports(self, *module_name_globs):
+        for m in module_name_globs:
+            self._spec.append(('include', 'imports', m))
+        return self
+
     def include_objc_method(self, *function_name_globs):
         for f in function_name_globs:
             match = re.search(r"([+*-])\[(\S+)\s+(\S+)\]", f)
@@ -148,6 +153,10 @@ function resolve(spec) {
             case 'relative_function':
                 if (operation === 'include')
                     workingSet = includeRelativeFunction(param, workingSet);
+                break;
+            case 'imports':
+                if (operation === 'include')
+                    workingSet = includeImports(param, workingSet);
                 break;
             case 'objc_method':
                 if (operation === 'include')
@@ -252,6 +261,29 @@ function includeRelativeFunction(func, workingSet) {
             };
         }
     }
+    return workingSet;
+}
+
+function includeImports(pattern, workingSet) {
+    const modules = [];
+    if (pattern === null) {
+        modules.push(allModules()[0]);
+    } else {
+        const mm = new Minimatch(pattern);
+        for (let module of allModules()) {
+            if (mm.match(module.name)) {
+                modules.push(module);
+                break;
+            }
+        }
+    }
+
+    for (let module of modules) {
+        const functions = allFunctionImports(module);
+        for (let func of functions)
+            workingSet[func.address.toString()] = func;
+    }
+
     return workingSet;
 }
 
@@ -386,9 +418,37 @@ function getObjCState() {
 
 let cachedModules = null;
 function allModules() {
-    if (cachedModules === null)
+    if (cachedModules === null) {
         cachedModules = Process.enumerateModulesSync();
+        cachedModules._idByPath = cachedModules.reduce((mappings, module, index) => {
+            mappings[module.path] = index;
+            return mappings;
+        }, {});
+    }
     return cachedModules;
+}
+
+function allFunctionImports(module) {
+    if (!module.hasOwnProperty('_cachedFunctionImports')) {
+        const moduleIdByPath = allModules()._idByPath;
+        module._cachedFunctionImports = Module.enumerateImportsSync(module.path)
+            .filter(isResolvedFunctionImport)
+            .map(imp => {
+                const value = {
+                    name: imp.name,
+                    address: imp.address
+                };
+                if (imp.hasOwnProperty('module')) {
+                    const moduleId = moduleIdByPath[imp.module];
+                    if (moduleId !== undefined) {
+                        value.module = moduleId;
+                    }
+                }
+                return value;
+            });
+    }
+
+    return module._cachedFunctionImports;
 }
 
 function allFunctionExports(module) {
@@ -396,17 +456,21 @@ function allFunctionExports(module) {
         const moduleId = allModules().indexOf(module);
         module._cachedFunctionExports = Module.enumerateExportsSync(module.path)
             .filter(isFunctionExport)
-            .map(e => {
-                e.module = moduleId;
-                return e;
+            .map(exp => {
+                exp.module = moduleId;
+                return exp;
             });
     }
 
     return module._cachedFunctionExports;
 }
 
-function isFunctionExport(e) {
-    return e.type === 'function';
+function isResolvedFunctionImport(imp) {
+    return imp.type === 'function' && imp.hasOwnProperty('address');
+}
+
+function isFunctionExport(exp) {
+    return exp.type === 'function';
 }
 
 
@@ -1386,6 +1450,10 @@ def main():
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.exclude,))
             parser.add_option("-a", "--add", help="add MODULE!OFFSET", metavar="MODULE!OFFSET",
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_relative_address,))
+            parser.add_option("-T", "--include-imports", help="include program's imports",
+                    action='callback', callback=process_builder_arg, callback_args=(pb.include_imports,))
+            parser.add_option("-t", "--include-module-imports", help="include MODULE imports", metavar="MODULE",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_imports,))
             parser.add_option("-m", "--include-objc-method", help="include OBJC_METHOD", metavar="OBJC_METHOD",
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_objc_method,))
             self._profile_builder = pb
