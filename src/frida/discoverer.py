@@ -170,7 +170,7 @@ def main():
             self._discoverer.start(self._session, self)
 
         def _stop(self):
-            print("Stopping...")
+            self._print("Stopping...")
             self._discoverer.dispose()
             self._discoverer = None
 
@@ -180,17 +180,17 @@ def main():
 
         def on_sample_result(self, module_functions, dynamic_functions):
             for module, functions in module_functions.items():
-                print(module.name)
-                print("\t%-10s\t%s" % ("Calls", "Function"))
+                self._print(module.name)
+                self._print("\t%-10s\t%s" % ("Calls", "Function"))
                 for function, count in sorted(functions, key=lambda item: item[1], reverse=True):
-                    print("\t%-10d\t%s" % (count, function))
-                print("")
+                    self._print("\t%-10d\t%s" % (count, function))
+                self._print("")
 
             if len(dynamic_functions) > 0:
-                print("Dynamic functions:")
-                print("\t%-10s\t%s" % ("Calls", "Function"))
+                self._print("Dynamic functions:")
+                self._print("\t%-10s\t%s" % ("Calls", "Function"))
                 for function, count in sorted(dynamic_functions, key=lambda item: item[1], reverse=True):
-                    print("\t%-10d\t%s" % (count, function))
+                    self._print("\t%-10d\t%s" % (count, function))
 
             self._results_received.set()
 

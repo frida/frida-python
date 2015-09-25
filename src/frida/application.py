@@ -12,7 +12,7 @@ import threading
 import time
 
 import colorama
-from colorama import Style
+from colorama import Fore, Style
 
 import frida
 
@@ -54,6 +54,11 @@ def await_enter(reactor):
                 break
     except KeyboardInterrupt:
         print('')
+
+class ConsoleState:
+    EMPTY = 1
+    STATUS = 2
+    TEXT = 3
 
 class ConsoleApplication(object):
     def __init__(self, run_until_return=await_enter, on_stop=None):
@@ -99,7 +104,7 @@ class ConsoleApplication(object):
         self._resumed = False
         self._reactor = Reactor(run_until_return, on_stop)
         self._exit_status = None
-        self._status_updated = False
+        self._console_state = ConsoleState.EMPTY
 
         if self._device_id is not None and self._device_type is not None:
             parser.error("-D cannot be used with -U and -R")
@@ -206,9 +211,7 @@ class ConsoleApplication(object):
                 self._session = self._device.attach(attach_target)
                 if self._enable_debugger:
                     self._session.enable_debugger()
-                    self._update_status("")
-                    print("Debugger listening on port 5858\n")
-                    self._update_status("Attaching...")
+                    self._print("Debugger listening on port 5858\n")
                 self._session.on('detached', self._schedule_on_session_detached)
             except Exception as e:
                 if spawning:
@@ -222,25 +225,40 @@ class ConsoleApplication(object):
 
     def _show_message_if_no_device(self):
         if self._device is None:
-            print("Waiting for USB device to appear...")
+            self._print("Waiting for USB device to appear...")
 
     def _on_device_lost(self):
         if self._exit_status is not None:
             return
-        print("Device disconnected.")
+        self._print("Device disconnected.")
         self._exit(1)
 
     def _on_session_detached(self):
-        print("Target process terminated.")
+        self._print("Target process terminated.")
         self._exit(1)
 
+    def _clear_status(self):
+        if self._console_state == ConsoleState.STATUS:
+            print("\033[A" + (80 * " "))
+
     def _update_status(self, message):
-        if self._status_updated:
+        if self._console_state == ConsoleState.STATUS:
             cursor_position = "\033[A"
         else:
             cursor_position = ""
         print("%-80s" % (cursor_position + Style.BRIGHT + message + Style.RESET_ALL,))
-        self._status_updated = True
+        self._console_state = ConsoleState.STATUS
+
+    def _print(self, *args, **kwargs):
+        print(*args, **kwargs)
+        self._console_state = ConsoleState.TEXT
+
+    def _log(self, level, text):
+        if level == 'info':
+            self._print(text)
+        else:
+            color = Fore.RED if level == 'error' else Fore.YELLOW
+            self._print(color + Style.BRIGHT + text + Style.RESET_ALL)
 
 def find_device(type):
     for device in frida.enumerate_devices():

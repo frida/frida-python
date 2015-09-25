@@ -41,16 +41,16 @@ def main():
                 header_format = "%" + str(pid_column_width) + "s  " + \
                     "%-" + str(name_column_width) + "s  " + \
                     "%-" + str(identifier_column_width) + "s"
-                print(header_format % ("PID", "Name", "Identifier"))
-                print("%s  %s  %s" % (pid_column_width * "-", name_column_width * "-", identifier_column_width * "-"))
+                self._print(header_format % ("PID", "Name", "Identifier"))
+                self._print("%s  %s  %s" % (pid_column_width * "-", name_column_width * "-", identifier_column_width * "-"))
                 line_format = "%" + str(pid_column_width) + "s  " + \
                     "%-" + str(name_column_width) + "s  " + \
                     "%-" + str(identifier_column_width) + "s"
                 for app in sorted(applications, key=cmp_to_key(compare_applications)):
                     if app.pid == 0:
-                        print(line_format % ("-", app.name, app.identifier))
+                        self._print(line_format % ("-", app.name, app.identifier))
                     else:
-                        print(line_format % (app.pid, app.name, app.identifier))
+                        self._print(line_format % (app.pid, app.name, app.identifier))
             else:
                 try:
                     processes = self._device.enumerate_processes()
@@ -61,11 +61,11 @@ def main():
                 pid_column_width = max(map(lambda p: len("%d" % p.pid), processes))
                 name_column_width = max(map(lambda p: len(p.name), processes))
                 header_format = "%" + str(pid_column_width) + "s  %s"
-                print(header_format % ("PID", "Name"))
-                print("%s  %s" % (pid_column_width * "-", name_column_width * "-"))
+                self._print(header_format % ("PID", "Name"))
+                self._print("%s  %s" % (pid_column_width * "-", name_column_width * "-"))
                 line_format = "%" + str(pid_column_width) + "d  %s"
                 for process in sorted(processes, key=cmp_to_key(compare_processes)):
-                    print(line_format % (process.pid, process.name))
+                    self._print(line_format % (process.pid, process.name))
             self._exit(0)
 
     def compare_applications(a, b):

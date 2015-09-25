@@ -22,13 +22,13 @@ def main():
             header_format = "%-" + str(id_column_width) + "s  " + \
                 "%-" + str(type_column_width) + "s  " + \
                 "%-" + str(name_column_width) + "s"
-            print(header_format % ("Id", "Type", "Name"))
-            print("%s  %s  %s" % (id_column_width * "-", type_column_width * "-", name_column_width * "-"))
+            self._print(header_format % ("Id", "Type", "Name"))
+            self._print("%s  %s  %s" % (id_column_width * "-", type_column_width * "-", name_column_width * "-"))
             line_format = "%-" + str(id_column_width) + "s  " + \
                 "%-" + str(type_column_width) + "s  " + \
                 "%-" + str(name_column_width) + "s"
             for device in sorted(devices, key=cmp_to_key(compare_devices)):
-                print(line_format % (device.id, device.type, device.name))
+                self._print(line_format % (device.id, device.type, device.name))
             self._exit(0)
 
     def compare_devices(a, b):

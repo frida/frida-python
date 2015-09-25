@@ -56,7 +56,7 @@ def main():
             if self._spawned_argv is not None:
                 self._update_status("Spawned `{command}`. Use %resume to let the main thread start executing!".format(command=" ".join(self._spawned_argv)))
             else:
-                sys.stdout.write("\033[A")
+                self._clear_status()
             self._ready.set()
 
         def _on_stop(self):
@@ -74,6 +74,7 @@ def main():
         def _load_script(self):
             self._seqno += 1
             script = self._session.create_script(name="repl%d" % self._seqno, source=self._create_repl_script())
+            script.set_log_handler(self._log)
             self._unload_script()
             self._script = script
             def on_message(message, data):
@@ -125,7 +126,7 @@ def main():
                             eventloop.close()
                     except EOFError:
                         # An extra newline after EOF to exit the REPL cleanly
-                        print("\nThank you for using Frida!")
+                        self._print("\nThank you for using Frida!")
                         return
                     except KeyboardInterrupt:
                         line = ""
@@ -140,17 +141,16 @@ def main():
                         self._print_help(expression)
                     except JavaScriptError as e:
                         error = e.error
-                        sys.stdout.write(Fore.RED + Style.BRIGHT + error['name'] + Style.RESET_ALL + ": " + error['message'] + "\n")
-                        sys.stdout.flush()
+                        self._print(Fore.RED + Style.BRIGHT + error['name'] + Style.RESET_ALL + ": " + error['message'])
                     except frida.InvalidOperationError:
                         return
                 elif expression.startswith("%"):
                     self._do_magic(expression[1:].rstrip())
                 elif expression in ("exit", "quit", "q"):
-                    print("Thank you for using Frida!")
+                    self._print("Thank you for using Frida!")
                     return
                 elif expression == "help":
-                    print("Help: #TODO :)")
+                    self._print("Help: #TODO :)")
                 else:
                     self._eval_and_print(expression)
 
@@ -168,11 +168,10 @@ def main():
                 output = Fore.RED + Style.BRIGHT + error['name'] + Style.RESET_ALL + ": " + error['message']
             except frida.InvalidOperationError:
                 return
-            sys.stdout.write(output + "\n")
-            sys.stdout.flush()
+            self._print(output)
 
         def _print_startup_message(self):
-            print("""    _____
+            self._print("""    _____
    (_____)
     |   |    Frida {version} - A world-class dynamic instrumentation framework
     |   |
@@ -219,7 +218,7 @@ def main():
                 help_text += "Text:      %s\n" % self._evaluate("%s.toString()" % obj_to_identify)[1]
                 help_text += "Docstring: #TODO :)"
 
-            print(help_text)
+            self._print(help_text)
 
         # Negative means at least abs(val) - 1
         _magic_command_args = {
@@ -238,8 +237,8 @@ def main():
             required_args = self._magic_command_args.get(command)
 
             if required_args == None:
-                print("Unknown command: {}".format(command))
-                print("Valid commands: {}".format(", ".join(self._magic_command_args.keys())))
+                self._print("Unknown command: {}".format(command))
+                self._print("Valid commands: {}".format(", ".join(self._magic_command_args.keys())))
                 return
 
             atleast_args = False
@@ -249,7 +248,7 @@ def main():
 
             if (not atleast_args and len(args) != required_args) or \
                (atleast_args and len(args) < required_args):
-                print("{cmd} command expects {atleast}{n} argument{s}".format(
+                self._print("{cmd} command expects {atleast}{n} argument{s}".format(
                     cmd=command, atleast='atleast ' if atleast_args else '', n=required_args, s='' if required_args == 1 else ' '))
                 return
 
@@ -289,7 +288,7 @@ def main():
             if result[0] is None:
                 return True
             else:
-                print("Failed to load script: {error}".format(error=result[0]))
+                self._print("Failed to load script: {error}".format(error=result[0]))
                 return False
 
         def _create_prompt(self):
@@ -331,13 +330,17 @@ def main():
                 raise JavaScriptError(stanza['payload'])
 
         def _process_message(self, message, data):
-            if message['type'] == 'send':
+            message_type = message['type']
+            if message_type == 'send':
                 stanza = message['payload']
                 with self._response_cond:
                     self._response_data = (stanza, data)
                     self._response_cond.notify()
+            elif message_type == 'error':
+                text = message.get('stack', message['description'])
+                self._log('error', text)
             else:
-                print("message:", message, "data:", data)
+                self._print("message:", message, "data:", data)
 
         def _create_repl_script(self):
             user_script = ""
@@ -485,7 +488,7 @@ def main():
                             continue
                         yield Completion(key, -len(before_dot))
             except Exception as e:
-                print(e)
+                self._print(e)
 
         def _get_keys(self, code):
             return sorted(

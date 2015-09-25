@@ -67,8 +67,9 @@ class TracerProfile(object):
     def __init__(self, spec):
         self._spec = spec
 
-    def resolve(self, session):
+    def resolve(self, session, log_handler=None):
         script = session.create_script(name="profile-resolver", source=self._create_resolver_script())
+        script.set_log_handler(log_handler)
         result = [None, None]
         completed = threading.Event()
         def on_message(message, data):
@@ -922,11 +923,12 @@ function regExpEscape(s) {
 """
 
 class Tracer(object):
-    def __init__(self, reactor, repository, profile):
+    def __init__(self, reactor, repository, profile, log_handler=None):
         self._reactor = reactor
         self._repository = repository
         self._profile = profile
         self._script = None
+        self._log_handler = log_handler
 
     def start_trace(self, session, ui):
         def on_create(*args):
@@ -955,9 +957,10 @@ class Tracer(object):
             self._reactor.schedule(lambda: self._process_message(message, data, ui))
 
         ui.on_trace_progress('resolve')
-        working_set = self._profile.resolve(session)
+        working_set = self._profile.resolve(session, log_handler=self._log_handler)
         ui.on_trace_progress('instrument')
         self._script = session.create_script(name="tracer", source=self._create_trace_script())
+        self._script.set_log_handler(self._log_handler)
         self._script.on('message', on_message)
         self._script.load()
         for chunk in [working_set[i:i+1000] for i in range(0, len(working_set), 1000)]:
@@ -1399,11 +1402,11 @@ def main():
             return True
 
         def _start(self):
-            self._tracer = Tracer(self._reactor, FileRepository(), self._profile)
+            self._tracer = Tracer(self._reactor, FileRepository(), self._profile, log_handler=self._log)
             self._targets = self._tracer.start_trace(self._session, self)
 
         def _stop(self):
-            print("Stopping...")
+            self._print("Stopping...")
             self._tracer.stop()
             self._tracer = None
 
@@ -1428,24 +1431,23 @@ def main():
                 self._resume()
 
         def on_trace_error(self, error):
-            print(Fore.RED + Style.BRIGHT + "Error" + Style.RESET_ALL + ": " + error['message'])
+            self._print(Fore.RED + Style.BRIGHT + "Error" + Style.RESET_ALL + ": " + error['message'])
 
         def on_trace_events(self, events):
-            self._status_updated = False
             no_attributes = Style.RESET_ALL
             for timestamp, thread_id, depth, target_address, message in events:
                 indent = depth * "   | "
                 attributes = self._get_attributes(thread_id)
                 if thread_id != self._last_event_tid:
-                    print("%s           /* TID 0x%x */%s" % (attributes, thread_id, Style.RESET_ALL))
+                    self._print("%s           /* TID 0x%x */%s" % (attributes, thread_id, Style.RESET_ALL))
                     self._last_event_tid = thread_id
-                print("%6d ms  %s%s%s%s" % (timestamp, attributes, indent, message, no_attributes))
+                self._print("%6d ms  %s%s%s%s" % (timestamp, attributes, indent, message, no_attributes))
 
         def on_trace_handler_create(self, function, handler, source):
-            print("%s: Auto-generated handler at \"%s\"" % (function, source))
+            self._print("%s: Auto-generated handler at \"%s\"" % (function, source))
 
         def on_trace_handler_load(self, function, handler, source):
-            print("%s: Loaded handler at \"%s\"" % (function, source))
+            self._print("%s: Loaded handler at \"%s\"" % (function, source))
 
         def _get_attributes(self, thread_id):
             attributes = self._attributes_by_thread_id.get(thread_id, None)
