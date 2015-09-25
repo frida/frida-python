@@ -423,6 +423,7 @@ class Script(object):
 
         self._impl = impl
         self._on_message_callbacks = []
+        self._log_handler = self._on_log
 
         self._pending = {}
         self._next_request_id = 1
@@ -453,6 +454,12 @@ class Script(object):
             self._on_message_callbacks.remove(callback)
         else:
             self._impl.off(signal, callback)
+
+    def set_log_handler(self, handler):
+        if handler is not None:
+            self._log_handler = handler
+        else:
+            self._log_handler = self._on_log
 
     def _rpc_request(self, *args):
         result = [False, None, None]
@@ -495,7 +502,9 @@ class Script(object):
         mtype = message['type']
         payload = message.get('payload', None)
         if mtype == 'log':
-            print(payload)
+            level = message.get('level', 'info')
+            text = payload
+            self._log_handler(level, text)
         elif mtype == 'send' and isinstance(payload, list) and payload[0] == 'frida:rpc':
             request_id = payload[1]
             operation = payload[2]
@@ -507,6 +516,12 @@ class Script(object):
                     callback(message, data)
                 except:
                     traceback.print_exc()
+
+    def _on_log(self, level, text):
+        if level == 'info':
+            print(text, file=sys.stdout)
+        else:
+            print(text, file=sys.stderr)
 
 class ScriptExports(object):
     def __init__(self, script):
