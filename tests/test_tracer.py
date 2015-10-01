@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from .data import target_program
 import platform
 import subprocess
 import threading
@@ -17,10 +18,7 @@ class TestTracer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         system = platform.system()
-        if system == 'Windows':
-            cls.target = subprocess.Popen([r"C:\Windows\notepad.exe"])
-        else:
-            cls.target = subprocess.Popen(["/bin/cat"])
+        cls.target = subprocess.Popen([target_program])
         cls.session = frida.attach(cls.target.pid)
 
     @classmethod
