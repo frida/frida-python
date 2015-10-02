@@ -485,14 +485,14 @@ class Script(object):
 
         return result[1]
 
-    def _on_rpc_message(self, request_id, operation, params):
+    def _on_rpc_message(self, request_id, operation, params, data):
         if operation in ('ok', 'error'):
             callback = self._pending.pop(request_id)
 
             value = None
             error = None
             if operation == 'ok':
-                value = params[0]
+                value = params[0] if data is None else data
             else:
                 error = Exception(params[0])
 
@@ -509,7 +509,7 @@ class Script(object):
             request_id = payload[1]
             operation = payload[2]
             params = payload[3:]
-            self._on_rpc_message(request_id, operation, params)
+            self._on_rpc_message(request_id, operation, params, data)
         else:
             for callback in self._on_message_callbacks[:]:
                 try:
