@@ -52,7 +52,7 @@ class FridaPrebuiltExt(build_ext):
             if system == 'Windows':
                 os_version = "win-amd64" if arch == 64 else "win32"
             elif system == 'Darwin':
-                os_version = "macosx-10.6-intel" if sys.version_info[0] == 3 else "macosx-10.10-intel"
+                os_version = "macosx-10.6-intel" if sys.version_info[0] == 3 else "macosx-10.11-intel"
             elif system == 'Linux':
                 os_version = "linux-x86_64" if arch == 64 else "linux-i686"
             egg_url = "https://pypi.python.org/packages/{python_version}/f/frida/frida-{frida_version}-py{python_version}-{os_version}.egg".format(
