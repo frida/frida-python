@@ -65,7 +65,7 @@ class FridaPrebuiltExt(build_ext):
                 print('downloading prebuilt extension from', egg_url)
                 egg_data = urlopen(egg_url).read()
             except:
-                egg_url = re.sub(r".*/f/frida/(.*)","file:///\g<1>",egg_url)
+                egg_url = re.sub(r".*/f/frida/(.*)", "file:///\g<1>", egg_url)
                 print('trying to get prebuilt extension from the current folder', egg_url)
                 egg_data = urlopen(egg_url).read()
 
