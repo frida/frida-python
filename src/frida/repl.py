@@ -488,7 +488,7 @@ def main():
                             continue
                         yield Completion(key, -len(before_dot))
             except Exception as e:
-                self._print(e)
+                self._repl._print(e)
 
         def _get_keys(self, code):
             return sorted(
