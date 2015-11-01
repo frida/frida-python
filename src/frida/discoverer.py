@@ -37,8 +37,8 @@ class Discoverer(object):
         return """"use strict";\
 
 function Sampler() {
-    let threadIds = [];
-    let result = {};
+    var threadIds = [];
+    var result = {};
 
     function onStanza(stanza) {
         if (stanza.to === "/sampler") {
@@ -49,14 +49,14 @@ function Sampler() {
         recv(onStanza);
     }
 
-    this.start = () => {
+    this.start = function () {
         threadIds = [];
         Process.enumerateThreads({
             onMatch(thread) {
                 threadIds.push(thread.id);
             },
             onComplete() {
-                threadIds.forEach(threadId => {
+                threadIds.forEach(function (threadId) {
                     Stalker.follow(threadId, {
                         events: { call: true },
                         onCallSummary(summary) {
@@ -82,7 +82,7 @@ function Sampler() {
     };
 
     function stop() {
-        threadIds.forEach(threadId => {
+        threadIds.forEach(function (threadId) {
             Stalker.unfollow(threadId);
         });
         threadIds = [];
@@ -100,8 +100,8 @@ function Sampler() {
     recv(onStanza);
 };
 
-const sampler = new Sampler();
-setTimeout(() => { sampler.start(); }, 0);
+var sampler = new Sampler();
+setTimeout(function () { sampler.start(); }, 0);
 """
 
     def _process_message(self, message, data, session, ui):
