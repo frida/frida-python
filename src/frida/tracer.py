@@ -127,7 +127,7 @@ class TracerProfile(object):
     def _create_resolver_script(self):
         return r""""use strict";
 
-recv(spec => {
+recv(function (spec) {
     try {
         send({
             name: '+result',
@@ -136,16 +136,16 @@ recv(spec => {
     } catch (e) {
         send({
             name: '+error',
-            payload: e.stack
+            payload: Script.symbolicate(e).stack
         });
     }
 });
 
 function resolve(spec) {
-    const workingSet = spec.reduce((workingSet, item) => {
-        const operation = item[0];
-        const scope = item[1];
-        const param = item[2];
+    var workingSet = spec.reduce(function (workingSet, item) {
+        var operation = item[0];
+        var scope = item[1];
+        var param = item[2];
         switch (scope) {
             case 'module':
                 if (operation === 'include')
@@ -175,14 +175,14 @@ function resolve(spec) {
         return workingSet;
     }, {});
 
-    const modules = {};
-    const targets = [];
-    for (let address in workingSet) {
+    var modules = {};
+    var targets = [];
+    for (var address in workingSet) {
         if (workingSet.hasOwnProperty(address)) {
-            const target = workingSet[address];
-            const moduleId = target.module;
+            var target = workingSet[address];
+            var moduleId = target.module;
             if (moduleId !== undefined && !modules.hasOwnProperty(moduleId)) {
-                const m = allModules()[moduleId];
+                var m = allModules()[moduleId];
                 delete m._cachedFunctionExports;
                 modules[moduleId] = m;
             }
@@ -196,14 +196,14 @@ function resolve(spec) {
 }
 
 function includeModule(pattern, workingSet) {
-    const mm = new Minimatch(pattern);
-    const modules = allModules();
-    for (let moduleIndex = 0; moduleIndex !== modules.length; moduleIndex++) {
-        const module = modules[moduleIndex];
+    var mm = new Minimatch(pattern);
+    var modules = allModules();
+    for (var moduleIndex = 0; moduleIndex !== modules.length; moduleIndex++) {
+        var module = modules[moduleIndex];
         if (mm.match(module.name)) {
-            const functions = allFunctionExports(module);
-            for (let functionIndex = 0; functionIndex !== functions.length; functionIndex++) {
-                const func = functions[functionIndex];
+            var functions = allFunctionExports(module);
+            for (var functionIndex = 0; functionIndex !== functions.length; functionIndex++) {
+                var func = functions[functionIndex];
                 workingSet[func.address.toString()] = func;
             }
         }
@@ -212,14 +212,14 @@ function includeModule(pattern, workingSet) {
 }
 
 function excludeModule(pattern, workingSet) {
-    const mm = new Minimatch(pattern);
-    const modules = allModules();
-    for (let address in workingSet) {
+    var mm = new Minimatch(pattern);
+    var modules = allModules();
+    for (var address in workingSet) {
         if (workingSet.hasOwnProperty(address)) {
-            const target = workingSet[address];
-            const moduleId = target.module;
+            var target = workingSet[address];
+            var moduleId = target.module;
             if (moduleId !== undefined) {
-                const module = modules[moduleId];
+                var module = modules[moduleId];
                 if (mm.match(module.name))
                     delete workingSet[address];
             }
@@ -229,12 +229,12 @@ function excludeModule(pattern, workingSet) {
 }
 
 function includeFunction(pattern, workingSet) {
-    const mm = new Minimatch(pattern);
-    const modules = allModules();
-    for (let moduleIndex = 0; moduleIndex !== modules.length; moduleIndex++) {
-        const functions = allFunctionExports(modules[moduleIndex]);
-        for (let functionIndex = 0; functionIndex !== functions.length; functionIndex++) {
-            const func = functions[functionIndex];
+    var mm = new Minimatch(pattern);
+    var modules = allModules();
+    for (var moduleIndex = 0; moduleIndex !== modules.length; moduleIndex++) {
+        var functions = allFunctionExports(modules[moduleIndex]);
+        for (var functionIndex = 0; functionIndex !== functions.length; functionIndex++) {
+            var func = functions[functionIndex];
             if (mm.match(func.name))
                 workingSet[func.address.toString()] = func;
         }
@@ -243,10 +243,10 @@ function includeFunction(pattern, workingSet) {
 }
 
 function excludeFunction(pattern, workingSet) {
-    const mm = new Minimatch(pattern);
-    for (let address in workingSet) {
+    var mm = new Minimatch(pattern);
+    for (var address in workingSet) {
         if (workingSet.hasOwnProperty(address)) {
-            const target = workingSet[address];
+            var target = workingSet[address];
             if (mm.match(target.name))
                 delete workingSet[address];
         }
@@ -255,13 +255,13 @@ function excludeFunction(pattern, workingSet) {
 }
 
 function includeRelativeFunction(func, workingSet) {
-    const relativeToModule = func.module;
-    const modules = allModules();
-    for (let moduleIndex = 0; moduleIndex !== modules.length; moduleIndex++) {
-        const module = modules[moduleIndex];
+    var relativeToModule = func.module;
+    var modules = allModules();
+    for (var moduleIndex = 0; moduleIndex !== modules.length; moduleIndex++) {
+        var module = modules[moduleIndex];
         if (module.path === relativeToModule || module.name === relativeToModule) {
-            const relativeAddress = ptr(func.offset);
-            const absoluteAddress = module.base.add(relativeAddress);
+            var relativeAddress = ptr(func.offset);
+            var absoluteAddress = module.base.add(relativeAddress);
             workingSet[absoluteAddress] = {
                 name: "sub_" + relativeAddress.toString(16),
                 address: absoluteAddress,
@@ -274,56 +274,64 @@ function includeRelativeFunction(func, workingSet) {
 }
 
 function includeImports(pattern, workingSet) {
-    const modules = [];
+    var moduleIndex;
+
+    var modules = [];
     if (pattern === null) {
         modules.push(allModules()[0]);
     } else {
-        const mm = new Minimatch(pattern);
-        for (let module of allModules()) {
-            if (mm.match(module.name)) {
-                modules.push(module);
+        var mm = new Minimatch(pattern);
+        var candidates = allModules();
+        for (moduleIndex = 0; moduleIndex !== candidates.length; moduleIndex++) {
+            var candidate = candidates[moduleIndex];
+            if (mm.match(candidate.name)) {
+                modules.push(candidate);
                 break;
             }
         }
     }
 
-    for (let module of modules) {
-        const functions = allFunctionImports(module);
-        for (let func of functions)
+    for (moduleIndex = 0; moduleIndex !== modules.length; moduleIndex++) {
+        var functions = allFunctionImports(modules[moduleIndex]);
+        for (var functionIndex = 0; functionIndex !== functions.length; functionIndex++) {
+            var func = functions[functionIndex];
             workingSet[func.address.toString()] = func;
+        }
     }
 
     return workingSet;
 }
 
-let cachedObjCState = null;
+var cachedObjCState = null;
 function includeObjCMethod(method, workingSet) {
     if (!ObjC.available)
         throw new Error("Objective C runtime is not available");
 
     if (cachedObjCState === null)
         cachedObjCState = getObjCState();
-    const api = cachedObjCState.api;
-    const classInfo = cachedObjCState.classInfo;
+    var api = cachedObjCState.api;
+    var classInfo = cachedObjCState.classInfo;
 
-    const type = method.type;
-    const clsMm = new Minimatch(method.cls);
-    const methodMm = new Minimatch(method.name);
+    var type = method.type;
+    var clsMm = new Minimatch(method.cls);
+    var methodMm = new Minimatch(method.name);
 
     function addImps(clsPtr) {
-        const info = classInfo[clsPtr];
-        const name = info.name;
+        var i;
 
-        for (let i = 0; i != 2; i++) {
-            const currentType = i === 0? '-': '+';
-            const methods = i === 0? info.instanceMethods: info.classMethods;
+        var info = classInfo[clsPtr];
+        var name = info.name;
+
+        for (i = 0; i != 2; i++) {
+            var currentType = i === 0? '-': '+';
+            var methods = i === 0? info.instanceMethods: info.classMethods;
             if (type !== currentType && type !== '*') {
                 continue;
             }
 
-            for (let methodName in methods) {
+            for (var methodName in methods) {
                 if (methodMm.match(methodName)) {
-                    const impPtr = methods[methodName];
+                    var impPtr = methods[methodName];
                     if (!workingSet[impPtr]) {
                         workingSet[impPtr] = {
                             objc: {
@@ -340,12 +348,12 @@ function includeObjCMethod(method, workingSet) {
            }
         }
 
-        const subclasses = info.subclasses;
-        for (let i = 0; i !== subclasses.length; i++)
+        var subclasses = info.subclasses;
+        for (i = 0; i !== subclasses.length; i++)
             addImps(subclasses[i]);
     }
 
-    for (let className in ObjC.classes) {
+    for (var className in ObjC.classes) {
         if (clsMm.match(className)) {
             addImps(ObjC.classes[className].handle.toString());
         }
@@ -355,8 +363,8 @@ function includeObjCMethod(method, workingSet) {
 }
 
 function getObjCState() {
-    const api = {};
-    const apiSpec = {
+    var api = {};
+    var apiSpec = {
         class_getSuperclass: 1,
         class_copyMethodList: 2,
         object_getClass: 1,
@@ -364,28 +372,28 @@ function getObjCState() {
         method_getImplementation: 1,
         sel_getName: 1
     };
-    Object.keys(apiSpec).forEach(name => {
-        const funPtr = Module.findExportByName("libobjc.A.dylib", name);
-        const argCount = apiSpec[name];
-        const argTypes = [];
-        for (let i = 0; i !== argCount; i++)
+    Object.keys(apiSpec).forEach(function (name) {
+        var funPtr = Module.findExportByName("libobjc.A.dylib", name);
+        var argCount = apiSpec[name];
+        var argTypes = [];
+        for (var i = 0; i !== argCount; i++)
             argTypes.push('pointer');
         api[name] = new NativeFunction(funPtr, 'pointer', argTypes);
     });
 
-    const freePtr = Module.findExportByName("libSystem.B.dylib", "free");
-    const free = new NativeFunction(freePtr, 'void', ['pointer']);
+    var freePtr = Module.findExportByName("libSystem.B.dylib", "free");
+    var free = new NativeFunction(freePtr, 'void', ['pointer']);
 
-    const methodCountPtr = Memory.alloc(4);
+    var methodCountPtr = Memory.alloc(4);
     function addMethods(clsHandle, methodObj) {
-        const methods = api.class_copyMethodList(clsHandle, methodCountPtr);
-        const methodCount = Memory.readU32(methodCountPtr);
-        for (let i = 0; i !== methodCount; i++) {
-            const method = Memory.readPointer(methods.add(i * Process.pointerSize));
-            const sel = api.method_getName(method);
-            const methodName = Memory.readUtf8String(api.sel_getName(sel));
-            const imp = api.method_getImplementation(method);
-            const impPtr = imp.toString();
+        var methods = api.class_copyMethodList(clsHandle, methodCountPtr);
+        var methodCount = Memory.readU32(methodCountPtr);
+        for (var i = 0; i !== methodCount; i++) {
+            var method = Memory.readPointer(methods.add(i * Process.pointerSize));
+            var sel = api.method_getName(method);
+            var methodName = Memory.readUtf8String(api.sel_getName(sel));
+            var imp = api.method_getImplementation(method);
+            var impPtr = imp.toString();
 
             methodObj[methodName] = impPtr;
         }
@@ -393,12 +401,14 @@ function getObjCState() {
         free(methods);
     }
 
-    const classInfo = {};
-    const classes = ObjC.classes;
-    for (let className in classes) {
-        const klass = classes[className];
-        const clsHandle = klass.handle;
-        const clsPtr = clsHandle.toString();
+    var className, clsHandle, clsPtr;
+
+    var classInfo = {};
+    var classes = ObjC.classes;
+    for (className in classes) {
+        var klass = classes[className];
+        clsHandle = klass.handle;
+        clsPtr = clsHandle.toString();
         classInfo[clsPtr] = {
             name: className,
             subclasses: [],
@@ -409,12 +419,12 @@ function getObjCState() {
         addMethods(clsHandle, classInfo[clsPtr].instanceMethods);
         addMethods(api.object_getClass(clsHandle), classInfo[clsPtr].classMethods);
     }
-    for (let className in classes) {
-        const clsHandle = classes[className].handle;
-        const clsPtr = clsHandle.toString();
-        const superCls = api.class_getSuperclass(clsHandle);
+    for (className in classes) {
+        clsHandle = classes[className].handle;
+        clsPtr = clsHandle.toString();
+        var superCls = api.class_getSuperclass(clsHandle);
         if (!superCls.isNull()) {
-            const superClsPtr = superCls.toString();
+            var superClsPtr = superCls.toString();
             classInfo[superClsPtr].subclasses.push(clsPtr);
         }
     }
@@ -425,11 +435,11 @@ function getObjCState() {
     };
 }
 
-let cachedModules = null;
+var cachedModules = null;
 function allModules() {
     if (cachedModules === null) {
         cachedModules = Process.enumerateModulesSync();
-        cachedModules._idByPath = cachedModules.reduce((mappings, module, index) => {
+        cachedModules._idByPath = cachedModules.reduce(function (mappings, module, index) {
             mappings[module.path] = index;
             return mappings;
         }, {});
@@ -439,16 +449,16 @@ function allModules() {
 
 function allFunctionImports(module) {
     if (!module.hasOwnProperty('_cachedFunctionImports')) {
-        const moduleIdByPath = allModules()._idByPath;
+        var moduleIdByPath = allModules()._idByPath;
         module._cachedFunctionImports = Module.enumerateImportsSync(module.path)
             .filter(isResolvedFunctionImport)
-            .map(imp => {
-                const value = {
+            .map(function (imp) {
+                var value = {
                     name: imp.name,
                     address: imp.address
                 };
                 if (imp.hasOwnProperty('module')) {
-                    const moduleId = moduleIdByPath[imp.module];
+                    var moduleId = moduleIdByPath[imp.module];
                     if (moduleId !== undefined) {
                         value.module = moduleId;
                     }
@@ -462,10 +472,10 @@ function allFunctionImports(module) {
 
 function allFunctionExports(module) {
     if (!module.hasOwnProperty('_cachedFunctionExports')) {
-        const moduleId = allModules().indexOf(module);
+        var moduleId = allModules().indexOf(module);
         module._cachedFunctionExports = Module.enumerateExportsSync(module.path)
             .filter(isFunctionExport)
-            .map(exp => {
+            .map(function (exp) {
                 exp.module = moduleId;
                 return exp;
             });
@@ -509,30 +519,30 @@ function isFunctionExport(exp) {
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
 //
-const GLOBSTAR = Minimatch.GLOBSTAR = {};
-const qmark = '[^/]';
-const star = qmark + '*?';
-const twoStarDot = '(?:(?!(?:\\\/|^)(?:\\.{1,2})($|\\\/)).)*?';
-const twoStarNoDot = '(?:(?!(?:\\\/|^)\\.).)*?';
-const reSpecials = charSet('().*{}+?[]^$\\!');
+var GLOBSTAR = Minimatch.GLOBSTAR = {};
+var qmark = '[^/]';
+var star = qmark + '*?';
+var twoStarDot = '(?:(?!(?:\\\/|^)(?:\\.{1,2})($|\\\/)).)*?';
+var twoStarNoDot = '(?:(?!(?:\\\/|^)\\.).)*?';
+var reSpecials = charSet('().*{}+?[]^$\\!');
 
 function charSet(s) {
-    return s.split("").reduce((set, c) => {
+    return s.split("").reduce(function (set, c) {
         set[c] = true;
         return set;
     }, {});
 }
 
-const slashSplit = /\/+/;
+var slashSplit = /\/+/;
 
 function ext(a, b) {
     a = a || {};
     b = b || {};
-    const t = {};
-    Object.keys(b).forEach(k => {
+    var t = {};
+    Object.keys(b).forEach(function (k) {
         t[k] = b[k];
     });
-    Object.keys(a).forEach(k => {
+    Object.keys(a).forEach(function (k) {
         t[k] = a[k];
     });
     return t;
@@ -558,8 +568,8 @@ Minimatch.prototype.make = function () {
     if (this._made)
         return;
 
-    const pattern = this.pattern;
-    const options = this.options;
+    var pattern = this.pattern;
+    var options = this.options;
 
     if (!options.nocomment && pattern.charAt(0) === '#') {
         this.comment = true;
@@ -572,17 +582,17 @@ Minimatch.prototype.make = function () {
 
     this.parseNegate();
 
-    let set = this.globSet = [this.pattern];
+    var set = this.globSet = [this.pattern];
 
-    set = this.globParts = set.map(s => {
+    set = this.globParts = set.map(function (s) {
         return s.split(slashSplit);
     });
 
-    set = set.map((s, si, set) => {
+    set = set.map(function (s, si, set) {
         return s.map(this.parse, this);
-    });
+    }, this);
 
-    set = set.filter(s => {
+    set = set.filter(function (s) {
         return s.indexOf(false) === -1;
     });
 
@@ -590,15 +600,15 @@ Minimatch.prototype.make = function () {
 };
 
 Minimatch.prototype.parseNegate = function () {
-    const pattern = this.pattern;
-    let negate = false;
-    const options = this.options;
-    let negateOffset = 0;
+    var pattern = this.pattern;
+    var negate = false;
+    var options = this.options;
+    var negateOffset = 0;
 
     if (options.nonegate)
         return;
 
-    for (let i = 0, l = pattern.length; i < l && pattern.charAt(i) === '!'; i++) {
+    for (var i = 0, l = pattern.length; i < l && pattern.charAt(i) === '!'; i++) {
         negate = !negate;
         negateOffset++;
     }
@@ -608,25 +618,25 @@ Minimatch.prototype.parseNegate = function () {
     this.negate = negate;
 };
 
-const SUBPARSE = {};
+var SUBPARSE = {};
 Minimatch.prototype.parse = function (pattern, isSub) {
-    const options = this.options;
+    var options = this.options;
 
     if (!options.noglobstar && pattern === '**')
         return GLOBSTAR;
     if (pattern === '')
         return '';
 
-    let re = '';
-    let hasMagic = !!options.nocase;
-    let escaping = false;
-    const patternListStack = [];
-    let stateChar;
-    let inClass = false;
-    let reClassStart = -1;
-    let classStart = -1;
-    let plType, cs;
-    const patternStart = pattern.charAt(0) === '.' ? '' : options.dot ? '(?!(?:^|\\\/)\\.{1,2}(?:$|\\\/))' : '(?!\\.)';
+    var re = '';
+    var hasMagic = !!options.nocase;
+    var escaping = false;
+    var patternListStack = [];
+    var stateChar;
+    var inClass = false;
+    var reClassStart = -1;
+    var classStart = -1;
+    var plType, cs;
+    var patternStart = pattern.charAt(0) === '.' ? '' : options.dot ? '(?!(?:^|\\\/)\\.{1,2}(?:$|\\\/))' : '(?!\\.)';
 
     function clearStateChar () {
         if (stateChar) {
@@ -647,7 +657,7 @@ Minimatch.prototype.parse = function (pattern, isSub) {
         }
     }
 
-    for (let i = 0, len = pattern.length, c; (i < len) && (c = pattern.charAt(i)); i++) {
+    for (var i = 0, len = pattern.length, c; (i < len) && (c = pattern.charAt(i)); i++) {
         if (escaping && reSpecials[c]) {
             re += '\\' + c;
             escaping = false;
@@ -765,7 +775,7 @@ Minimatch.prototype.parse = function (pattern, isSub) {
                     try {
                         new RegExp('[' + cs + ']');
                     } catch (er) {
-                        const sp = this.parse(cs, SUBPARSE);
+                        var sp = this.parse(cs, SUBPARSE);
                         re = re.substr(0, reClassStart) + '\\[' + sp[0] + '\\]';
                         hasMagic = hasMagic || sp[1];
                         inClass = false;
@@ -793,21 +803,21 @@ Minimatch.prototype.parse = function (pattern, isSub) {
 
     if (inClass) {
         cs = pattern.substr(classStart + 1);
-        const sp = this.parse(cs, SUBPARSE);
+        var sp = this.parse(cs, SUBPARSE);
         re = re.substr(0, reClassStart) + '\\[' + sp[0];
         hasMagic = hasMagic || sp[1];
     }
 
-    for (let pl = patternListStack.pop(); pl; pl = patternListStack.pop()) {
-        let tail = re.slice(pl.reStart + 3);
-        tail = tail.replace(/((?:\\{2})*)(\\?)\|/g, (_, $1, $2) => {
+    for (var pl = patternListStack.pop(); pl; pl = patternListStack.pop()) {
+        var tail = re.slice(pl.reStart + 3);
+        tail = tail.replace(/((?:\\{2})*)(\\?)\|/g, function (_, $1, $2) {
             if (!$2)
                 $2 = '\\';
 
             return $1 + $1 + $2 + '|';
         });
 
-        const t = pl.type === '*' ? star : pl.type === '?' ? qmark : '\\' + pl.type;
+        var t = pl.type === '*' ? star : pl.type === '?' ? qmark : '\\' + pl.type;
         hasMagic = true;
         re = re.slice(0, pl.reStart) + t + '\\(' + tail;
     }
@@ -816,7 +826,7 @@ Minimatch.prototype.parse = function (pattern, isSub) {
     if (escaping)
         re += '\\\\';
 
-    let addPatternStart = false;
+    var addPatternStart = false;
     switch (re.charAt(0)) {
         case '.':
         case '[':
@@ -836,8 +846,8 @@ Minimatch.prototype.parse = function (pattern, isSub) {
     if (!hasMagic)
         return globUnescape(pattern);
 
-    const flags = options.nocase ? 'i' : '';
-    const regExp = new RegExp('^' + re + '$', flags);
+    var flags = options.nocase ? 'i' : '';
+    var regExp = new RegExp('^' + re + '$', flags);
 
     regExp._glob = pattern;
     regExp._src = re;
@@ -849,19 +859,19 @@ Minimatch.prototype.makeRe = function () {
     if (this.regexp || this.regexp === false)
         return this.regexp;
 
-    const set = this.set;
+    var set = this.set;
 
     if (!set.length) {
         this.regexp = false;
         return this.regexp;
     }
-    const options = this.options;
+    var options = this.options;
 
-    const twoStar = options.noglobstar ? star : options.dot ? twoStarDot : twoStarNoDot;
-    const flags = options.nocase ? 'i' : '';
+    var twoStar = options.noglobstar ? star : options.dot ? twoStarDot : twoStarNoDot;
+    var flags = options.nocase ? 'i' : '';
 
-    let re = set.map(pattern => {
-        return pattern.map(p => {
+    var re = set.map(function (pattern) {
+        return pattern.map(function (p) {
             return (p === GLOBSTAR) ? twoStar : (typeof p === 'string') ? regExpEscape(p) : p._src;
         }).join('\\\/');
     }).join('|');
@@ -888,14 +898,14 @@ Minimatch.prototype.match = function (f, partial) {
     if (f === '/' && partial)
         return true;
 
-    const options = this.options;
+    var options = this.options;
 
     f = f.split(slashSplit);
 
-    const set = this.set;
+    var set = this.set;
 
-    let filename;
-    let i;
+    var filename;
+    var i;
     for (i = f.length - 1; i >= 0; i--) {
         filename = f[i];
         if (filename)
@@ -903,9 +913,9 @@ Minimatch.prototype.match = function (f, partial) {
     }
 
     for (i = 0; i < set.length; i++) {
-        const pattern = set[i];
-        const file = (options.matchBase && pattern.length === 1) ? [filename] : f;
-        const hit = this.matchOne(file, pattern, partial);
+        var pattern = set[i];
+        var file = (options.matchBase && pattern.length === 1) ? [filename] : f;
+        var hit = this.matchOne(file, pattern, partial);
         if (hit) {
             if (options.flipNegate)
                 return true;
@@ -919,19 +929,19 @@ Minimatch.prototype.match = function (f, partial) {
 };
 
 Minimatch.prototype.matchOne = function (file, pattern, partial) {
-    const options = this.options;
+    var options = this.options;
 
-    let fi, pi, fl, pl;
+    var fi, pi, fl, pl;
     for (fi = 0, pi = 0, fl = file.length, pl = pattern.length; (fi < fl) && (pi < pl); fi++, pi++) {
-        const p = pattern[pi];
-        const f = file[fi];
+        var p = pattern[pi];
+        var f = file[fi];
 
         if (p === false)
             return false;
 
         if (p === GLOBSTAR) {
-            let fr = fi;
-            const pr = pi + 1;
+            var fr = fi;
+            var pr = pi + 1;
 
             if (pr === pl) {
                 for (; fi < fl; fi++) {
@@ -942,7 +952,7 @@ Minimatch.prototype.matchOne = function (file, pattern, partial) {
             }
 
             while (fr < fl) {
-                const swallowee = file[fr];
+                var swallowee = file[fr];
 
                 if (this.matchOne(file.slice(fr), pattern.slice(pr), partial)) {
                     return true;
@@ -959,7 +969,7 @@ Minimatch.prototype.matchOne = function (file, pattern, partial) {
             return false;
         }
 
-        let hit;
+        var hit;
         if (typeof p === 'string') {
             if (options.nocase)
                 hit = f.toLowerCase() === p.toLowerCase();
@@ -978,7 +988,7 @@ Minimatch.prototype.matchOne = function (file, pattern, partial) {
     } else if (fi === fl) {
         return partial;
     } else if (pi === pl) {
-        const emptyFileEnd = (fi === fl - 1) && (file[fi] === '');
+        var emptyFileEnd = (fi === fl - 1) && (file[fi] === '');
         return emptyFileEnd;
     }
 
@@ -1069,11 +1079,11 @@ class Tracer(object):
     def _create_trace_script(self):
         return """"use strict";
 
-const started = Date.now();
-const pending = [];
-let timer = null;
-const handlers = {};
-const state = {};
+var started = Date.now();
+var pending = [];
+var timer = null;
+var handlers = {};
+var state = {};
 function onStanza(stanza) {
     if (stanza.to === "/targets") {
         if (stanza.name === '+add') {
@@ -1088,24 +1098,24 @@ function onStanza(stanza) {
     recv(onStanza);
 }
 function add(targets) {
-    targets.forEach(target => {
-        const handler = parseHandler(target);
+    targets.forEach(function (target) {
+        var handler = parseHandler(target);
         if (handler === null)
             return;
-        const name = target.name;
-        const targetAddress = target.absolute_address;
+        var name = target.name;
+        var targetAddress = target.absolute_address;
         target = null;
 
-        const h = [handler];
+        var h = [handler];
         handlers[targetAddress] = h;
 
         function invokeCallback(callback, context, param) {
             if (callback === undefined)
                 return;
 
-            const timestamp = Date.now() - started;
-            const threadId = context.threadId;
-            const depth = context.depth;
+            var timestamp = Date.now() - started;
+            var threadId = context.threadId;
+            var depth = context.depth;
 
             function log(message) {
                 emit([timestamp, threadId, depth, targetAddress, message]);
@@ -1114,13 +1124,13 @@ function add(targets) {
             callback.call(context, log, param, state);
         }
 
-        pending.push(() => {
+        pending.push(function () {
             try {
                 Interceptor.attach(ptr(targetAddress), {
-                    onEnter(args) {
+                    onEnter: function (args) {
                         invokeCallback(h[0].onEnter, this, args);
                     },
-                    onLeave(retval) {
+                    onLeave: function (retval) {
                         invokeCallback(h[0].onLeave, this, retval);
                     }
                 });
@@ -1139,7 +1149,7 @@ function add(targets) {
     scheduleNext();
 }
 function update(targets) {
-    targets.forEach(target => {
+    targets.forEach(function (target) {
         handlers[target.absolute_address][0] = parseHandler(target);
     });
 }
@@ -1167,7 +1177,7 @@ function parseHandler(target) {
     }
 }
 function start() {
-    pending.push(() => {
+    pending.push(function () {
         send({
             from: "/targets",
             name: '+started',
@@ -1185,7 +1195,7 @@ function processNext() {
     timer = null;
 
     if (pending.length > 0) {
-        const work = pending.shift();
+        var work = pending.shift();
         work();
         scheduleNext();
     }
