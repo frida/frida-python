@@ -266,13 +266,13 @@ def main():
                 self._reload()
             elif command == 'time':
                 self._eval_and_print('''
-                    (() => {{
-                        const _startTime = Date.now();
-                        const _result = eval({expression});
-                        const _endTime = Date.now();
+                    (function () {
+                        var _startTime = Date.now();
+                        var _result = eval({expression});
+                        var _endTime = Date.now();
                         console.log('Time: ' + (_endTime - _startTime).toLocaleString() + ' ms.');
                         return _result;
-                    }})();'''.format(expression=json.dumps(' '.join(args))))
+                    })();'''.format(expression=json.dumps(' '.join(args))))
 
         def _reload(self):
             completed = threading.Event()
@@ -351,12 +351,12 @@ def main():
 
             return user_script + """\
 
-(() => {
+(function () {
     "use strict";
 
     function onEvaluate(expression) {
         try {
-            let result = (1, eval)(expression);
+            var result = (1, eval)(expression);
 
             if (isByteArray(result)) {
                 send({
@@ -366,7 +366,7 @@ def main():
                     }
                 }, result);
             } else {
-                const type = (result === null) ? 'null' : typeof result;
+                var type = (result === null) ? 'null' : typeof result;
                 send({
                     name: '+result',
                     payload: {
@@ -391,14 +391,14 @@ def main():
             return false;
         if (v instanceof Array) // Object returned by Memory.readByteArray() isn't an Array
             return false;
-        for (let i = 0; i !== v.length; i++) {
+        for (var i = 0; i !== v.length; i++) {
             if (typeof v[i] !== 'number')
                 return false;
         }
         return true;
     }
 
-    const onStanza = function (stanza) {
+    var onStanza = function (stanza) {
         switch (stanza.name) {
             case '.evaluate':
                 onEvaluate.call(this, stanza.payload.expression);
@@ -459,11 +459,11 @@ def main():
             try:
                 if encountered_dot:
                     for key in self._get_keys("""try {
-                                    (o => {
+                                    (function (o) {
                                         "use strict";
-                                        let k = Object.getOwnPropertyNames(o);
+                                        var k = Object.getOwnPropertyNames(o);
                                         if (o !== null && o !== undefined) {
-                                            let p;
+                                            var p;
                                             if (typeof o !== 'object')
                                                 p = o.__proto__;
                                             else
