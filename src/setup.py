@@ -87,7 +87,7 @@ setup(
     url="http://www.frida.re",
     install_requires=[
         "colorama >= 0.2.7",
-        "prompt-toolkit >= 0.38",
+        "prompt-toolkit == 0.38",
         "pygments >= 2.0.2"
     ],
     license="wxWindows Library Licence, Version 3.1",
