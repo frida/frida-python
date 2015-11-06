@@ -295,7 +295,7 @@ def main():
             device_type = self._device.type
             type_name = self._target[0]
             if self._target[0] == 'pid' and self._target[1] == 0:
-                target = 'Kernel'
+                target = 'System'
             else:
                 target = self._target[1]
 
