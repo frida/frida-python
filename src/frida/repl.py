@@ -358,7 +358,7 @@ def main():
         try {
             var result = (1, eval)(expression);
 
-            if (isByteArray(result)) {
+            if (result instanceof ArrayBuffer) {
                 send({
                     name: '+result',
                     payload: {
@@ -384,18 +384,6 @@ def main():
                 }
             });
         }
-    }
-
-    function isByteArray(v) {
-        if (!v || typeof v !== 'object' || !('length' in v) || typeof v.length !== 'number' || v.length < 1)
-            return false;
-        if (v instanceof Array) // Object returned by Memory.readByteArray() isn't an Array
-            return false;
-        for (var i = 0; i !== v.length; i++) {
-            if (typeof v[i] !== 'number')
-                return false;
-        }
-        return true;
     }
 
     var onStanza = function (stanza) {
