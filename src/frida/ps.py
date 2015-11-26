@@ -48,9 +48,9 @@ def main():
                     "%-" + str(identifier_column_width) + "s"
                 for app in sorted(applications, key=cmp_to_key(compare_applications)):
                     if app.pid == 0:
-                        self._print(line_format % ("-", app.name, app.identifier))
+                        self._print(line_format % ("-", app.name.decode('utf-8'), app.identifier.decode('utf-8')))
                     else:
-                        self._print(line_format % (app.pid, app.name, app.identifier))
+                        self._print(line_format % (app.pid, app.name.decode('utf-8'), app.identifier.decode('utf-8')))
             else:
                 try:
                     processes = self._device.enumerate_processes()
@@ -65,7 +65,7 @@ def main():
                 self._print("%s  %s" % (pid_column_width * "-", name_column_width * "-"))
                 line_format = "%" + str(pid_column_width) + "d  %s"
                 for process in sorted(processes, key=cmp_to_key(compare_processes)):
-                    self._print(line_format % (process.pid, process.name))
+                    self._print(line_format % (process.pid, process.name.decode('utf-8')))
             self._exit(0)
 
     def compare_applications(a, b):
