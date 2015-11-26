@@ -22,6 +22,7 @@
 # include <crt_externs.h>
 #endif
 
+#define PyUnicode_FromUTF8String(str) PyUnicode_DecodeUTF8 (str, strlen (str), "strict")
 #if PY_MAJOR_VERSION >= 3
 # define MOD_INIT(name) PyMODINIT_FUNC PyInit_##name (void)
 # define MOD_DEF(ob, name, doc, methods) \
@@ -72,10 +73,10 @@ struct _PyDevice
 
   FridaDevice * handle;
 
-  const gchar * id;
-  const gchar * name;
+  PyObject * id;
+  PyObject * name;
   PyObject * icon;
-  const gchar * type;
+  PyObject * type;
 
   GList * on_spawned;
   GList * on_lost;
@@ -87,8 +88,8 @@ struct _PyApplication
 
   FridaApplication * handle;
 
-  const gchar * identifier;
-  const gchar * name;
+  PyObject * identifier;
+  PyObject * name;
   guint pid;
 };
 
@@ -99,7 +100,7 @@ struct _PyProcess
   FridaProcess * handle;
 
   guint pid;
-  const gchar * name;
+  PyObject * name;
 };
 
 struct _PySpawn
@@ -109,7 +110,7 @@ struct _PySpawn
   FridaSpawn * handle;
 
   guint pid;
-  const gchar * identifier;
+  PyObject * identifier;
 };
 
 struct _PyIcon
@@ -242,10 +243,10 @@ static PyMethodDef PyDevice_methods[] =
 
 static PyMemberDef PyDevice_members[] =
 {
-  { "id", T_STRING, G_STRUCT_OFFSET (PyDevice, id), READONLY, "Device ID."},
-  { "name", T_STRING, G_STRUCT_OFFSET (PyDevice, name), READONLY, "Human-readable device name."},
+  { "id", T_OBJECT_EX, G_STRUCT_OFFSET (PyDevice, id), READONLY, "Device ID."},
+  { "name", T_OBJECT_EX, G_STRUCT_OFFSET (PyDevice, name), READONLY, "Human-readable device name."},
   { "icon", T_OBJECT_EX, G_STRUCT_OFFSET (PyDevice, icon), READONLY, "Icon."},
-  { "type", T_STRING, G_STRUCT_OFFSET (PyDevice, type), READONLY, "Device type. One of: local, tether, remote."},
+  { "type", T_OBJECT_EX, G_STRUCT_OFFSET (PyDevice, type), READONLY, "Device type. One of: local, tether, remote."},
   { NULL }
 };
 
@@ -258,8 +259,8 @@ static PyMethodDef PyApplication_methods[] =
 
 static PyMemberDef PyApplication_members[] =
 {
-  { "identifier", T_STRING, G_STRUCT_OFFSET (PyApplication, identifier), READONLY, "Application identifier."},
-  { "name", T_STRING, G_STRUCT_OFFSET (PyApplication, name), READONLY, "Human-readable process name."},
+  { "identifier", T_OBJECT_EX, G_STRUCT_OFFSET (PyApplication, identifier), READONLY, "Application identifier."},
+  { "name", T_OBJECT_EX, G_STRUCT_OFFSET (PyApplication, name), READONLY, "Human-readable application name."},
   { "pid", T_UINT, G_STRUCT_OFFSET (PyApplication, pid), READONLY, "Process ID, or 0 if not running."},
   { NULL }
 };
@@ -274,14 +275,14 @@ static PyMethodDef PyProcess_methods[] =
 static PyMemberDef PyProcess_members[] =
 {
   { "pid", T_UINT, G_STRUCT_OFFSET (PyProcess, pid), READONLY, "Process ID."},
-  { "name", T_STRING, G_STRUCT_OFFSET (PyProcess, name), READONLY, "Human-readable process name."},
+  { "name", T_OBJECT_EX, G_STRUCT_OFFSET (PyProcess, name), READONLY, "Human-readable process name."},
   { NULL }
 };
 
 static PyMemberDef PySpawn_members[] =
 {
   { "pid", T_UINT, G_STRUCT_OFFSET (PySpawn, pid), READONLY, "Process ID."},
-  { "identifier", T_STRING, G_STRUCT_OFFSET (PySpawn, identifier), READONLY, "Application identifier."},
+  { "identifier", T_OBJECT_EX, G_STRUCT_OFFSET (PySpawn, identifier), READONLY, "Application identifier."},
   { NULL }
 };
 
@@ -808,16 +809,21 @@ PyDevice_from_handle (FridaDevice * handle)
   device = g_object_get_data (G_OBJECT (handle), "pyobject");
   if (device == NULL)
   {
+    const gchar * id, * name, * type;
     PyDevice * dev;
+
+    id = frida_device_get_id (handle);
+    name = frida_device_get_name (handle);
+    type = PyFrida_device_type_to_string (frida_device_get_dtype (handle));
 
     device = PyObject_CallFunction ((PyObject *) &PyDeviceType, NULL);
 
     dev = (PyDevice *) device;
     dev->handle = handle;
-    dev->id = frida_device_get_id (handle);
-    dev->name = frida_device_get_name (handle);
+    dev->id = PyUnicode_FromUTF8String (id);
+    dev->name = PyUnicode_FromUTF8String (name);
     dev->icon = PyIcon_from_handle (frida_device_get_icon (handle));
-    dev->type = PyFrida_device_type_to_string (frida_device_get_dtype (handle));
+    dev->type = PyUnicode_FromUTF8String (type);
 
     g_object_set_data (G_OBJECT (handle), "pyobject", device);
   }
@@ -861,7 +867,10 @@ PyDevice_dealloc (PyDevice * self)
     g_list_free_full (self->on_lost, (GDestroyNotify) Py_DecRef);
   }
 
+  Py_XDECREF (self->type);
   Py_XDECREF (self->icon);
+  Py_XDECREF (self->name);
+  Py_XDECREF (self->id);
 
   if (self->handle != NULL)
   {
@@ -877,7 +886,22 @@ PyDevice_dealloc (PyDevice * self)
 static PyObject *
 PyDevice_repr (PyDevice * self)
 {
-  return PyRepr_FromFormat ("Device(id=\"%s\", name=\"%s\", type='%s')", self->id, self->name, self->type);
+  PyObject * id_bytes, * name_bytes, * type_bytes, * result;
+
+  id_bytes = PyUnicode_AsUTF8String (self->id);
+  name_bytes = PyUnicode_AsUTF8String (self->name);
+  type_bytes = PyUnicode_AsUTF8String (self->type);
+
+  result = PyRepr_FromFormat ("Device(id=\"%s\", name=\"%s\", type='%s')",
+      PyBytes_AsString (id_bytes),
+      PyBytes_AsString (name_bytes),
+      PyBytes_AsString (type_bytes));
+
+  Py_XDECREF (type_bytes);
+  Py_XDECREF (name_bytes);
+  Py_XDECREF (id_bytes);
+
+  return result;
 }
 
 static PyObject *
@@ -1281,15 +1305,19 @@ PyDevice_on_lost (PyDevice * self, FridaDevice * handle)
 static PyObject *
 PyApplication_from_handle (FridaApplication * handle)
 {
+  const gchar * identifier, * name;
   PyObject * result;
   PyApplication * application;
+
+  identifier = frida_application_get_identifier (handle);
+  name = frida_application_get_name (handle);
 
   result = PyObject_CallFunction ((PyObject *) &PyApplicationType, NULL);
 
   application = (PyApplication *) result;
   application->handle = handle;
-  application->identifier = frida_application_get_identifier (handle);
-  application->name = frida_application_get_name (handle);
+  application->identifier = PyUnicode_FromUTF8String (identifier);
+  application->name = PyUnicode_FromUTF8String (name);
   application->pid = frida_application_get_pid (handle);
 
   return result;
@@ -1309,6 +1337,9 @@ PyApplication_init (PyApplication * self)
 static void
 PyApplication_dealloc (PyApplication * self)
 {
+  Py_XDECREF (self->name);
+  Py_XDECREF (self->identifier);
+
   if (self->handle != NULL)
     g_object_unref (self->handle);
 
@@ -1318,10 +1349,29 @@ PyApplication_dealloc (PyApplication * self)
 static PyObject *
 PyApplication_repr (PyApplication * self)
 {
+  PyObject * identifier_bytes, * name_bytes, * result;
+
+  identifier_bytes = PyUnicode_AsUTF8String (self->identifier);
+  name_bytes = PyUnicode_AsUTF8String (self->name);
+
   if (self->pid != 0)
-    return PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\", pid=%u)", self->identifier, self->name, self->pid);
+  {
+    result = PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\", pid=%u)",
+        PyBytes_AsString (identifier_bytes),
+        PyBytes_AsString (name_bytes),
+        self->pid);
+  }
   else
-    return PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\")", self->identifier, self->name);
+  {
+    result = PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\")",
+        PyBytes_AsString (identifier_bytes),
+        PyBytes_AsString (name_bytes));
+  }
+
+  Py_XDECREF (name_bytes);
+  Py_XDECREF (identifier_bytes);
+
+  return result;
 }
 
 static PyObject *
@@ -1340,15 +1390,18 @@ PyApplication_get_large_icon (PyApplication * self)
 static PyObject *
 PyProcess_from_handle (FridaProcess * handle)
 {
+  const gchar * name;
   PyObject * result;
   PyProcess * process;
+
+  name = frida_process_get_name (handle);
 
   result = PyObject_CallFunction ((PyObject *) &PyProcessType, NULL);
 
   process = (PyProcess *) result;
   process->handle = handle;
   process->pid = frida_process_get_pid (handle);
-  process->name = frida_process_get_name (handle);
+  process->name = PyUnicode_FromUTF8String (name);
 
   return result;
 }
@@ -1367,6 +1420,8 @@ PyProcess_init (PyProcess * self)
 static void
 PyProcess_dealloc (PyProcess * self)
 {
+  Py_XDECREF (self->name);
+
   if (self->handle != NULL)
     g_object_unref (self->handle);
 
@@ -1376,7 +1431,17 @@ PyProcess_dealloc (PyProcess * self)
 static PyObject *
 PyProcess_repr (PyProcess * self)
 {
-  return PyRepr_FromFormat ("Process(pid=%u, name=\"%s\")", self->pid, self->name);
+  PyObject * name_bytes, * result;
+
+  name_bytes = PyUnicode_AsUTF8String (self->name);
+
+  result = PyRepr_FromFormat ("Process(pid=%u, name=\"%s\")",
+      self->pid,
+      PyBytes_AsString (name_bytes));
+
+  Py_XDECREF (name_bytes);
+
+  return result;
 }
 
 static PyObject *
@@ -1395,15 +1460,18 @@ PyProcess_get_large_icon (PyProcess * self)
 static PyObject *
 PySpawn_from_handle (FridaSpawn * handle)
 {
+  const gchar * identifier;
   PyObject * result;
   PySpawn * spawn;
+
+  identifier = frida_spawn_get_identifier (handle);
 
   result = PyObject_CallFunction ((PyObject *) &PySpawnType, NULL);
 
   spawn = (PySpawn *) result;
   spawn->handle = handle;
   spawn->pid = frida_spawn_get_pid (handle);
-  spawn->identifier = frida_spawn_get_identifier (handle);
+  spawn->identifier = PyUnicode_FromUTF8String (identifier);
 
   return result;
 }
@@ -1422,6 +1490,8 @@ PySpawn_init (PySpawn * self)
 static void
 PySpawn_dealloc (PySpawn * self)
 {
+  Py_XDECREF (self->identifier);
+
   if (self->handle != NULL)
     g_object_unref (self->handle);
 
@@ -1431,10 +1501,25 @@ PySpawn_dealloc (PySpawn * self)
 static PyObject *
 PySpawn_repr (PySpawn * self)
 {
+  PyObject * identifier_bytes, * result;
+
+  identifier_bytes = PyUnicode_AsUTF8String (self->identifier);
+
   if (self->identifier != NULL)
-    return PyRepr_FromFormat ("Spawn(pid=%u, identifier=\"%s\")", self->pid, self->identifier);
+  {
+    result = PyRepr_FromFormat ("Spawn(pid=%u, identifier=\"%s\")",
+        self->pid,
+        PyBytes_AsString (identifier_bytes));
+  }
   else
-    return PyRepr_FromFormat ("Spawn(pid=%u)", self->pid);
+  {
+    result = PyRepr_FromFormat ("Spawn(pid=%u)",
+        self->pid);
+  }
+
+  Py_XDECREF (identifier_bytes);
+
+  return result;
 }
 
 
