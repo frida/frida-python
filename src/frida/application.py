@@ -250,7 +250,18 @@ class ConsoleApplication(object):
         self._console_state = ConsoleState.STATUS
 
     def _print(self, *args, **kwargs):
-        print(*args, **kwargs)
+        encoded_args = []
+        if sys.version_info[0] >= 3:
+            string_type = str
+        else:
+            string_type = unicode
+        encoding = sys.stdout.encoding
+        for arg in args:
+            if isinstance(arg, string_type):
+                encoded_args.append(arg.encode(encoding, errors='replace'))
+            else:
+                encoded_args.append(arg)
+        print(*encoded_args, **kwargs)
         self._console_state = ConsoleState.TEXT
 
     def _log(self, level, text):
