@@ -2,6 +2,7 @@
 from __future__ import unicode_literals, print_function
 
 import binascii
+import codecs
 import os
 import platform
 import re
@@ -1413,7 +1414,7 @@ class FileRepository(Repository):
             try:
                 new_mtime = os.stat(handler_file).st_mtime
                 if new_mtime != handler_mtime:
-                    with open(handler_file, 'r') as f:
+                    with codecs.open(handler_file, 'r', 'utf-8') as f:
                         new_handler = f.read()
                     changed = new_handler != handler
                     handler = new_handler
