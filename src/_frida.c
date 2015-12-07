@@ -8,6 +8,7 @@
 
 #ifdef _MSC_VER
 # pragma warning (push)
+# pragma warning (disable: 4115)
 # pragma warning (disable: 4211)
 #endif
 #ifdef _POSIX_C_SOURCE
