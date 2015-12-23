@@ -1283,7 +1283,7 @@ class Repository(object):
                         man_argv.extend(["-E", "UTF-8"])
                     man_argv.extend(["-P", "col -b", "2", function.name])
                     output = subprocess.check_output(man_argv, stderr=devnull)
-                match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}" + function.name + r"\(.*\n(^.+$\n)*)(?:.|\n)*^DESCRIPTION", output.decode('UTF-8', errors='replace'), re.MULTILINE)
+                match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}\w+ \**?" + function.name + r"\((?:.+\,\s*?$\n)*?(?:.+\;$\n))(?:.|\n)*^DESCRIPTION", output.decode('UTF-8', errors='replace'), re.MULTILINE)
                 if match:
                     decl = match.group(1)
                     for argm in re.finditer(r"([^* ]*)\s*(,|\))", decl):
