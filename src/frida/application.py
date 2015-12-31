@@ -255,7 +255,7 @@ class ConsoleApplication(object):
             string_type = str
         else:
             string_type = unicode
-        encoding = sys.stdout.encoding
+        encoding = sys.stdout.encoding or 'UTF-8'
         for arg in args:
             if isinstance(arg, string_type):
                 encoded_args.append(arg.encode(encoding, errors='replace'))
