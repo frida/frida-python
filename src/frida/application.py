@@ -253,12 +253,14 @@ class ConsoleApplication(object):
         encoded_args = []
         if sys.version_info[0] >= 3:
             string_type = str
+            decoder = "unicode-escape"
         else:
             string_type = unicode
+            decoder = "string-escape"
         encoding = sys.stdout.encoding or 'UTF-8'
         for arg in args:
             if isinstance(arg, string_type):
-                encoded_args.append(arg.encode(encoding, errors='replace'))
+                encoded_args.append(arg.encode(encoding, errors='replace').decode(decoder))
             else:
                 encoded_args.append(arg)
         print(*encoded_args, **kwargs)
