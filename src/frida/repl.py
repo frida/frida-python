@@ -9,7 +9,7 @@ def main():
     import json
     import os
     import platform
-    from prompt_toolkit.shortcuts import create_default_application, create_default_output, create_eventloop
+    from prompt_toolkit.shortcuts import create_prompt_application, create_output, create_eventloop
     from prompt_toolkit.history import FileHistory
     from prompt_toolkit.completion import Completion, Completer
     from prompt_toolkit.interface import CommandLineInterface
@@ -111,9 +111,9 @@ def main():
                         eventloop = create_eventloop()
 
                         self._cli = CommandLineInterface(
-                            application=create_default_application(prompt, history=self._history, completer=self._completer, lexer=JavascriptLexer),
+                            application=create_prompt_application(prompt, history=self._history, completer=self._completer, lexer=JavascriptLexer),
                             eventloop=eventloop,
-                            output=create_default_output())
+                            output=create_output())
 
                         try:
                             line = None
