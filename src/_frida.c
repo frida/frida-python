@@ -198,6 +198,7 @@ static PyObject * PySession_detach (PySession * self);
 static PyObject * PySession_create_script (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_disable_debugger (PySession * self);
+static PyObject * PySession_disable_jit (PySession * self);
 static PyObject * PySession_on (PySession * self, PyObject * args);
 static PyObject * PySession_off (PySession * self, PyObject * args);
 static void PySession_on_detached (PySession * self, FridaSession * handle);
@@ -302,6 +303,7 @@ static PyMethodDef PySession_methods[] =
   { "create_script", (PyCFunction) PySession_create_script, METH_VARARGS | METH_KEYWORDS, "Create a new script." },
   { "enable_debugger", (PyCFunction) PySession_enable_debugger, METH_VARARGS | METH_KEYWORDS, "Enable the Node.js compatible script debugger." },
   { "disable_debugger", (PyCFunction) PySession_disable_debugger, METH_NOARGS, "Disable the Node.js compatible script debugger." },
+  { "disable_jit", (PyCFunction) PySession_disable_jit, METH_NOARGS, "Disable JIT." },
   { "on", (PyCFunction) PySession_on, METH_VARARGS, "Add an event handler." },
   { "off", (PyCFunction) PySession_off, METH_VARARGS, "Remove an event handler." },
   { NULL }
@@ -1685,6 +1687,20 @@ PySession_disable_debugger (PySession * self)
 
   Py_BEGIN_ALLOW_THREADS
   frida_session_disable_debugger_sync (self->handle, &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PySession_disable_jit (PySession * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_session_disable_jit_sync (self->handle, &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
