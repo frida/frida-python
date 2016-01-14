@@ -1326,7 +1326,7 @@ class Repository(object):
      * However, do not use this to store function arguments across onEnter/onLeave, but instead
      * use "this" which is an object for keeping state local to an invocation.
      */
-    onEnter(log, args, state) {
+    onEnter: function (log, args, state) {
         log(%(log_str)s);
     },
 
@@ -1340,7 +1340,7 @@ class Repository(object):
      * @param {NativePointer} retval - Return value represented as a NativePointer object.
      * @param {object} state - Object allowing you to keep state across function calls.
      */
-    onLeave(log, retval, state) {
+    onLeave: function (log, retval, state) {
     }
 }
 """ % {"display_name": display_name, "log_str": log_str}
