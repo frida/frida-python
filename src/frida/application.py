@@ -84,6 +84,8 @@ class ConsoleApplication(object):
                 type='int', action='callback', callback=store_target, callback_args=('pid',))
             parser.add_option("--debug", help="enable the Node.js compatible script debugger",
                 action='store_true', dest="enable_debugger", default=False)
+            parser.add_option("--disable-jit", help="disable JIT",
+                action='store_true', dest="disable_jit", default=False)
         self._add_options(parser)
 
         (options, args) = parser.parse_args()
@@ -97,8 +99,10 @@ class ConsoleApplication(object):
         self._session = None
         if self._needs_target():
             self._enable_debugger = options.enable_debugger
+            self._disable_jit = options.disable_jit
         else:
             self._enable_debugger = False
+            self._disable_jit = False
         self._schedule_on_session_detached = lambda: self._reactor.schedule(self._on_session_detached)
         self._started = False
         self._resumed = False
@@ -209,6 +213,8 @@ class ConsoleApplication(object):
                     self._update_status("Attaching...")
                 spawning = False
                 self._session = self._device.attach(attach_target)
+                if self._disable_jit:
+                    self._session.disable_jit()
                 if self._enable_debugger:
                     self._session.enable_debugger()
                     self._print("Debugger listening on port 5858\n")
