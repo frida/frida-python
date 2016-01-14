@@ -10,7 +10,7 @@ import subprocess
 import threading
 import time
 
-from frida.core import Module, ModuleFunction, ObjCMethod
+from frida.core import Function, Module, ModuleFunction, ObjCMethod
 
 
 class TracerProfileBuilder(object):
@@ -106,19 +106,25 @@ class TracerProfile(object):
 
         working_set = []
         for target in data['targets']:
-            module_id = target.get('module')
-            if module_id is not None:
-                module = modules[module_id]
-                relative_address = int(target["address"], 16) - module.base_address
-                exported = not target.get('private', False)
-                mf = ModuleFunction(module, target["name"], relative_address, exported)
-                if not self._is_blacklisted(mf):
-                    working_set.append(mf)
-            else:
-                objc = target['objc']
+            objc = target.get('objc')
+            if objc is not None:
                 method = objc['method']
                 of = ObjCMethod(method['type'], objc['className'], method['name'], int(target['address'], 16))
                 working_set.append(of)
+            else:
+                name = target['name']
+                absolute_address = int(target['address'], 16)
+                module_id = target.get('module')
+                if module_id is not None:
+                    module = modules[module_id]
+                    relative_address = absolute_address - module.base_address
+                    exported = not target.get('private', False)
+                    mf = ModuleFunction(module, name, relative_address, exported)
+                    if not self._is_blacklisted(mf):
+                        working_set.append(mf)
+                else:
+                    f = Function(name, absolute_address)
+                    working_set.append(f)
         return working_set
 
     def _is_blacklisted(self, module_function):
