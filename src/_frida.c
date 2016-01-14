@@ -197,7 +197,7 @@ static void PySession_dealloc (PySession * self);
 static PyObject * PySession_detach (PySession * self);
 static PyObject * PySession_create_script (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw);
-static PyObject * PySession_disable_debugger (PySession * self, PyObject * args);
+static PyObject * PySession_disable_debugger (PySession * self);
 static PyObject * PySession_on (PySession * self, PyObject * args);
 static PyObject * PySession_off (PySession * self, PyObject * args);
 static void PySession_on_detached (PySession * self, FridaSession * handle);
@@ -301,7 +301,7 @@ static PyMethodDef PySession_methods[] =
   { "detach", (PyCFunction) PySession_detach, METH_NOARGS, "Detach session from the process." },
   { "create_script", (PyCFunction) PySession_create_script, METH_VARARGS | METH_KEYWORDS, "Create a new script." },
   { "enable_debugger", (PyCFunction) PySession_enable_debugger, METH_VARARGS | METH_KEYWORDS, "Enable the Node.js compatible script debugger." },
-  { "disable_debugger", (PyCFunction) PySession_disable_debugger, METH_VARARGS, "Disable the Node.js compatible script debugger." },
+  { "disable_debugger", (PyCFunction) PySession_disable_debugger, METH_NOARGS, "Disable the Node.js compatible script debugger." },
   { "on", (PyCFunction) PySession_on, METH_VARARGS, "Add an event handler." },
   { "off", (PyCFunction) PySession_off, METH_VARARGS, "Remove an event handler." },
   { NULL }
@@ -1679,11 +1679,9 @@ PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw)
 }
 
 static PyObject *
-PySession_disable_debugger (PySession * self, PyObject * args)
+PySession_disable_debugger (PySession * self)
 {
   GError * error = NULL;
-
-  (void) args;
 
   Py_BEGIN_ALLOW_THREADS
   frida_session_disable_debugger_sync (self->handle, &error);
