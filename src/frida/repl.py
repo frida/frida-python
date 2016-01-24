@@ -3,7 +3,6 @@ from __future__ import unicode_literals, print_function
 
 def main():
     import codecs
-    from collections import deque
     from colorama import Fore, Style
     import frida
     from frida.application import ConsoleApplication
@@ -24,8 +23,9 @@ def main():
             self._script = None
             self._seqno = 0
             self._ready = threading.Event()
+            self._next_request_id = 1
             self._response_cond = threading.Condition()
-            self._response_queue = deque()
+            self._response_queue = []
             self._completor_locals = []
             self._history = FileHistory(os.path.join(os.path.expanduser('~'), '.frida_history'))
             self._completer = FridaCompleter(self)
@@ -312,13 +312,33 @@ def main():
             return prompt_string
 
         def _evaluate(self, text):
-            self._reactor.schedule(lambda: self._script.post_message({'name': '.evaluate', 'payload': {'expression': text}}))
+            request_id = -1
             with self._response_cond:
-                while len(self._response_queue) == 0:
+                request_id = self._next_request_id
+                self._next_request_id += 1
+
+            self._reactor.schedule(lambda: self._script.post_message({
+                'id': request_id,
+                'name': '.evaluate',
+                'payload': {
+                    'expression': text
+                }
+            }))
+
+            response = None
+            with self._response_cond:
+                while True:
+                    for r in self._response_queue:
+                        if r[0]['id'] == request_id:
+                            response = r
+                            break
+                    if response is not None:
+                        self._response_queue.remove(response)
+                        break
                     if not self._reactor.is_running():
                         raise frida.InvalidOperationError("Invalid operation while stopping")
                     self._response_cond.wait(0.5)
-                response = self._response_queue.popleft()
+
             stanza, data = response
             if data is not None:
                 return ('binary', data)
@@ -333,10 +353,10 @@ def main():
             message_type = message['type']
             if message_type == 'send':
                 stanza = message['payload']
+                response = (stanza, data)
                 with self._response_cond:
-                    response = (stanza, data)
                     self._response_queue.append(response)
-                    self._response_cond.notify()
+                    self._response_cond.notify_all()
             elif message_type == 'error':
                 text = message.get('stack', message['description'])
                 self._log('error', text)
@@ -355,12 +375,13 @@ def main():
 (function () {
     "use strict";
 
-    function onEvaluate(expression) {
+    function onEvaluate(requestId, expression) {
         try {
             var result = (1, eval)(expression);
 
             if (result instanceof ArrayBuffer) {
                 send({
+                    id: requestId,
                     name: '+result',
                     payload: {
                         type: 'binary'
@@ -369,6 +390,7 @@ def main():
             } else {
                 var type = (result === null) ? 'null' : typeof result;
                 send({
+                    id: requestId,
                     name: '+result',
                     payload: {
                         type: type,
@@ -378,6 +400,7 @@ def main():
             }
         } catch (e) {
             send({
+                id: requestId,
                 name: '+error',
                 payload: {
                     name: e.name,
@@ -390,7 +413,7 @@ def main():
     var onStanza = function (stanza) {
         switch (stanza.name) {
             case '.evaluate':
-                onEvaluate.call(this, stanza.payload.expression);
+                onEvaluate.call(this, stanza.id, stanza.payload.expression);
                 break;
         }
 
