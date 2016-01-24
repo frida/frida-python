@@ -3,6 +3,7 @@ from __future__ import unicode_literals, print_function
 
 def main():
     import codecs
+    from collections import deque
     from colorama import Fore, Style
     import frida
     from frida.application import ConsoleApplication
@@ -24,7 +25,7 @@ def main():
             self._seqno = 0
             self._ready = threading.Event()
             self._response_cond = threading.Condition()
-            self._response_data = None
+            self._response_queue = deque()
             self._completor_locals = []
             self._history = FileHistory(os.path.join(os.path.expanduser('~'), '.frida_history'))
             self._completer = FridaCompleter(self)
@@ -313,12 +314,11 @@ def main():
         def _evaluate(self, text):
             self._reactor.schedule(lambda: self._script.post_message({'name': '.evaluate', 'payload': {'expression': text}}))
             with self._response_cond:
-                while self._response_data is None:
+                while len(self._response_queue) == 0:
                     if not self._reactor.is_running():
                         raise frida.InvalidOperationError("Invalid operation while stopping")
                     self._response_cond.wait(0.5)
-                response = self._response_data
-                self._response_data = None
+                response = self._response_queue.popleft()
             stanza, data = response
             if data is not None:
                 return ('binary', data)
@@ -334,7 +334,8 @@ def main():
             if message_type == 'send':
                 stanza = message['payload']
                 with self._response_cond:
-                    self._response_data = (stanza, data)
+                    response = (stanza, data)
+                    self._response_queue.append(response)
                     self._response_cond.notify()
             elif message_type == 'error':
                 text = message.get('stack', message['description'])
