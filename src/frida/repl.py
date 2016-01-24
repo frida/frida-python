@@ -499,6 +499,8 @@ def main():
                         if not key.startswith(before_dot) or (key.startswith('_') and before_dot == ''):
                             continue
                         yield Completion(key, -len(before_dot))
+            except frida.InvalidOperationError:
+                pass
             except Exception as e:
                 self._repl._print(e)
 
