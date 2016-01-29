@@ -1030,17 +1030,11 @@ class Tracer(object):
         self._repository.on_load(on_load)
 
         def on_update(function, handler, source):
-            self._script.post_message({
-                'to': "/targets",
-                'name': '+update',
-                'payload': {
-                    'items': [{
-                        'name': function.name,
-                        'absolute_address': hex(function.absolute_address),
-                        'handler': handler
-                    }]
-                }
-            })
+            self._script.exports.update([{
+                'name': function.name,
+                'absolute_address': hex(function.absolute_address),
+                'handler': handler
+            }])
         self._repository.on_update(on_update)
 
         def on_message(message, data):
@@ -1059,19 +1053,9 @@ class Tracer(object):
                     'absolute_address': hex(function.absolute_address),
                     'handler': self._repository.ensure_handler(function)
                 } for function in chunk]
-            self._script.post_message({
-                'to': "/targets",
-                'name': '+add',
-                'payload': {
-                    'items': targets
-                }
-            })
+            self._script.exports.add(targets)
 
-        self._script.post_message({
-            'to': "/targets",
-            'name': '+start',
-            'payload': {}
-        })
+        self._reactor.schedule(lambda: ui.on_trace_progress('ready'))
 
         return working_set
 
@@ -1087,51 +1071,40 @@ class Tracer(object):
         return """"use strict";
 
 var started = Date.now();
-var pending = [];
-var timer = null;
 var handlers = {};
 var state = {};
-function onStanza(stanza) {
-    if (stanza.to === "/targets") {
-        if (stanza.name === '+add') {
-            add(stanza.payload.items);
-        } else if (stanza.name === '+update') {
-            update(stanza.payload.items);
-        } else if (stanza.name === '+start') {
-            start();
-        }
-    }
+var pending = [];
+var timer = null;
 
-    recv(onStanza);
-}
-function add(targets) {
-    targets.forEach(function (target) {
-        var handler = parseHandler(target);
-        if (handler === null)
-            return;
-        var name = target.name;
-        var targetAddress = target.absolute_address;
-        target = null;
-
-        var h = [handler];
-        handlers[targetAddress] = h;
-
-        function invokeCallback(callback, context, param) {
-            if (callback === undefined)
+rpc.exports = {
+    add: function (targets) {
+        try {
+        targets.forEach(function (target) {
+            var handler = parseHandler(target);
+            if (handler === null)
                 return;
+            var name = target.name;
+            var targetAddress = target.absolute_address;
+            target = null;
 
-            var timestamp = Date.now() - started;
-            var threadId = context.threadId;
-            var depth = context.depth;
+            var h = [handler];
+            handlers[targetAddress] = h;
 
-            function log(message) {
-                emit([timestamp, threadId, depth, targetAddress, message]);
+            function invokeCallback(callback, context, param) {
+                if (callback === undefined)
+                    return;
+
+                var timestamp = Date.now() - started;
+                var threadId = context.threadId;
+                var depth = context.depth;
+
+                function log(message) {
+                    emit([timestamp, threadId, depth, targetAddress, message]);
+                }
+
+                callback.call(context, log, param, state);
             }
 
-            callback.call(context, log, param, state);
-        }
-
-        pending.push(function () {
             try {
                 Interceptor.attach(ptr(targetAddress), {
                     onEnter: function (args) {
@@ -1151,24 +1124,37 @@ function add(targets) {
                 });
             }
         });
-    });
-
-    scheduleNext();
-}
-function update(targets) {
-    targets.forEach(function (target) {
-        handlers[target.absolute_address][0] = parseHandler(target);
-    });
-}
-function emit(event) {
-    send({
-        from: "/events",
-        name: '+add',
-        payload: {
-            items: [event]
+        } catch (e) {
+            console.log(e.stack);
         }
-    });
+    },
+    update: function (targets) {
+        targets.forEach(function (target) {
+            handlers[target.absolute_address][0] = parseHandler(target);
+        });
+    }
+};
+
+function emit(event) {
+    pending.push(event);
+
+    if (timer === null) {
+        timer = setTimeout(function () {
+            var items = pending;
+            pending = [];
+            timer = null;
+
+            send({
+                from: "/events",
+                name: '+add',
+                payload: {
+                    items: items
+                }
+            });
+        }, 50);
+    }
 }
+
 function parseHandler(target) {
     try {
         return (1, eval)("(" + target.handler + ")");
@@ -1183,31 +1169,6 @@ function parseHandler(target) {
         return null;
     }
 }
-function start() {
-    pending.push(function () {
-        send({
-            from: "/targets",
-            name: '+started',
-            payload: {}
-        });
-    });
-    scheduleNext();
-}
-function scheduleNext() {
-    if (timer === null) {
-        timer = setTimeout(processNext, 0);
-    }
-}
-function processNext() {
-    timer = null;
-
-    if (pending.length > 0) {
-        var work = pending.shift();
-        work();
-        scheduleNext();
-    }
-}
-recv(onStanza);
 """
 
     def _process_message(self, message, data, ui):
@@ -1223,9 +1184,6 @@ recv(onStanza);
                 for target_address in target_addresses:
                     self._repository.sync_handler(target_address)
 
-                handled = True
-            elif stanza['from'] == "/targets" and stanza['name'] == '+started':
-                ui.on_trace_progress('ready')
                 handled = True
             elif stanza['from'] == "/targets" and stanza['name'] == '+error':
                 ui.on_trace_error(stanza['payload'])
