@@ -78,7 +78,10 @@ class TracerProfile(object):
             print(message)
         script.on('message', on_message)
         script.load()
-        data = script.exports.resolve(self._spec)
+        try:
+            data = script.exports.resolve(self._spec)
+        finally:
+            script.unload()
 
         modules = {}
         for module_id, m in data['modules'].items():
