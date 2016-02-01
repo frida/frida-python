@@ -749,7 +749,11 @@ def main():
 
         def _start(self):
             self._tracer = Tracer(self._reactor, FileRepository(), self._profile, log_handler=self._log)
-            self._targets = self._tracer.start_trace(self._session, self)
+            try:
+                self._targets = self._tracer.start_trace(self._session, self)
+            except Exception as e:
+                self._update_status("Failed to start tracing: {error}".format(error=e))
+                self._exit(1)
 
         def _stop(self):
             self._print("Stopping...")
