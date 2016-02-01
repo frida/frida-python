@@ -48,6 +48,7 @@ class TracerProfileBuilder(object):
                 'module': m.group('module'),
                 'offset': int(m.group('offset'), base=16)
             }))
+        return self
 
     def include_imports(self, *module_name_globs):
         for m in module_name_globs:
@@ -56,15 +57,8 @@ class TracerProfileBuilder(object):
 
     def include_objc_method(self, *function_name_globs):
         for f in function_name_globs:
-            match = re.search(r"([+*-])\[(\S+)\s+(\S+)\]", f)
-            if not match:
-                raise Exception("Format: -[NS*Number foo:bar:], +[Foo foo*] or *[Bar baz]")
-            mtype, cls, name = match.groups()
-            self._spec.append(('include', 'objc_method', {
-                'type': mtype,
-                'cls': cls,
-                'name': name
-            }))
+            self._spec.append(('include', 'objc_method', f))
+        return self
 
     def build(self):
         return TracerProfile(self._spec)
@@ -80,24 +74,11 @@ class TracerProfile(object):
     def resolve(self, session, log_handler=None):
         script = session.create_script(name="profile-resolver", source=self._create_resolver_script())
         script.set_log_handler(log_handler)
-        result = [None, None]
-        completed = threading.Event()
         def on_message(message, data):
-            assert message['type'] == 'send'
-            stanza = message['payload']
-            if stanza['name'] == '+result':
-                result[0] = stanza['payload']
-            else:
-                result[1] = Exception(stanza['payload'])
-            completed.set()
+            print(message)
         script.on('message', on_message)
         script.load()
-        script.post_message(self._spec)
-        completed.wait()
-        if result[1] is not None:
-            raise result[1]
-
-        data = result[0]
+        data = script.exports.resolve(self._spec)
 
         modules = {}
         for module_id, m in data['modules'].items():
@@ -134,130 +115,87 @@ class TracerProfile(object):
     def _create_resolver_script(self):
         return r""""use strict";
 
-recv(function (spec) {
-    try {
-        send({
-            name: '+result',
-            payload: resolve(spec)
-        });
-    } catch (e) {
-        send({
-            name: '+error',
-            payload: Script.symbolicate(e).stack
-        });
-    }
-});
-
-function resolve(spec) {
-    var workingSet = spec.reduce(function (workingSet, item) {
-        var operation = item[0];
-        var scope = item[1];
-        var param = item[2];
-        switch (scope) {
-            case 'module':
-                if (operation === 'include')
-                    workingSet = includeModule(param, workingSet);
-                else if (operation === 'exclude')
-                    workingSet = excludeModule(param, workingSet);
-                break;
-            case 'function':
-                if (operation === 'include')
-                    workingSet = includeFunction(param, workingSet);
-                else if (operation === 'exclude')
-                    workingSet = excludeFunction(param, workingSet);
-                break;
-            case 'relative_function':
-                if (operation === 'include')
-                    workingSet = includeRelativeFunction(param, workingSet);
-                break;
-            case 'imports':
-                if (operation === 'include')
-                    workingSet = includeImports(param, workingSet);
-                break;
-            case 'objc_method':
-                if (operation === 'include')
-                    workingSet = includeObjCMethod(param, workingSet);
-                break;
-        }
-        return workingSet;
-    }, {});
-
-    var modules = {};
-    var targets = [];
-    for (var address in workingSet) {
-        if (workingSet.hasOwnProperty(address)) {
-            var target = workingSet[address];
-            var moduleId = target.module;
-            if (moduleId !== undefined && !modules.hasOwnProperty(moduleId)) {
-                var m = allModules()[moduleId];
-                delete m._cachedFunctionExports;
-                modules[moduleId] = m;
+rpc.exports = {
+    resolve: function (spec) {
+        var workingSet = spec.reduce(function (workingSet, item) {
+            var operation = item[0];
+            var scope = item[1];
+            var param = item[2];
+            switch (scope) {
+                case 'module':
+                    if (operation === 'include')
+                        workingSet = includeModule(param, workingSet);
+                    else if (operation === 'exclude')
+                        workingSet = excludeModule(param, workingSet);
+                    break;
+                case 'function':
+                    if (operation === 'include')
+                        workingSet = includeFunction(param, workingSet);
+                    else if (operation === 'exclude')
+                        workingSet = excludeFunction(param, workingSet);
+                    break;
+                case 'relative_function':
+                    if (operation === 'include')
+                        workingSet = includeRelativeFunction(param, workingSet);
+                    break;
+                case 'imports':
+                    if (operation === 'include')
+                        workingSet = includeImports(param, workingSet);
+                    break;
+                case 'objc_method':
+                    if (operation === 'include')
+                        workingSet = includeObjCMethod(param, workingSet);
+                    break;
             }
-            targets.push(target);
+            return workingSet;
+        }, {});
+
+        var modules = {};
+        var targets = [];
+        for (var address in workingSet) {
+            if (workingSet.hasOwnProperty(address)) {
+                var target = workingSet[address];
+                var moduleId = target.module;
+                if (moduleId !== undefined && !modules.hasOwnProperty(moduleId)) {
+                    var m = allModules()[moduleId];
+                    delete m._cachedFunctionExports;
+                    modules[moduleId] = m;
+                }
+                targets.push(target);
+            }
         }
+        return {
+            modules: modules,
+            targets: targets
+        };
     }
-    return {
-        modules: modules,
-        targets: targets
-    };
-}
+};
 
 function includeModule(pattern, workingSet) {
-    var mm = new Minimatch(pattern);
-    var modules = allModules();
-    for (var moduleIndex = 0; moduleIndex !== modules.length; moduleIndex++) {
-        var module = modules[moduleIndex];
-        if (mm.match(module.name)) {
-            var functions = allFunctionExports(module);
-            for (var functionIndex = 0; functionIndex !== functions.length; functionIndex++) {
-                var func = functions[functionIndex];
-                workingSet[func.address.toString()] = func;
-            }
-        }
-    }
+    moduleResolver().enumerateMatchesSync('exports:' + pattern + '!*').forEach(function (m) {
+        workingSet[m.address.toString()] = moduleExportFromMatch(m);
+    });
     return workingSet;
 }
 
 function excludeModule(pattern, workingSet) {
-    var mm = new Minimatch(pattern);
-    var modules = allModules();
-    for (var address in workingSet) {
-        if (workingSet.hasOwnProperty(address)) {
-            var target = workingSet[address];
-            var moduleId = target.module;
-            if (moduleId !== undefined) {
-                var module = modules[moduleId];
-                if (mm.match(module.name))
-                    delete workingSet[address];
-            }
-        }
-    }
+    moduleResolver().enumerateMatchesSync('exports:' + pattern + '!*').forEach(function (m) {
+        delete workingSet[m.address.toString()];
+    });
     return workingSet;
 }
 
 function includeFunction(pattern, workingSet) {
-    var mm = new Minimatch(pattern);
-    var modules = allModules();
-    for (var moduleIndex = 0; moduleIndex !== modules.length; moduleIndex++) {
-        var functions = allFunctionExports(modules[moduleIndex]);
-        for (var functionIndex = 0; functionIndex !== functions.length; functionIndex++) {
-            var func = functions[functionIndex];
-            if (mm.match(func.name))
-                workingSet[func.address.toString()] = func;
-        }
-    }
+    moduleResolver().enumerateMatchesSync('exports:*!' + pattern).forEach(function (m) {
+        workingSet[m.address.toString()] = moduleExportFromMatch(m);
+    });
     return workingSet;
 }
 
 function excludeFunction(pattern, workingSet) {
-    var mm = new Minimatch(pattern);
-    for (var address in workingSet) {
-        if (workingSet.hasOwnProperty(address)) {
-            var target = workingSet[address];
-            if (mm.match(target.name))
-                delete workingSet[address];
-        }
-    }
+    moduleResolver().enumerateMatchesSync('exports:*!' + pattern).forEach(function (m) {
+        delete workingSet[m.address.toString()];
+    });
     return workingSet;
 }
 
@@ -281,165 +219,45 @@ function includeRelativeFunction(func, workingSet) {
 }
 
 function includeImports(pattern, workingSet) {
-    var moduleIndex;
-
-    var modules = [];
+    var matches;
     if (pattern === null) {
-        modules.push(allModules()[0]);
+        var mainModule = allModules()[0].path;
+        matches = moduleResolver().enumerateMatchesSync('imports:' + mainModule + '!*');
     } else {
-        var mm = new Minimatch(pattern);
-        var candidates = allModules();
-        for (moduleIndex = 0; moduleIndex !== candidates.length; moduleIndex++) {
-            var candidate = candidates[moduleIndex];
-            if (mm.match(candidate.name)) {
-                modules.push(candidate);
-                break;
-            }
-        }
+        matches = moduleResolver().enumerateMatchesSync('imports:' + pattern + '!*');
     }
 
-    for (moduleIndex = 0; moduleIndex !== modules.length; moduleIndex++) {
-        var functions = allFunctionImports(modules[moduleIndex]);
-        for (var functionIndex = 0; functionIndex !== functions.length; functionIndex++) {
-            var func = functions[functionIndex];
-            workingSet[func.address.toString()] = func;
-        }
-    }
-
-    return workingSet;
-}
-
-var cachedObjCState = null;
-function includeObjCMethod(method, workingSet) {
-    if (!ObjC.available)
-        throw new Error("Objective C runtime is not available");
-
-    if (cachedObjCState === null)
-        cachedObjCState = getObjCState();
-    var api = cachedObjCState.api;
-    var classInfo = cachedObjCState.classInfo;
-
-    var type = method.type;
-    var clsMm = new Minimatch(method.cls);
-    var methodMm = new Minimatch(method.name);
-
-    function addImps(clsPtr) {
-        var i;
-
-        var info = classInfo[clsPtr];
-        var name = info.name;
-
-        for (i = 0; i != 2; i++) {
-            var currentType = i === 0? '-': '+';
-            var methods = i === 0? info.instanceMethods: info.classMethods;
-            if (type !== currentType && type !== '*') {
-                continue;
-            }
-
-            for (var methodName in methods) {
-                if (methodMm.match(methodName)) {
-                    var impPtr = methods[methodName];
-                    if (!workingSet[impPtr]) {
-                        workingSet[impPtr] = {
-                            objc: {
-                                className: name,
-                                method: {
-                                    type: currentType,
-                                    name: methodName
-                                }
-                            },
-                            address: impPtr
-                        };
-                    }
-                }
-           }
-        }
-
-        var subclasses = info.subclasses;
-        for (i = 0; i !== subclasses.length; i++)
-            addImps(subclasses[i]);
-    }
-
-    for (var className in ObjC.classes) {
-        if (clsMm.match(className)) {
-            addImps(ObjC.classes[className].handle.toString());
-        }
-    }
-
-    return workingSet;
-}
-
-function getObjCState() {
-    var api = {};
-    var apiSpec = {
-        class_getSuperclass: 1,
-        class_copyMethodList: 2,
-        object_getClass: 1,
-        method_getName: 1,
-        method_getImplementation: 1,
-        sel_getName: 1
-    };
-    Object.keys(apiSpec).forEach(function (name) {
-        var funPtr = Module.findExportByName("libobjc.A.dylib", name);
-        var argCount = apiSpec[name];
-        var argTypes = [];
-        for (var i = 0; i !== argCount; i++)
-            argTypes.push('pointer');
-        api[name] = new NativeFunction(funPtr, 'pointer', argTypes);
+    matches.map(moduleExportFromMatch).forEach(function (e) {
+        workingSet[e.address.toString()] = e;
     });
 
-    var freePtr = Module.findExportByName("libSystem.B.dylib", "free");
-    var free = new NativeFunction(freePtr, 'void', ['pointer']);
+    return workingSet;
+}
 
-    var methodCountPtr = Memory.alloc(4);
-    function addMethods(clsHandle, methodObj) {
-        var methods = api.class_copyMethodList(clsHandle, methodCountPtr);
-        var methodCount = Memory.readU32(methodCountPtr);
-        for (var i = 0; i !== methodCount; i++) {
-            var method = Memory.readPointer(methods.add(i * Process.pointerSize));
-            var sel = api.method_getName(method);
-            var methodName = Memory.readUtf8String(api.sel_getName(sel));
-            var imp = api.method_getImplementation(method);
-            var impPtr = imp.toString();
+function includeObjCMethod(pattern, workingSet) {
+    objcResolver().enumerateMatchesSync(pattern).forEach(function (m) {
+        workingSet[m.address.toString()] = objcMethodFromMatch(m);
+    });
+    return workingSet;
+}
 
-            methodObj[methodName] = impPtr;
-        }
+var cachedModuleResolver = null;
+function moduleResolver() {
+    if (cachedModuleResolver === null)
+        cachedModuleResolver = new ApiResolver('module');
+    return cachedModuleResolver;
+}
 
-        free(methods);
-    }
-
-    var className, clsHandle, clsPtr;
-
-    var classInfo = {};
-    var classes = ObjC.classes;
-    for (className in classes) {
-        var klass = classes[className];
-        clsHandle = klass.handle;
-        clsPtr = clsHandle.toString();
-        classInfo[clsPtr] = {
-            name: className,
-            subclasses: [],
-            instanceMethods: {},
-            classMethods: {}
-        };
-
-        addMethods(clsHandle, classInfo[clsPtr].instanceMethods);
-        addMethods(api.object_getClass(clsHandle), classInfo[clsPtr].classMethods);
-    }
-    for (className in classes) {
-        clsHandle = classes[className].handle;
-        clsPtr = clsHandle.toString();
-        var superCls = api.class_getSuperclass(clsHandle);
-        if (!superCls.isNull()) {
-            var superClsPtr = superCls.toString();
-            classInfo[superClsPtr].subclasses.push(clsPtr);
+var cachedObjcResolver = null;
+function objcResolver() {
+    if (cachedObjcResolver === null) {
+        try {
+            cachedObjcResolver = new ApiResolver('objc');
+        } catch (e) {
+            throw new Error("Objective-C runtime is not available");
         }
     }
-
-    return {
-        api: api,
-        classInfo: classInfo
-    };
+    return cachedObjcResolver;
 }
 
 var cachedModules = null;
@@ -454,562 +272,35 @@ function allModules() {
     return cachedModules;
 }
 
-function allFunctionImports(module) {
-    if (!module.hasOwnProperty('_cachedFunctionImports')) {
-        var moduleIdByPath = allModules()._idByPath;
-        module._cachedFunctionImports = Module.enumerateImportsSync(module.path)
-            .filter(isResolvedFunctionImport)
-            .map(function (imp) {
-                var value = {
-                    name: imp.name,
-                    address: imp.address
-                };
-                if (imp.hasOwnProperty('module')) {
-                    var moduleId = moduleIdByPath[imp.module];
-                    if (moduleId !== undefined) {
-                        value.module = moduleId;
-                    }
-                }
-                return value;
-            });
-    }
-
-    return module._cachedFunctionImports;
+function moduleExportFromMatch(m) {
+    var encodedName = m.name;
+    var delimiterIndex = encodedName.indexOf('!');
+    var modulePath = encodedName.substring(0, delimiterIndex);
+    var functionName = encodedName.substring(delimiterIndex + 1);
+    return {
+        name: functionName,
+        address: m.address,
+        module: allModules()._idByPath[modulePath]
+    };
 }
 
-function allFunctionExports(module) {
-    if (!module.hasOwnProperty('_cachedFunctionExports')) {
-        var moduleId = allModules().indexOf(module);
-        module._cachedFunctionExports = Module.enumerateExportsSync(module.path)
-            .filter(isFunctionExport)
-            .map(function (exp) {
-                exp.module = moduleId;
-                return exp;
-            });
-    }
-
-    return module._cachedFunctionExports;
-}
-
-function isResolvedFunctionImport(imp) {
-    return imp.type === 'function' && imp.hasOwnProperty('address');
-}
-
-function isFunctionExport(exp) {
-    return exp.type === 'function';
-}
-
-
-// MINIMATCH BEGIN
-//
-// Copyright 2009, 2010, 2011 Isaac Z. Schlueter.
-// All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person
-// obtaining a copy of this software and associated documentation
-// files (the "Software"), to deal in the Software without
-// restriction, including without limitation the rights to use,
-// copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the
-// Software is furnished to do so, subject to the following
-// conditions:
-//
-// The above copyright notice and this permission notice shall be
-// included in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-// OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-// HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-// OTHER DEALINGS IN THE SOFTWARE.
-//
-var GLOBSTAR = Minimatch.GLOBSTAR = {};
-var qmark = '[^/]';
-var star = qmark + '*?';
-var twoStarDot = '(?:(?!(?:\\\/|^)(?:\\.{1,2})($|\\\/)).)*?';
-var twoStarNoDot = '(?:(?!(?:\\\/|^)\\.).)*?';
-var reSpecials = charSet('().*{}+?[]^$\\!');
-
-function charSet(s) {
-    return s.split("").reduce(function (set, c) {
-        set[c] = true;
-        return set;
-    }, {});
-}
-
-var slashSplit = /\/+/;
-
-function ext(a, b) {
-    a = a || {};
-    b = b || {};
-    var t = {};
-    Object.keys(b).forEach(function (k) {
-        t[k] = b[k];
-    });
-    Object.keys(a).forEach(function (k) {
-        t[k] = a[k];
-    });
-    return t;
-}
-
-function Minimatch(pattern, options) {
-    if (!options)
-        options = {};
-    pattern = pattern.trim();
-
-    this.options = options;
-    this.set = [];
-    this.pattern = pattern;
-    this.regexp = null;
-    this.negate = false;
-    this.comment = false;
-    this.empty = false;
-
-    this.make();
-}
-
-Minimatch.prototype.make = function () {
-    if (this._made)
-        return;
-
-    var pattern = this.pattern;
-    var options = this.options;
-
-    if (!options.nocomment && pattern.charAt(0) === '#') {
-        this.comment = true;
-        return;
-    }
-    if (!pattern) {
-        this.empty = true;
-        return;
-    }
-
-    this.parseNegate();
-
-    var set = this.globSet = [this.pattern];
-
-    set = this.globParts = set.map(function (s) {
-        return s.split(slashSplit);
-    });
-
-    set = set.map(function (s, si, set) {
-        return s.map(this.parse, this);
-    }, this);
-
-    set = set.filter(function (s) {
-        return s.indexOf(false) === -1;
-    });
-
-    this.set = set;
-};
-
-Minimatch.prototype.parseNegate = function () {
-    var pattern = this.pattern;
-    var negate = false;
-    var options = this.options;
-    var negateOffset = 0;
-
-    if (options.nonegate)
-        return;
-
-    for (var i = 0, l = pattern.length; i < l && pattern.charAt(i) === '!'; i++) {
-        negate = !negate;
-        negateOffset++;
-    }
-
-    if (negateOffset)
-        this.pattern = pattern.substr(negateOffset);
-    this.negate = negate;
-};
-
-var SUBPARSE = {};
-Minimatch.prototype.parse = function (pattern, isSub) {
-    var options = this.options;
-
-    if (!options.noglobstar && pattern === '**')
-        return GLOBSTAR;
-    if (pattern === '')
-        return '';
-
-    var re = '';
-    var hasMagic = !!options.nocase;
-    var escaping = false;
-    var patternListStack = [];
-    var stateChar;
-    var inClass = false;
-    var reClassStart = -1;
-    var classStart = -1;
-    var plType, cs;
-    var patternStart = pattern.charAt(0) === '.' ? '' : options.dot ? '(?!(?:^|\\\/)\\.{1,2}(?:$|\\\/))' : '(?!\\.)';
-
-    function clearStateChar () {
-        if (stateChar) {
-            switch (stateChar) {
-                case '*':
-                    re += star;
-                    hasMagic = true;
-                    break;
-                case '?':
-                    re += qmark;
-                    hasMagic = true;
-                    break;
-                default:
-                    re += '\\' + stateChar;
-                    break;
+function objcMethodFromMatch(m) {
+    var encodedName = m.name;
+    var methodType = encodedName[0];
+    var delimiterIndex = encodedName.indexOf(' ', 3);
+    var className = encodedName.substring(2, delimiterIndex);
+    var methodName = encodedName.substring(delimiterIndex + 1, encodedName.length - 1);
+    return {
+        objc: {
+            className: className,
+            method: {
+                type: methodType,
+                name: methodName
             }
-            stateChar = false;
-        }
-    }
-
-    for (var i = 0, len = pattern.length, c; (i < len) && (c = pattern.charAt(i)); i++) {
-        if (escaping && reSpecials[c]) {
-            re += '\\' + c;
-            escaping = false;
-            continue;
-        }
-
-        switch (c) {
-            case '/':
-                return false;
-
-            case '\\':
-                clearStateChar();
-                escaping = true;
-                continue;
-
-            case '?':
-            case '*':
-            case '+':
-            case '@':
-            case '!':
-                if (inClass) {
-                    if (c === '!' && i === classStart + 1)
-                        c = '^';
-                    re += c;
-                    continue;
-                }
-
-                clearStateChar();
-                stateChar = c;
-
-                if (options.noext)
-                    clearStateChar();
-
-                continue;
-
-            case '(': {
-                if (inClass) {
-                    re += '(';
-                    continue;
-                }
-
-                if (!stateChar) {
-                    re += '\\(';
-                    continue;
-                }
-
-                plType = stateChar;
-                patternListStack.push({ type: plType, start: i - 1, reStart: re.length });
-                re += stateChar === '!' ? '(?:(?!' : '(?:';
-                stateChar = false;
-
-                continue;
-            }
-            case ')': {
-                if (inClass || !patternListStack.length) {
-                    re += '\\)';
-                    continue;
-                }
-
-                clearStateChar();
-                hasMagic = true;
-                re += ')';
-                plType = patternListStack.pop().type;
-                switch (plType) {
-                    case '!':
-                        re += '[^/]*?)';
-                        break;
-                    case '?':
-                    case '+':
-                    case '*':
-                        re += plType;
-                        break;
-                    case '@':
-                        break;
-                }
-
-                continue;
-            }
-            case '|':
-                if (inClass || !patternListStack.length || escaping) {
-                    re += '\\|';
-                    escaping = false;
-                    continue;
-                }
-
-                clearStateChar();
-                re += '|';
-
-                continue;
-
-            case '[':
-                clearStateChar();
-
-                if (inClass) {
-                    re += '\\' + c;
-                    continue;
-                }
-
-                inClass = true;
-                classStart = i;
-                reClassStart = re.length;
-                re += c;
-
-                continue;
-
-            case ']':
-                if (i === classStart + 1 || !inClass) {
-                    re += '\\' + c;
-                    escaping = false;
-                    continue;
-                }
-
-                if (inClass) {
-                    cs = pattern.substring(classStart + 1, i);
-                    try {
-                        new RegExp('[' + cs + ']');
-                    } catch (er) {
-                        var sp = this.parse(cs, SUBPARSE);
-                        re = re.substr(0, reClassStart) + '\\[' + sp[0] + '\\]';
-                        hasMagic = hasMagic || sp[1];
-                        inClass = false;
-                        continue;
-                    }
-                }
-
-                hasMagic = true;
-                inClass = false;
-                re += c;
-
-                continue;
-
-            default:
-                clearStateChar();
-
-                if (escaping)
-                    escaping = false;
-                else if (reSpecials[c] && !(c === '^' && inClass))
-                    re += '\\';
-
-                re += c;
-        }
-    }
-
-    if (inClass) {
-        cs = pattern.substr(classStart + 1);
-        var sp = this.parse(cs, SUBPARSE);
-        re = re.substr(0, reClassStart) + '\\[' + sp[0];
-        hasMagic = hasMagic || sp[1];
-    }
-
-    for (var pl = patternListStack.pop(); pl; pl = patternListStack.pop()) {
-        var tail = re.slice(pl.reStart + 3);
-        tail = tail.replace(/((?:\\{2})*)(\\?)\|/g, function (_, $1, $2) {
-            if (!$2)
-                $2 = '\\';
-
-            return $1 + $1 + $2 + '|';
-        });
-
-        var t = pl.type === '*' ? star : pl.type === '?' ? qmark : '\\' + pl.type;
-        hasMagic = true;
-        re = re.slice(0, pl.reStart) + t + '\\(' + tail;
-    }
-
-    clearStateChar();
-    if (escaping)
-        re += '\\\\';
-
-    var addPatternStart = false;
-    switch (re.charAt(0)) {
-        case '.':
-        case '[':
-        case '(':
-            addPatternStart = true;
-    }
-
-    if (re !== '' && hasMagic)
-        re = '(?=.)' + re;
-
-    if (addPatternStart)
-        re = patternStart + re;
-
-    if (isSub === SUBPARSE)
-        return [re, hasMagic];
-
-    if (!hasMagic)
-        return globUnescape(pattern);
-
-    var flags = options.nocase ? 'i' : '';
-    var regExp = new RegExp('^' + re + '$', flags);
-
-    regExp._glob = pattern;
-    regExp._src = re;
-
-    return regExp;
-};
-
-Minimatch.prototype.makeRe = function () {
-    if (this.regexp || this.regexp === false)
-        return this.regexp;
-
-    var set = this.set;
-
-    if (!set.length) {
-        this.regexp = false;
-        return this.regexp;
-    }
-    var options = this.options;
-
-    var twoStar = options.noglobstar ? star : options.dot ? twoStarDot : twoStarNoDot;
-    var flags = options.nocase ? 'i' : '';
-
-    var re = set.map(function (pattern) {
-        return pattern.map(function (p) {
-            return (p === GLOBSTAR) ? twoStar : (typeof p === 'string') ? regExpEscape(p) : p._src;
-        }).join('\\\/');
-    }).join('|');
-
-    re = '^(?:' + re + ')$';
-
-    if (this.negate)
-        re = '^(?!' + re + ').*$';
-
-    try {
-        this.regexp = new RegExp(re, flags);
-    } catch (ex) {
-        this.regexp = false;
-    }
-    return this.regexp;
-};
-
-Minimatch.prototype.match = function (f, partial) {
-    if (this.comment)
-        return false;
-    if (this.empty)
-        return f === '';
-
-    if (f === '/' && partial)
-        return true;
-
-    var options = this.options;
-
-    f = f.split(slashSplit);
-
-    var set = this.set;
-
-    var filename;
-    var i;
-    for (i = f.length - 1; i >= 0; i--) {
-        filename = f[i];
-        if (filename)
-            break;
-    }
-
-    for (i = 0; i < set.length; i++) {
-        var pattern = set[i];
-        var file = (options.matchBase && pattern.length === 1) ? [filename] : f;
-        var hit = this.matchOne(file, pattern, partial);
-        if (hit) {
-            if (options.flipNegate)
-                return true;
-            return !this.negate;
-        }
-    }
-
-    if (options.flipNegate)
-        return false;
-    return this.negate;
-};
-
-Minimatch.prototype.matchOne = function (file, pattern, partial) {
-    var options = this.options;
-
-    var fi, pi, fl, pl;
-    for (fi = 0, pi = 0, fl = file.length, pl = pattern.length; (fi < fl) && (pi < pl); fi++, pi++) {
-        var p = pattern[pi];
-        var f = file[fi];
-
-        if (p === false)
-            return false;
-
-        if (p === GLOBSTAR) {
-            var fr = fi;
-            var pr = pi + 1;
-
-            if (pr === pl) {
-                for (; fi < fl; fi++) {
-                    if (file[fi] === '.' || file[fi] === '..' || (!options.dot && file[fi].charAt(0) === '.'))
-                        return false;
-                }
-                return true;
-            }
-
-            while (fr < fl) {
-                var swallowee = file[fr];
-
-                if (this.matchOne(file.slice(fr), pattern.slice(pr), partial)) {
-                    return true;
-                } else {
-                    if (swallowee === '.' || swallowee === '..' || (!options.dot && swallowee.charAt(0) === '.'))
-                        break;
-                    fr++;
-                }
-            }
-
-            if (partial && fr === fl)
-                return true;
-
-            return false;
-        }
-
-        var hit;
-        if (typeof p === 'string') {
-            if (options.nocase)
-                hit = f.toLowerCase() === p.toLowerCase();
-            else
-                hit = f === p;
-        } else {
-            hit = f.match(p);
-        }
-
-        if (!hit)
-            return false;
-    }
-
-    if (fi === fl && pi === pl) {
-        return true;
-    } else if (fi === fl) {
-        return partial;
-    } else if (pi === pl) {
-        var emptyFileEnd = (fi === fl - 1) && (file[fi] === '');
-        return emptyFileEnd;
-    }
-
-    throw new Error('wtf?');
-};
-
-function globUnescape(s) {
-    return s.replace(/\\(.)/g, '$1');
+        },
+        address: m.address
+    };
 }
-
-function regExpEscape(s) {
-    return s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
-}
-// MINIMATCH END
 """
 
 class Tracer(object):
