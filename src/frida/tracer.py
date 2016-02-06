@@ -703,7 +703,7 @@ def main():
         def __init__(self):
             super(TracerApplication, self).__init__(self._await_ctrl_c)
             self._palette = [Fore.CYAN, Fore.MAGENTA, Fore.YELLOW, Fore.GREEN, Fore.RED, Fore.BLUE]
-            self._nextColor = 0
+            self._next_color = 0
             self._attributes_by_thread_id = {}
             self._last_event_tid = -1
 
@@ -795,8 +795,8 @@ def main():
         def _get_attributes(self, thread_id):
             attributes = self._attributes_by_thread_id.get(thread_id, None)
             if attributes is None:
-                color = self._nextColor
-                self._nextColor += 1
+                color = self._next_color
+                self._next_color += 1
                 attributes = self._palette[color % len(self._palette)]
                 if (1 + int(color / len(self._palette))) % 2 == 0:
                     attributes += Style.BRIGHT
