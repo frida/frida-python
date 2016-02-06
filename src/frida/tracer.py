@@ -787,10 +787,10 @@ def main():
                 self._print("%6d ms  %s%s%s%s" % (timestamp, attributes, indent, message, no_attributes))
 
         def on_trace_handler_create(self, function, handler, source):
-            self._print("%s: Auto-generated handler at \"%s\"" % (function, source))
+            self._print("%s: Auto-generated handler at \"%s\"" % (function, source.replace("\\", "\\\\")))
 
         def on_trace_handler_load(self, function, handler, source):
-            self._print("%s: Loaded handler at \"%s\"" % (function, source))
+            self._print("%s: Loaded handler at \"%s\"" % (function, source.replace("\\", "\\\\")))
 
         def _get_attributes(self, thread_id):
             attributes = self._attributes_by_thread_id.get(thread_id, None)
