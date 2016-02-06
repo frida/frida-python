@@ -59,6 +59,7 @@ typedef struct _PySpawn          PySpawn;
 typedef struct _PyIcon           PyIcon;
 typedef struct _PySession        PySession;
 typedef struct _PyScript         PyScript;
+typedef struct _PyFileMonitor    PyFileMonitor;
 
 struct _PyDeviceManager
 {
@@ -140,6 +141,15 @@ struct _PyScript
   GList * on_message;
 };
 
+struct _PyFileMonitor
+{
+  PyObject_HEAD
+
+  GFile * file;
+  GFileMonitor * monitor;
+  GList * on_change;
+};
+
 static int PyDeviceManager_init (PyDeviceManager * self);
 static void PyDeviceManager_dealloc (PyDeviceManager * self);
 static PyObject * PyDeviceManager_close (PyDeviceManager * self);
@@ -212,6 +222,18 @@ static PyObject * PyScript_post_message (PyScript * self, PyObject * args);
 static PyObject * PyScript_on (PyScript * self, PyObject * args);
 static PyObject * PyScript_off (PyScript * self, PyObject * args);
 static void PyScript_on_message (PyScript * self, const gchar * message, const gchar * data, gint data_size, FridaScript * handle);
+
+static int PyFileMonitor_init (PyFileMonitor * self, PyObject * args);
+static void PyFileMonitor_dealloc (PyFileMonitor * self);
+static PyObject * PyFileMonitor_enable (PyFileMonitor * self);
+static gboolean PyFileMonitor_do_enable (PyFileMonitor * self);
+static PyObject * PyFileMonitor_disable (PyFileMonitor * self);
+static gboolean PyFileMonitor_do_disable (PyFileMonitor * self);
+static PyObject * PyFileMonitor_on (PyFileMonitor * self, PyObject * args);
+static PyObject * PyFileMonitor_off (PyFileMonitor * self, PyObject * args);
+static void PyFileMonitor_on_change (PyFileMonitor * self, GFile * file, GFile * other_file, GFileMonitorEvent event_type, GFileMonitor * handle);
+static gchar * PyFileMonitor_get_file_path (GFile * file);
+static const gchar * PyFileMonitor_event_type_to_string (GFileMonitorEvent event);
 
 static PyObject * PyFrida_raise (GError * error);
 static const gchar * PyFrida_device_type_to_string (FridaDeviceType type);
@@ -316,6 +338,15 @@ static PyMethodDef PyScript_methods[] =
   { "post_message", (PyCFunction) PyScript_post_message, METH_VARARGS, "Post a JSON-formatted message to the script." },
   { "on", (PyCFunction) PyScript_on, METH_VARARGS, "Add an event handler." },
   { "off", (PyCFunction) PyScript_off, METH_VARARGS, "Remove an event handler." },
+  { NULL }
+};
+
+static PyMethodDef PyFileMonitor_methods[] =
+{
+  { "enable", (PyCFunction) PyFileMonitor_enable, METH_NOARGS, "Enables the file monitor." },
+  { "disable", (PyCFunction) PyFileMonitor_disable, METH_NOARGS, "Disables the file monitor." },
+  { "on", (PyCFunction) PyFileMonitor_on, METH_VARARGS, "Add an event handler." },
+  { "off", (PyCFunction) PyFileMonitor_off, METH_VARARGS, "Remove an event handler." },
   { NULL }
 };
 
@@ -637,6 +668,46 @@ static PyTypeObject PyScriptType =
   NULL,                                         /* tp_descr_set      */
   0,                                            /* tp_dictoffset     */
   (initproc) PyScript_init,                     /* tp_init           */
+};
+
+static PyTypeObject PyFileMonitorType =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "_frida.FileMonitor",                         /* tp_name           */
+  sizeof (PyFileMonitor),                       /* tp_basicsize      */
+  0,                                            /* tp_itemsize       */
+  (destructor) PyFileMonitor_dealloc,           /* tp_dealloc        */
+  NULL,                                         /* tp_print          */
+  NULL,                                         /* tp_getattr        */
+  NULL,                                         /* tp_setattr        */
+  NULL,                                         /* tp_compare        */
+  NULL,                                         /* tp_repr           */
+  NULL,                                         /* tp_as_number      */
+  NULL,                                         /* tp_as_sequence    */
+  NULL,                                         /* tp_as_mapping     */
+  NULL,                                         /* tp_hash           */
+  NULL,                                         /* tp_call           */
+  NULL,                                         /* tp_str            */
+  NULL,                                         /* tp_getattro       */
+  NULL,                                         /* tp_setattro       */
+  NULL,                                         /* tp_as_buffer      */
+  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
+  "Frida FileMonitor",                          /* tp_doc            */
+  NULL,                                         /* tp_traverse       */
+  NULL,                                         /* tp_clear          */
+  NULL,                                         /* tp_richcompare    */
+  0,                                            /* tp_weaklistoffset */
+  NULL,                                         /* tp_iter           */
+  NULL,                                         /* tp_iternext       */
+  PyFileMonitor_methods,                        /* tp_methods        */
+  NULL,                                         /* tp_members        */
+  NULL,                                         /* tp_getset         */
+  NULL,                                         /* tp_base           */
+  NULL,                                         /* tp_dict           */
+  NULL,                                         /* tp_descr_get      */
+  NULL,                                         /* tp_descr_set      */
+  0,                                            /* tp_dictoffset     */
+  (initproc) PyFileMonitor_init,                /* tp_init           */
 };
 
 
@@ -2021,6 +2092,276 @@ PyScript_on_message (PyScript * self, const gchar * message, const gchar * data,
 }
 
 
+static int
+PyFileMonitor_init (PyFileMonitor * self, PyObject * args)
+{
+  const char * path;
+
+  self->file = NULL;
+  self->monitor = NULL;
+  self->on_change = NULL;
+
+  if (!PyArg_ParseTuple (args, "s", &path))
+    return -1;
+
+  self->file = g_file_new_for_path (path);
+
+  return 0;
+}
+
+static void
+PyFileMonitor_dealloc (PyFileMonitor * self)
+{
+  g_list_free_full (self->on_change, (GDestroyNotify) Py_DecRef);
+  self->on_change = NULL;
+
+  if (self->monitor != NULL)
+  {
+    g_signal_handlers_disconnect_by_func (self->monitor, FRIDA_FUNCPTR_TO_POINTER (PyFileMonitor_on_change), self);
+    g_object_set_data (G_OBJECT (self->monitor), "pyobject", NULL);
+  }
+
+  Py_BEGIN_ALLOW_THREADS
+  if (self->monitor != NULL)
+    frida_unref (self->monitor);
+  Py_END_ALLOW_THREADS
+
+  g_clear_object (&self->file);
+
+  Py_TYPE (self)->tp_free ((PyObject *) self);
+}
+
+static PyObject *
+PyFileMonitor_enable (PyFileMonitor * self)
+{
+  GSource * source;
+
+  Py_INCREF (self);
+
+  Py_BEGIN_ALLOW_THREADS
+
+  source = g_idle_source_new ();
+  g_source_set_callback (source, (GSourceFunc) PyFileMonitor_do_enable, self, NULL);
+  g_source_attach (source, frida_get_main_context ());
+  g_source_unref (source);
+
+  Py_END_ALLOW_THREADS
+
+  Py_RETURN_NONE;
+}
+
+static gboolean
+PyFileMonitor_do_enable (PyFileMonitor * self)
+{
+  PyGILState_STATE gstate;
+
+  if (self->monitor == NULL)
+  {
+    self->monitor = g_file_monitor (self->file, G_FILE_MONITOR_NONE, NULL, NULL);
+
+    if (self->monitor != NULL)
+    {
+      g_object_set_data (G_OBJECT (self->monitor), "pyobject", self);
+      g_signal_connect_swapped (self->monitor, "changed", G_CALLBACK (PyFileMonitor_on_change), self);
+    }
+  }
+
+  gstate = PyGILState_Ensure ();
+  Py_DECREF (self);
+  PyGILState_Release (gstate);
+
+  return FALSE;
+}
+
+static PyObject *
+PyFileMonitor_disable (PyFileMonitor * self)
+{
+  GSource * source;
+
+  Py_INCREF (self);
+
+  Py_BEGIN_ALLOW_THREADS
+
+  source = g_idle_source_new ();
+  g_source_set_callback (source, (GSourceFunc) PyFileMonitor_do_disable, self, NULL);
+  g_source_attach (source, frida_get_main_context ());
+  g_source_unref (source);
+
+  Py_END_ALLOW_THREADS
+
+  Py_RETURN_NONE;
+}
+
+static gboolean
+PyFileMonitor_do_disable (PyFileMonitor * self)
+{
+  PyGILState_STATE gstate;
+
+  if (self->monitor != NULL)
+  {
+    g_signal_handlers_disconnect_by_func (self->monitor, FRIDA_FUNCPTR_TO_POINTER (PyFileMonitor_on_change), self);
+    g_file_monitor_cancel (self->monitor);
+    g_object_unref (self->monitor);
+    self->monitor = NULL;
+  }
+
+  gstate = PyGILState_Ensure ();
+  Py_DECREF (self);
+  PyGILState_Release (gstate);
+
+  return FALSE;
+}
+
+static PyObject *
+PyFileMonitor_on (PyFileMonitor * self, PyObject * args)
+{
+  const char * signal;
+  PyObject * callback;
+
+  if (!PyFrida_parse_signal_method_args (args, &signal, &callback))
+    return NULL;
+
+  if (strcmp (signal, "change") == 0)
+  {
+    Py_INCREF (callback);
+    self->on_change = g_list_append (self->on_change, callback);
+  }
+  else
+  {
+    PyErr_SetString (PyExc_NotImplementedError, "unsupported signal");
+    return NULL;
+  }
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyFileMonitor_off (PyFileMonitor * self, PyObject * args)
+{
+  const char * signal;
+  PyObject * callback;
+
+  if (!PyFrida_parse_signal_method_args (args, &signal, &callback))
+    return NULL;
+
+  if (strcmp (signal, "change") == 0)
+  {
+    GList * entry;
+
+    entry = g_list_find (self->on_change, callback);
+    if (entry != NULL)
+    {
+      self->on_change = g_list_delete_link (self->on_change, entry);
+      Py_DECREF (callback);
+    }
+    else
+    {
+      PyErr_SetString (PyExc_ValueError, "unknown callback");
+      return NULL;
+    }
+  }
+  else
+  {
+    PyErr_SetString (PyExc_NotImplementedError, "unsupported signal");
+    return NULL;
+  }
+
+  Py_RETURN_NONE;
+}
+
+static void
+PyFileMonitor_on_change (PyFileMonitor * self, GFile * file, GFile * other_file, GFileMonitorEvent event_type, GFileMonitor * monitor)
+{
+  PyGILState_STATE gstate;
+
+  gstate = PyGILState_Ensure ();
+
+  if (g_object_get_data (G_OBJECT (monitor), "pyobject") == self)
+  {
+    gchar * file_path, * other_file_path;
+    const gchar * event_type_string;
+    PyObject * args;
+    GList * callbacks, * cur;
+
+    file_path = PyFileMonitor_get_file_path (file);
+    other_file_path = PyFileMonitor_get_file_path (other_file);
+    event_type_string = PyFileMonitor_event_type_to_string (event_type);
+
+    args = Py_BuildValue ("sss", file_path, other_file_path, event_type_string);
+
+    g_free (other_file_path);
+    g_free (file_path);
+
+    g_list_foreach (self->on_change, (GFunc) Py_IncRef, NULL);
+    callbacks = g_list_copy (self->on_change);
+
+    for (cur = callbacks; cur != NULL; cur = cur->next)
+    {
+      PyObject * result = PyObject_CallObject ((PyObject *) cur->data, args);
+      if (result == NULL)
+        PyErr_Print ();
+      else
+        Py_DECREF (result);
+    }
+
+    g_list_free_full (callbacks, (GDestroyNotify) Py_DecRef);
+
+    Py_DECREF (args);
+  }
+
+  PyGILState_Release (gstate);
+}
+
+static gchar *
+PyFileMonitor_get_file_path (GFile * file)
+{
+  gchar * path_raw, * path_utf8;
+
+  if (file == NULL)
+    return NULL;
+
+  path_raw = g_file_get_path (file);
+  if (path_raw == NULL)
+    return NULL;
+  path_utf8 = g_filename_to_utf8 (path_raw, -1, NULL, NULL, NULL);
+  g_free (path_raw);
+
+  return path_utf8;
+}
+
+static const gchar *
+PyFileMonitor_event_type_to_string (GFileMonitorEvent event)
+{
+  switch (event)
+  {
+    case G_FILE_MONITOR_EVENT_CHANGED:
+      return "changed";
+    case G_FILE_MONITOR_EVENT_CHANGES_DONE_HINT:
+      return "changes-done-hint";
+    case G_FILE_MONITOR_EVENT_DELETED:
+      return "deleted";
+    case G_FILE_MONITOR_EVENT_CREATED:
+      return "created";
+    case G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED:
+      return "attribute-changed";
+    case G_FILE_MONITOR_EVENT_PRE_UNMOUNT:
+      return "pre-unmount";
+    case G_FILE_MONITOR_EVENT_UNMOUNTED:
+      return "unmounted";
+    case G_FILE_MONITOR_EVENT_MOVED:
+      return "moved";
+    case G_FILE_MONITOR_EVENT_RENAMED:
+      return "renamed";
+    case G_FILE_MONITOR_EVENT_MOVED_IN:
+      return "moved-in";
+    case G_FILE_MONITOR_EVENT_MOVED_OUT:
+      return "moved-out";
+    default:
+      g_assert_not_reached ();
+  }
+}
+
+
 static void
 PyFrida_object_decref (gpointer obj)
 {
@@ -2127,6 +2468,10 @@ MOD_INIT (_frida)
   if (PyType_Ready (&PyScriptType) < 0)
     return MOD_ERROR_VAL;
 
+  PyFileMonitorType.tp_new = PyType_GenericNew;
+  if (PyType_Ready (&PyFileMonitorType) < 0)
+    return MOD_ERROR_VAL;
+
   MOD_DEF (module, "_frida", "Frida", NULL);
 
   PyModule_AddStringConstant (module, "__version__", frida_version_string ());
@@ -2154,6 +2499,9 @@ MOD_INIT (_frida)
 
   Py_INCREF (&PyScriptType);
   PyModule_AddObject (module, "Script", (PyObject *) &PyScriptType);
+
+  Py_INCREF (&PyFileMonitorType);
+  PyModule_AddObject (module, "FileMonitor", (PyObject *) &PyFileMonitorType);
 
   exception_by_error_code = g_hash_table_new_full (NULL, NULL, NULL, PyFrida_object_decref);
 #define PYFRIDA_DECLARE_EXCEPTION(code, name) \

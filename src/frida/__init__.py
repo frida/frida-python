@@ -28,6 +28,8 @@ except Exception as ex:
 
 __version__ = _frida.__version__
 
+FileMonitor = _frida.FileMonitor
+
 ServerNotRunningError = _frida.ServerNotRunningError
 ExecutableNotFoundError = _frida.ExecutableNotFoundError
 ExecutableNotSupportedError = _frida.ExecutableNotSupportedError
