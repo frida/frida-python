@@ -10,6 +10,7 @@ import subprocess
 import threading
 import time
 
+from frida import FileMonitor
 from frida.core import Function, Module, ModuleFunction, ObjCMethod
 
 
@@ -349,6 +350,8 @@ class Tracer(object):
                 } for function in chunk]
             self._script.exports.add(targets)
 
+        self._repository.commit_handlers()
+
         self._reactor.schedule(lambda: ui.on_trace_progress('ready'))
 
         return working_set
@@ -464,12 +467,7 @@ function parseHandler(target) {
             stanza = message['payload']
             if stanza['from'] == "/events" and stanza['name'] == '+add':
                 events = [(timestamp, thread_id, depth, int(target_address.rstrip("L"), 16), message) for timestamp, thread_id, depth, target_address, message in stanza['payload']['items']]
-
                 ui.on_trace_events(events)
-
-                target_addresses = set([target_address for timestamp, thread_id, depth, target_address, message in events])
-                for target_address in target_addresses:
-                    self._repository.sync_handler(target_address)
 
                 handled = True
             elif stanza['from'] == "/targets" and stanza['name'] == '+error':
@@ -487,7 +485,7 @@ class Repository(object):
     def ensure_handler(self, function):
         raise NotImplementedError("not implemented")
 
-    def sync_handler(self, function_address):
+    def commit_handlers(self):
         pass
 
     def on_create(self, callback):
@@ -612,15 +610,20 @@ class MemoryRepository(Repository):
         return handler
 
 class FileRepository(Repository):
-    def __init__(self):
+    def __init__(self, reactor):
         super(FileRepository, self).__init__()
-        self._handlers = {}
+        self._reactor = reactor
+        self._handler_by_address = {}
+        self._handler_by_file = {}
+        self._changed_files = set()
+        self._last_change_id = 0
         self._repo_dir = os.path.join(os.getcwd(), "__handlers__")
+        self._repo_monitors = {}
 
     def ensure_handler(self, function):
-        entry = self._handlers.get(function.absolute_address)
+        entry = self._handler_by_address.get(function.absolute_address)
         if entry is not None:
-            (function, handler, handler_file, handler_mtime, last_sync) = entry
+            (function, handler, handler_file) = entry
             return handler
 
         handler = None
@@ -636,7 +639,7 @@ class FileRepository(Repository):
 
         for handler_file in handler_files_to_try:
             if os.path.isfile(handler_file):
-                with open(handler_file, 'r') as f:
+                with codecs.open(handler_file, 'r', 'utf-8') as f:
                     handler = f.read()
                 self._notify_load(function, handler, handler_file)
                 break
@@ -651,32 +654,49 @@ class FileRepository(Repository):
                 f.write(handler)
             self._notify_create(function, handler, handler_file)
 
-        handler_mtime = os.stat(handler_file).st_mtime
-        self._handlers[function.absolute_address] = (function, handler, handler_file, handler_mtime, time.time())
+        entry = (function, handler, handler_file)
+        self._handler_by_address[function.absolute_address] = entry
+        self._handler_by_file[handler_file] = entry
+
+        self._ensure_monitor(handler_file)
 
         return handler
 
-    def sync_handler(self, function_address):
-        (function, handler, handler_file, handler_mtime, last_sync) = self._handlers[function_address]
-        delta = time.time() - last_sync
-        if delta >= 1.0:
-            changed = False
+    def _ensure_monitor(self, handler_file):
+        handler_dir = os.path.dirname(handler_file)
+        monitor = self._repo_monitors.get(handler_dir)
+        if monitor is None:
+            monitor = FileMonitor(handler_dir)
+            monitor.on('change', self._on_change)
+            self._repo_monitors[handler_dir] = monitor
 
-            try:
-                new_mtime = os.stat(handler_file).st_mtime
-                if new_mtime != handler_mtime:
-                    with codecs.open(handler_file, 'r', 'utf-8') as f:
-                        new_handler = f.read()
-                    changed = new_handler != handler
-                    handler = new_handler
-                    handler_mtime = new_mtime
-            except:
-                pass
+    def commit_handlers(self):
+        for monitor in self._repo_monitors.values():
+            monitor.enable()
 
-            self._handlers[function_address] = (function, handler, handler_file, handler_mtime, time.time())
+    def _on_change(self, changed_file, other_file, event_type):
+        if changed_file not in self._handler_by_file or event_type == 'changes-done-hint':
+            return
+        self._changed_files.add(changed_file)
+        self._last_change_id += 1
+        change_id = self._last_change_id
+        self._reactor.schedule(lambda: self._sync_handlers(change_id), delay=0.05)
 
+    def _sync_handlers(self, change_id):
+        if change_id != self._last_change_id:
+            return
+        changes = self._changed_files.copy()
+        self._changed_files.clear()
+        for changed_handler_file in changes:
+            (function, old_handler, handler_file) = self._handler_by_file[changed_handler_file]
+            with codecs.open(handler_file, 'r', 'utf-8') as f:
+                new_handler = f.read()
+            changed = new_handler != old_handler
             if changed:
-                self._notify_update(function, handler, handler_file)
+                entry = (function, new_handler, handler_file)
+                self._handler_by_address[function.absolute_address] = entry
+                self._handler_by_file[handler_file] = entry
+                self._notify_update(function, new_handler, handler_file)
 
 class UI(object):
     def on_trace_progress(self, operation):
@@ -741,7 +761,7 @@ def main():
             return True
 
         def _start(self):
-            self._tracer = Tracer(self._reactor, FileRepository(), self._profile, log_handler=self._log)
+            self._tracer = Tracer(self._reactor, FileRepository(self._reactor), self._profile, log_handler=self._log)
             try:
                 self._targets = self._tracer.start_trace(self._session, self)
             except Exception as e:
