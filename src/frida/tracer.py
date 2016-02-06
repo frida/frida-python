@@ -372,16 +372,12 @@ var timer = null;
 
 rpc.exports = {
     add: function (targets) {
-        try {
         targets.forEach(function (target) {
-            var handler = parseHandler(target);
-            if (handler === null)
-                return;
+            var h = [parseHandler(target)];
             var name = target.name;
             var targetAddress = target.absolute_address;
             target = null;
 
-            var h = [handler];
             handlers[targetAddress] = h;
 
             function invokeCallback(callback, context, param) {
@@ -418,9 +414,6 @@ rpc.exports = {
                 });
             }
         });
-        } catch (e) {
-            console.log(e.stack);
-        }
     },
     update: function (targets) {
         targets.forEach(function (target) {
@@ -460,7 +453,7 @@ function parseHandler(target) {
                 message: "Invalid handler for '" + target.name + "': " + e.message
             }
         });
-        return null;
+        return {};
     }
 }
 """
