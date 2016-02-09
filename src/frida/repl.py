@@ -23,10 +23,6 @@ def main():
             self._script = None
             self._seqno = 0
             self._ready = threading.Event()
-            self._next_request_id = 1
-            self._response_cond = threading.Condition()
-            self._response_queue = []
-            self._completor_locals = []
             self._history = FileHistory(os.path.join(os.path.expanduser('~'), '.frida_history'))
             self._completer = FridaCompleter(self)
             self._cli = None
@@ -312,52 +308,19 @@ def main():
             return prompt_string
 
         def _evaluate(self, text):
-            request_id = -1
-            with self._response_cond:
-                request_id = self._next_request_id
-                self._next_request_id += 1
-
-            self._reactor.schedule(lambda: self._script.post_message({
-                'id': request_id,
-                'name': '.evaluate',
-                'payload': {
-                    'expression': text
-                }
-            }))
-
-            response = None
-            with self._response_cond:
-                while True:
-                    for r in self._response_queue:
-                        if r[0]['id'] == request_id:
-                            response = r
-                            break
-                    if response is not None:
-                        self._response_queue.remove(response)
-                        break
-                    if not self._reactor.is_running():
-                        raise frida.InvalidOperationError("Invalid operation while stopping")
-                    self._response_cond.wait(0.5)
-
-            stanza, data = response
-            if data is not None:
-                return ('binary', data)
-            elif stanza['name'] == '+result':
-                payload = stanza['payload']
-                return (payload['type'], payload.get('value', None))
+            result = self._script.exports.evaluate(text)
+            if is_byte_array(result):
+                return ('binary', result)
+            elif isinstance(result, dict):
+                return ('binary', bytes())
+            elif result[0] == 'error':
+                raise JavaScriptError(result[1])
             else:
-                assert stanza['name'] == '+error'
-                raise JavaScriptError(stanza['payload'])
+                return result
 
         def _process_message(self, message, data):
             message_type = message['type']
-            if message_type == 'send':
-                stanza = message['payload']
-                response = (stanza, data)
-                with self._response_cond:
-                    self._response_queue.append(response)
-                    self._response_cond.notify_all()
-            elif message_type == 'error':
+            if message_type == 'error':
                 text = message.get('stack', message['description'])
                 self._log('error', text)
             else:
@@ -372,55 +335,23 @@ def main():
 
             return user_script + """\
 
-(function () {
-    "use strict";
-
-    function onEvaluate(requestId, expression) {
-        try {
-            var result = (1, eval)(expression);
-
-            if (result instanceof ArrayBuffer) {
-                send({
-                    id: requestId,
-                    name: '+result',
-                    payload: {
-                        type: 'binary'
-                    }
-                }, result);
-            } else {
-                var type = (result === null) ? 'null' : typeof result;
-                send({
-                    id: requestId,
-                    name: '+result',
-                    payload: {
-                        type: type,
-                        value: result
-                    }
-                });
-            }
-        } catch (e) {
-            send({
-                id: requestId,
-                name: '+error',
-                payload: {
-                    name: e.name,
-                    message: e.message
-                }
-            });
+rpc.exports.evaluate = function (expression) {
+    try {
+        var result = (1, eval)(expression);
+        if (result instanceof ArrayBuffer) {
+            return result;
+        } else {
+            var type = (result === null) ? 'null' : typeof result;
+            return [type, result];
         }
+    } catch (e) {
+        return ['error', {
+            name: e.name,
+            message: e.message,
+            stack: e.stack
+        }];
     }
-
-    var onStanza = function (stanza) {
-        switch (stanza.name) {
-            case '.evaluate':
-                onEvaluate.call(this, stanza.id, stanza.payload.expression);
-                break;
-        }
-
-        recv(onStanza);
-    }.bind(this);
-    recv(onStanza);
-}).call(this);
+};
 """
 
     class FridaCompleter(Completer):
@@ -526,6 +457,12 @@ def main():
             printable = ''.join(["%s" % ((x <= 127 and FILTER[x]) or ".") for x in iterbytes(chars)])
             lines.append("%04x  %-*s  %s\n" % (c, length * 3, hex, printable))
         return "".join(lines)
+
+    def is_byte_array(value):
+        if sys.version_info[0] >= 3:
+            return isinstance(value, bytes)
+        else:
+            return isinstance(value, str)
 
     if sys.version_info[0] >= 3:
         iterbytes = lambda x: iter(x)
