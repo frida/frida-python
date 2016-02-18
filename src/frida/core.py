@@ -532,8 +532,9 @@ class ScriptExports(object):
 
     def __getattr__(self, name):
         script = self._script
+        js_name = _to_camel_case(name)
         def method(*args):
-            return script._rpc_request('call', name, args)
+            return script._rpc_request('call', js_name, args)
         return method
 
 class Module(FunctionContainer):
@@ -678,6 +679,18 @@ class FunctionMap(AddressMap):
     def __init__(self, functions, get_address=lambda f: f.absolute_address):
         super(FunctionMap, self).__init__(functions, get_address, lambda f: 1)
 
+def _to_camel_case(name):
+    result = ""
+    uppercase_next = False
+    for c in name:
+        if c == '_':
+            uppercase_next = True
+        elif uppercase_next:
+            result += c.upper()
+            uppercase_next = False
+        else:
+            result += c.lower()
+    return result
 def _execute_script(script, post_hook=None):
     def on_message(message, data):
         if message['type'] == 'send':
