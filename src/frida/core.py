@@ -122,67 +122,45 @@ class Session(FunctionContainer):
         self._module_map = None
 
         self._script = None
-        self._pending = {}
-        self._next_request_id = 1
-        self._cond = threading.Condition()
 
     def detach(self):
         self._impl.detach()
 
     def enumerate_modules(self):
         if self._modules is None:
-            response = self._request('process:enumerate-modules')
-            self._modules = [Module(data['name'], int(data['base'], 16), data['size'], data['path'], self) for data in response['modules']]
+            raw_modules = self._get_api().enumerate_modules()
+            self._modules = [Module(data['name'], int(data['base'], 16), data['size'], data['path'], self) for data in raw_modules]
         return self._modules
 
     def prefetch_modules(self):
         modules = self.enumerate_modules()
         pending = [m for m in modules if m._exports is None]
-        response = self._request('process:enumerate-module-exports', {
-            'module_paths': [m.path for m in pending]
-        })
-        for i, exports in enumerate(response['exports']):
-            pending[i]._update_exports(exports)
+        batches = self._get_api().enumerate_exports([m.path for m in pending])
+        for i, raw_exports in enumerate(batches):
+            pending[i]._update_exports(raw_exports)
 
     """
       @param protection example '--x'
     """
     def enumerate_ranges(self, protection):
-        response = self._request('process:enumerate-ranges', {
-            'protection': protection
-        })
-        return [Range(int(data['base'], 16), data['size'], data['protection']) for data in response['ranges']]
+        raw_ranges = self._get_api().enumerate_ranges(protection)
+        return [Range(int(data['base'], 16), data['size'], data['protection']) for data in raw_ranges]
 
     def find_base_address(self, module_name):
-        response = self._request('module:find-base-address', {
-            'module_name': module_name
-        })
-        return int(response['base_address'], 16)
+        raw_base_address = self._get_api().find_base_address(module_name)
+        return int(raw_base_address, 16)
 
     def read_bytes(self, address, size):
-        return self._request('memory:read-byte-array', {
-            'address': "0x%x" % address,
-            'size': size
-        })
+        return self._get_api().read_byte_array("0x%x" % address, size)
 
     def write_bytes(self, address, data):
-        self._request('memory:write-byte-array', {
-            'address': "0x%x" % address,
-            'data': [x for x in iterbytes(data)]
-        })
+        self._get_api().write_byte_array("0x%x" % address, [x for x in iterbytes(data)])
 
     def read_utf8(self, address, length=-1):
-        response = self._request('memory:read-utf8', {
-            'address': "0x%x" % address,
-            'length': length
-        })
-        return response['string']
+        return self._get_api().read_utf8("0x%x" % address, length)
 
     def write_utf8(self, address, string):
-        self._request('memory:write-utf8', {
-            'address': "0x%x" % address,
-            'string': string
-        })
+        self._get_api().write_utf8("0x%x" % address, string)
 
     def create_script(self, *args, **kwargs):
         return Script(self._impl.create_script(*args, **kwargs))
@@ -202,36 +180,8 @@ class Session(FunctionContainer):
     def off(self, signal, callback):
         self._impl.off(signal, callback)
 
-    def _exec_script(self, source, post_hook=None):
-        script = self.create_script(name="exec", source=source)
-        return _execute_script(script, post_hook)
-
-    def _request(self, name, payload = {}):
-        result = [False, None, None]
-        def on_complete(data, error):
-            with self._cond:
-                result[0] = True
-                result[1] = data
-                result[2] = error
-                self._cond.notifyAll()
-
-        with self._cond:
-            request_id = self._next_request_id
-            self._next_request_id += 1
-            self._pending[request_id] = on_complete
-            script = self._get_script()
-            script.post_message({
-                'id': request_id,
-                'name': name,
-                'payload': payload
-            })
-            while not result[0]:
-                self._cond.wait()
-
-        if result[2] is not None:
-            raise result[2]
-
-        return result[1]
+    def _get_api(self):
+        return self._get_script().exports
 
     def _get_script(self):
         if self._script is None:
@@ -241,166 +191,52 @@ class Session(FunctionContainer):
         return self._script
 
     def _on_message(self, message, data):
-        if message['type'] == 'send':
-            stanza = message['payload']
-            callback = self._pending.pop(stanza['id'])
-            name = stanza['name']
-            payload = stanza['payload']
-            if name == 'request:result':
-                if data is None:
-                    callback(payload, None)
-                else:
-                    callback(data, None)
-            elif name == 'request:error':
-                callback(None, Exception(payload))
-            else:
-                raise NotImplementedError("unhandled stanza")
-        else:
-            print("[session]", message, data)
+        print("[session]", message, data)
 
     def _create_session_script(self):
         return """\
 "use strict";
 
-const handlers = {};
-
-handlers['process:enumerate-modules'] = function () {
-  return new Promise(function (resolve, reject) {
-    const modules = [];
-    Process.enumerateModules({
-      onMatch: function (m) {
-        modules.push(m);
-      },
-      onComplete: function () {
-        resolve({ modules: modules });
-      }
+rpc.exports = {
+  enumerateModules: function () {
+    return Process.enumerateModulesSync();
+  },
+  enumerateExports: function (modulePaths) {
+    return modulePaths.map(function (modulePath) {
+      return Module.enumerateExportsSync(modulePath);
     });
-  });
-};
-
-handlers['process:enumerate-module-exports'] = function (payload) {
-  return new Promise(function (resolve, reject) {
-    const result = payload.module_paths.map(function (modulePath) {
-      const exports = [];
-      Module.enumerateExports(modulePath, {
-        onMatch: function (e) {
-          exports.push(e);
-        },
-        onComplete: function () {
-        }
-      });
-      return exports;
-    });
-    resolve({ exports: result });
-  });
-};
-
-handlers['process:enumerate-ranges'] = function (payload) {
-  return new Promise(function (resolve, reject) {
-    const ranges = [];
-    Process.enumerateRanges(payload.protection, {
-      onMatch: function (r) {
-        ranges.push(r);
-      },
-      onComplete: function () {
-        resolve({ ranges: ranges });
-      }
-    });
-  });
-};
-
-handlers['module:find-base-address'] = function (payload) {
-  return new Promise(function (resolve, reject) {
-    const address = Module.findBaseAddress(payload.module_name);
-    resolve({ base_address: (address !== null) ? address : "0" });
-  });
-};
-
-handlers['memory:read-byte-array'] = function (payload) {
-  return new Promise(function (resolve, reject) {
-    const data = Memory.readByteArray(ptr(payload.address), payload.size);
-    resolve([{}, data]);
-  });
-};
-
-handlers['memory:write-byte-array'] = function (payload) {
-  return new Promise(function (resolve, reject) {
-    const base = ptr(payload.address);
-    const data = payload.data;
-    for (let i = 0; i !== data.length; i++) {
+  },
+  enumerateRanges: function (protection) {
+    return Process.enumerateRangesSync(protection);
+  },
+  findBaseAddress: function (moduleName) {
+    var address = Module.findBaseAddress(moduleName);
+    return (address !== null) ? address.toString() : "0";
+  },
+  readByteArray: function (address, size) {
+    return Memory.readByteArray(ptr(address), size);
+  },
+  writeByteArray: function (address, data) {
+    var base = ptr(address);
+    for (var i = 0; i !== data.length; i++) {
       Memory.writeU8(base.add(i), data[i]);
     }
-    resolve({});
-  });
-};
-
-handlers['memory:read-utf8'] = function (payload) {
-  return new Promise(function (resolve, reject) {
-    resolve({
-      string: Memory.readUtf8String(ptr(payload.address), payload.length)
+  },
+  readUtf8: function (address, length) {
+    return Memory.readUtf8String(ptr(address), length);
+  },
+  writeUtf8: function (address, string) {
+    Memory.writeUtf8String(ptr(address), string);
+  },
+  enumerateModuleExports: function (modulePath) {
+    return Module.enumerateExportsSync(modulePath).filter(function (e) {
+      return e.type === 'function';
     });
-  });
+  },
+  enumerateModuleRanges: function (modulePath, protection) {
+    return Module.enumerateRangesSync(modulePath, protection);
+  }
 };
-
-handlers['memory:write-utf8'] = function (payload) {
-  return new Promise(function (resolve, reject) {
-    Memory.writeUtf8String(ptr(payload.address), payload.string);
-    resolve({});
-  });
-};
-
-handlers['module:enumerate-exports'] = function (payload) {
-  return new Promise(function (resolve, reject) {
-    const exports = [];
-    Module.enumerateExports(payload.module_path, {
-      onMatch: function (e) {
-        if (e.type === 'function')
-          exports.push(e);
-      },
-      onComplete: function () {
-        resolve({ exports: exports });
-      }
-    });
-  });
-};
-
-handlers['module:enumerate-ranges'] = function (payload) {
-  return new Promise(function (resolve, reject) {
-    const ranges = [];
-    Module.enumerateRanges(payload.module_path, payload.protection, {
-      onMatch: function (r) {
-        ranges.push(r);
-      },
-      onComplete: function () {
-        resolve({ ranges: ranges });
-      }
-    });
-  });
-};
-
-function onStanza(stanza) {
-  const handler = handlers[stanza.name];
-  handler(stanza.payload)
-  .then(function (result) {
-    const payload = result.length === 2 ? result[0] : result;
-    const data = result.length === 2 ? result[1] : null;
-    send({
-      id: stanza.id,
-      name: 'request:result',
-      payload: payload
-    }, data);
-  })
-  .catch(function (error) {
-    send({
-      id: stanza.id,
-      name: 'request:error',
-      payload: error.stack
-    });
-  });
-
-  recv(onStanza);
-}
-recv(onStanza);
 """
 
     def _do_ensure_function(self, absolute_address):
@@ -564,21 +400,16 @@ class Module(FunctionContainer):
 
     def enumerate_exports(self):
         if self._exports is None:
-            response = self._session._request('module:enumerate-exports', {
-                'module_path': self.path
-            })
-            self._update_exports(response['exports'])
+            raw_exports = self._session._get_api().enumerate_module_exports(self.path)
+            self._update_exports(raw_exports)
         return self._exports
 
     """
       @param protection example '--x'
     """
     def enumerate_ranges(self, protection):
-        response = self._session._request('module:enumerate-ranges', {
-            'module_path': self.path,
-            'protection': protection
-        })
-        return [Range(int(data['base'], 16), data['size'], data['protection']) for data in response['ranges']]
+        raw_ranges = self._session._get_script().exports.enumerate_module_ranges(self.path, protection)
+        return [Range(int(data['base'], 16), data['size'], data['protection']) for data in raw_ranges]
 
     def _update_exports(self, exports):
         self._exports = []
@@ -691,32 +522,6 @@ def _to_camel_case(name):
         else:
             result += c.lower()
     return result
-def _execute_script(script, post_hook=None):
-    def on_message(message, data):
-        if message['type'] == 'send':
-            if data is not None:
-                result['data'] = data
-            else:
-                result['data'] = message['payload']
-        elif message['type'] == 'error':
-            result['error'] = message['description']
-        event.set()
-
-    result = {}
-    event = threading.Event()
-
-    script.on('message', on_message)
-    script.load()
-    if post_hook:
-        post_hook(script)
-    event.wait()
-    script.unload()
-    script.off('message', on_message)
-
-    if 'error' in result:
-        raise Error(result['error'])
-
-    return result['data']
 
 if sys.version_info[0] >= 3:
     iterbytes = lambda x: iter(x)

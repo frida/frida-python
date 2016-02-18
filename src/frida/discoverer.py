@@ -52,14 +52,14 @@ function Sampler() {
     this.start = function () {
         threadIds = [];
         Process.enumerateThreads({
-            onMatch(thread) {
+            onMatch: function (thread) {
                 threadIds.push(thread.id);
             },
-            onComplete() {
+            onComplete: function () {
                 threadIds.forEach(function (threadId) {
                     Stalker.follow(threadId, {
                         events: { call: true },
-                        onCallSummary(summary) {
+                        onCallSummary: function (summary) {
                             for (var address in summary) {
                                 if (summary.hasOwnProperty(address)) {
                                     var count = result[address] || 0;

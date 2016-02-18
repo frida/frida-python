@@ -100,17 +100,17 @@ send(hello);
 "use strict";
 
 rpc.exports = {
-    add(a, b) {
-        const result = a + b;
+    add: function (a, b) {
+        var result = a + b;
         if (result < 0)
           throw new Error("No");
         return result;
     },
-    sub(a, b) {
+    sub: function (a, b) {
         return a - b;
     },
-    speak() {
-        const buf = Memory.allocUtf8String("Yo");
+    speak: function () {
+        var buf = Memory.allocUtf8String("Yo");
         return Memory.readByteArray(buf, 2);
     }
 };
