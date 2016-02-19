@@ -154,6 +154,8 @@ static int PyDeviceManager_init (PyDeviceManager * self);
 static void PyDeviceManager_dealloc (PyDeviceManager * self);
 static PyObject * PyDeviceManager_close (PyDeviceManager * self);
 static PyObject * PyDeviceManager_enumerate_devices (PyDeviceManager * self);
+static PyObject * PyDeviceManager_add_remote_device (PyDeviceManager * self, PyObject * args);
+static PyObject * PyDeviceManager_remove_remote_device (PyDeviceManager * self, PyObject * args);
 static PyObject * PyDeviceManager_on (PyDeviceManager * self, PyObject * args);
 static PyObject * PyDeviceManager_off (PyDeviceManager * self, PyObject * args);
 static void PyDeviceManager_on_changed (PyDeviceManager * self, FridaDeviceManager * handle);
@@ -243,6 +245,8 @@ static PyMethodDef PyDeviceManager_methods[] =
 {
   { "close", (PyCFunction) PyDeviceManager_close, METH_NOARGS, "Close the device manager." },
   { "enumerate_devices", (PyCFunction) PyDeviceManager_enumerate_devices, METH_NOARGS, "Enumerate devices." },
+  { "add_remote_device", (PyCFunction) PyDeviceManager_add_remote_device, METH_VARARGS, "Add a remote device." },
+  { "remove_remote_device", (PyCFunction) PyDeviceManager_remove_remote_device, METH_VARARGS, "Remove a remote device." },
   { "on", (PyCFunction) PyDeviceManager_on, METH_VARARGS, "Add an event handler." },
   { "off", (PyCFunction) PyDeviceManager_off, METH_VARARGS, "Remove an event handler." },
   { NULL }
@@ -776,6 +780,43 @@ PyDeviceManager_enumerate_devices (PyDeviceManager * self)
   frida_unref (result);
 
   return devices;
+}
+
+static PyObject *
+PyDeviceManager_add_remote_device (PyDeviceManager * self, PyObject * args)
+{
+  const char * host;
+  GError * error = NULL;
+  FridaDevice * result;
+
+  if (!PyArg_ParseTuple (args, "s", &host))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  result = frida_device_manager_add_remote_device_sync (self->handle, host, &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  return PyDevice_from_handle (result);
+}
+
+static PyObject *
+PyDeviceManager_remove_remote_device (PyDeviceManager * self, PyObject * args)
+{
+  const char * host;
+  GError * error = NULL;
+
+  if (!PyArg_ParseTuple (args, "s", &host))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_device_manager_remove_remote_device_sync (self->handle, host, &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
 }
 
 static PyObject *

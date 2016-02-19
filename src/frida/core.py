@@ -20,6 +20,12 @@ class DeviceManager(object):
     def enumerate_devices(self):
         return [Device(device) for device in self._impl.enumerate_devices()]
 
+    def add_remote_device(self, host):
+        return Device(self._impl.add_remote_device(host))
+
+    def remove_remote_device(self, host):
+        self._impl.remove_remote_device(host)
+
     def get_device(self, device_id):
         devices = self._impl.enumerate_devices()
         if device_id is None:
