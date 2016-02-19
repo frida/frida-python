@@ -69,8 +69,10 @@ class ConsoleApplication(object):
                 metavar="ID", type='string', action='store', dest="device_id", default=None)
         parser.add_option("-U", "--usb", help="connect to USB device",
                 action='store_const', const='tether', dest="device_type", default=None)
-        parser.add_option("-R", "--remote", help="connect to remote device",
+        parser.add_option("-R", "--remote", help="connect to remote frida-server",
                 action='store_const', const='remote', dest="device_type", default=None)
+        parser.add_option("-H", "--host", help="connect to remote frida-server on HOST",
+                metavar="HOST", type='string', action='store', dest="host", default=None)
         if self._needs_target():
             def store_target(option, opt_str, target_value, parser, target_type, *args, **kwargs):
                 if target_type == 'file':
@@ -92,6 +94,7 @@ class ConsoleApplication(object):
 
         self._device_id = options.device_id
         self._device_type = options.device_type
+        self._host = options.host
         self._device = None
         self._schedule_on_device_lost = lambda: self._reactor.schedule(self._on_device_lost)
         self._spawned_pid = None
@@ -110,8 +113,8 @@ class ConsoleApplication(object):
         self._exit_status = None
         self._console_state = ConsoleState.EMPTY
 
-        if self._device_id is not None and self._device_type is not None:
-            parser.error("-D cannot be used with -U and -R")
+        if sum(map(lambda v: int(v is not None), (self._device_id, self._device_type, self._host))) > 1:
+            parser.error("Only one of -D, -U, -R, and -H may be specified")
 
         if self._needs_target():
             target = getattr(options, 'target', None)
@@ -195,6 +198,8 @@ class ConsoleApplication(object):
             self._device = find_device(self._device_type)
             if self._device is None:
                 return
+        elif self._host is not None:
+            self._device = frida.get_device_manager().add_remote_device(self._host)
         else:
             self._device = frida.get_local_device()
         self._device.on('lost', self._schedule_on_device_lost)
