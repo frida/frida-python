@@ -14,6 +14,21 @@
 #ifdef _POSIX_C_SOURCE
 # undef _POSIX_C_SOURCE
 #endif
+
+/*
+ * Don't propogate _DEBUG state to pyconfig as it incorrectly attempts to load
+ * debug libraries that don't normally ship with Python (e.g. 2.x). Debuggers
+ * wishing to spelunk the Python core can override this workaround by defining
+ * _FRIDA_ENABLE_PYDEBUG.
+ */
+#if defined (_DEBUG) && !defined (_FRIDA_ENABLE_PYDEBUG)
+# undef _DEBUG
+# include <pyconfig.h>
+# define _DEBUG
+#else
+# include <pyconfig.h>
+#endif
+
 #include <Python.h>
 #include <structmember.h>
 #ifdef _MSC_VER
