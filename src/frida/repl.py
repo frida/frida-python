@@ -168,17 +168,18 @@ def main():
             self._print(output)
 
         def _print_startup_message(self):
-            self._print("""    _____
-   (_____)
-    |   |    Frida {version} - A world-class dynamic instrumentation framework
-    |   |
-    |`-'|    Commands:
-    |   |        help      -> Displays the help system
-    |   |        object?   -> Display information about 'object'
-    |   |        exit/quit -> Exit
-    |   |
-    |   |    More info at http://www.frida.re/docs/home/
-    `._.'
+            self._print("""\
+     ____
+    / _  |
+   | (_| |   Frida {version} - A world-class dynamic instrumentation framework
+    > _  |
+   /_/ |_|   Commands:
+   . . . .       help      -> Displays the help system
+   . . . .       object?   -> Display information about 'object'
+   . . . .       exit/quit -> Exit
+   . . . .
+   . . . .   More info at http://www.frida.re/docs/home/
+   `.___.'
 """.format(version=frida.__version__))
 
         def _print_help(self, expression):
