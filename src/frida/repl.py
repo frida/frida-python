@@ -170,17 +170,14 @@ def main():
         def _print_startup_message(self):
             self._print("""\
      ____
-    / _  |
-   | (_| |   Frida {version} - A world-class dynamic instrumentation framework
-    > _  |
-   /_/ |_|   Commands:
-   . . . .       help      -> Displays the help system
+    / _  |   Frida {version} - A world-class dynamic instrumentation framework
+   | (_| |
+    > _  |   Commands:
+   /_/ |_|       help      -> Displays the help system
    . . . .       object?   -> Display information about 'object'
    . . . .       exit/quit -> Exit
    . . . .
-   . . . .   More info at http://www.frida.re/docs/home/
-   `.___.'
-""".format(version=frida.__version__))
+   . . . .   More info at http://www.frida.re/docs/home/""".format(version=frida.__version__))
 
         def _print_help(self, expression):
             # TODO: Figure out docstrings and implement here. This is real jankaty right now.
