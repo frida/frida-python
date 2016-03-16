@@ -13,7 +13,6 @@ from setuptools.command.build_ext import build_ext
 from setuptools.extension import Extension
 import os
 import platform
-import re
 import shutil
 import struct
 import sys
@@ -55,19 +54,31 @@ class FridaPrebuiltExt(build_ext):
                 os_version = "macosx-10.6-intel" if sys.version_info[0] == 3 else "macosx-10.11-intel"
             elif system == 'Linux':
                 os_version = "linux-x86_64" if arch == 64 else "linux-i686"
-            egg_url = "https://pypi.python.org/packages/{python_version}/f/frida/frida-{frida_version}-py{python_version}-{os_version}.egg".format(
+            egg_filename = "frida-{frida_version}-py{python_version}-{os_version}.egg".format(
                 frida_version=frida_version,
                 python_version=python_version,
                 os_version=os_version
+            )
+            egg_url = "https://pypi.python.org/packages/{python_version}/f/frida/{egg_filename}".format(
+                python_version=python_version,
+                egg_filename=egg_filename
             )
 
             try:
                 print('downloading prebuilt extension from', egg_url)
                 egg_data = urlopen(egg_url).read()
             except:
-                egg_url = re.sub(r".*/f/frida/(.*)", "file:///\g<1>", egg_url)
-                print('trying to get prebuilt extension from the current folder', egg_url)
-                egg_data = urlopen(egg_url).read()
+                egg_path = os.path.join(os.getcwd(), egg_filename)
+                print('trying to get prebuilt extension from the current folder', egg_path)
+                try:
+                    with open(egg_path, "rb") as f:
+                        egg_data = f.read()
+                except:
+                    egg_data = None
+
+            if egg_data is None:
+                raise Exception("Could not find prebuilt Frida extension. "
+                                "Prebuilts only provided for python 2.6-2.7 and 3.5")
 
             egg_file = BytesIO(egg_data)
 
