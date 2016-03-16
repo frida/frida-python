@@ -27,6 +27,9 @@ package_dir = os.path.dirname(os.path.realpath(__file__))
 pkg_info = os.path.join(package_dir, "PKG-INFO")
 in_source_package = os.path.isfile(pkg_info)
 if in_source_package:
+    if (sys.version_info[0] == 3 and sys.version_info[1] < 5) or \
+       (sys.version_info[0] == 2 and sys.version_info[1] < 7):
+        raise Exception("Frida only provides prebuilts for python 2.7 and 3.5")
     with open(pkg_info, "r") as f:
         version_line = [line.rstrip("\r") for line in f.read().split("\n") if line.startswith("Version: ")][0]
         frida_version = version_line[9:]
@@ -106,7 +109,9 @@ setup(
         "Operating System :: Microsoft :: Windows",
         "Operating System :: POSIX :: Linux",
         "Programming Language :: Python :: 2",
+        "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: JavaScript",
         "Topic :: Software Development :: Debuggers",
