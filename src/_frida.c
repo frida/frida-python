@@ -96,6 +96,7 @@ struct _PyDevice
   PyObject * type;
 
   GList * on_spawned;
+  GList * on_output;
   GList * on_lost;
 };
 
@@ -192,6 +193,7 @@ static PyObject * PyDevice_attach (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_on (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_off (PyDevice * self, PyObject * args);
 static void PyDevice_on_spawned (PyDevice * self, FridaSpawn * spawn, FridaDevice * handle);
+static void PyDevice_on_output (PyDevice * self, guint pid, gint fd, const guint8 * data, gint data_size, FridaDevice * handle);
 static void PyDevice_on_lost (PyDevice * self, FridaDevice * handle);
 
 static PyObject * PyApplication_from_handle (FridaApplication * handle);
@@ -977,6 +979,7 @@ PyDevice_init (PyDevice * self)
   self->type = NULL;
 
   self->on_spawned = NULL;
+  self->on_output = NULL;
   self->on_lost = NULL;
 
   return 0;
@@ -989,6 +992,12 @@ PyDevice_dealloc (PyDevice * self)
   {
     g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_spawned), self);
     g_list_free_full (self->on_spawned, (GDestroyNotify) Py_DecRef);
+  }
+
+  if (self->on_output != NULL)
+  {
+    g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_output), self);
+    g_list_free_full (self->on_output, (GDestroyNotify) Py_DecRef);
   }
 
   if (self->on_lost != NULL)
@@ -1288,6 +1297,16 @@ PyDevice_on (PyDevice * self, PyObject * args)
     Py_INCREF (callback);
     self->on_spawned = g_list_append (self->on_spawned, callback);
   }
+  else if (strcmp (signal, "output") == 0)
+  {
+    if (self->on_output == NULL)
+    {
+      g_signal_connect_swapped (self->handle, "output", G_CALLBACK (PyDevice_on_output), self);
+    }
+
+    Py_INCREF (callback);
+    self->on_output = g_list_append (self->on_output, callback);
+  }
   else if (strcmp (signal, "lost") == 0)
   {
     if (self->on_lost == NULL)
@@ -1337,6 +1356,27 @@ PyDevice_off (PyDevice * self, PyObject * args)
       g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_spawned), self);
     }
   }
+  else if (strcmp (signal, "output") == 0)
+  {
+    GList * entry;
+
+    entry = g_list_find (self->on_output, callback);
+    if (entry != NULL)
+    {
+      self->on_output = g_list_delete_link (self->on_output, entry);
+      Py_DECREF (callback);
+    }
+    else
+    {
+      PyErr_SetString (PyExc_ValueError, "unknown callback");
+      return NULL;
+    }
+
+    if (self->on_output == NULL)
+    {
+      g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_output), self);
+    }
+  }
   else if (strcmp (signal, "lost") == 0)
   {
     GList * entry;
@@ -1384,6 +1424,44 @@ PyDevice_on_spawned (PyDevice * self, FridaSpawn * spawn, FridaDevice * handle)
 
     g_list_foreach (self->on_spawned, (GFunc) Py_IncRef, NULL);
     callbacks = g_list_copy (self->on_spawned);
+
+    for (cur = callbacks; cur != NULL; cur = cur->next)
+    {
+      PyObject * result = PyObject_CallObject ((PyObject *) cur->data, args);
+      if (result == NULL)
+        PyErr_Print ();
+      else
+        Py_DECREF (result);
+    }
+
+    g_list_free_full (callbacks, (GDestroyNotify) Py_DecRef);
+
+    Py_DECREF (args);
+  }
+
+  PyGILState_Release (gstate);
+}
+
+static void
+PyDevice_on_output (PyDevice * self, guint pid, gint fd, const guint8 * data, gint data_size, FridaDevice * handle)
+{
+  PyGILState_STATE gstate;
+
+  gstate = PyGILState_Ensure ();
+
+  if (g_object_get_data (G_OBJECT (handle), "pyobject") == self)
+  {
+    PyObject * args;
+    GList * callbacks, * cur;
+
+#if PY_MAJOR_VERSION >= 3
+    args = Py_BuildValue ("Iiy#", pid, fd, data, data_size);
+#else
+    args = Py_BuildValue ("Iis#", pid, fd, data, data_size);
+#endif
+
+    g_list_foreach (self->on_output, (GFunc) Py_IncRef, NULL);
+    callbacks = g_list_copy (self->on_output);
 
     for (cur = callbacks; cur != NULL; cur = cur->next)
     {
