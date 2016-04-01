@@ -96,6 +96,7 @@ class ConsoleApplication(object):
         self._device_type = options.device_type
         self._host = options.host
         self._device = None
+        self._schedule_on_output = lambda pid, fd, data: self._reactor.schedule(lambda: self._on_output(pid, fd, data))
         self._schedule_on_device_lost = lambda: self._reactor.schedule(self._on_device_lost)
         self._spawned_pid = None
         self._spawned_argv = None
@@ -153,6 +154,7 @@ class ConsoleApplication(object):
             except:
                 pass
         if self._device is not None:
+            self._device.off('output', self._schedule_on_output)
             self._device.off('lost', self._schedule_on_device_lost)
         mgr.off('changed', on_devices_changed)
         frida.shutdown()
@@ -202,6 +204,7 @@ class ConsoleApplication(object):
             self._device = frida.get_device_manager().add_remote_device(self._host)
         else:
             self._device = frida.get_local_device()
+        self._device.on('output', self._schedule_on_output)
         self._device.on('lost', self._schedule_on_device_lost)
         if self._target is not None:
             spawning = True
@@ -237,6 +240,20 @@ class ConsoleApplication(object):
     def _show_message_if_no_device(self):
         if self._device is None:
             self._print("Waiting for USB device to appear...")
+
+    def _on_output(self, pid, fd, data):
+        if fd == 1:
+            prefix = "stdout> "
+            stream = sys.stdout
+        else:
+            prefix = "stderr> "
+            stream = sys.stderr
+        encoding = stream.encoding or 'UTF-8'
+        text = data.decode(encoding, errors='replace')
+        if text.endswith("\n"):
+            text = text[:-1]
+        lines = text.split("\n")
+        self._print(prefix + ("\n" + prefix).join(lines))
 
     def _on_device_lost(self):
         if self._exit_status is not None:
