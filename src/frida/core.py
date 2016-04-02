@@ -83,6 +83,9 @@ class Device(object):
     def spawn(self, argv):
         return self._impl.spawn(argv)
 
+    def input(self, target, data):
+        self._impl.input(self._pid_of(target), data)
+
     def resume(self, target):
         self._impl.resume(self._pid_of(target))
 

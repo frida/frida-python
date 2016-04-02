@@ -187,6 +187,7 @@ static PyObject * PyDevice_enable_spawn_gating (PyDevice * self);
 static PyObject * PyDevice_disable_spawn_gating (PyDevice * self);
 static PyObject * PyDevice_enumerate_pending_spawns (PyDevice * self);
 static PyObject * PyDevice_spawn (PyDevice * self, PyObject * args);
+static PyObject * PyDevice_input (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_resume (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_kill (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_attach (PyDevice * self, PyObject * args);
@@ -278,6 +279,7 @@ static PyMethodDef PyDevice_methods[] =
   { "disable_spawn_gating", (PyCFunction) PyDevice_disable_spawn_gating, METH_NOARGS, "Disable spawn gating." },
   { "enumerate_pending_spawns", (PyCFunction) PyDevice_enumerate_pending_spawns, METH_NOARGS, "Enumerate pending spawns." },
   { "spawn", (PyCFunction) PyDevice_spawn, METH_VARARGS, "Spawn a process into an attachable state." },
+  { "input", (PyCFunction) PyDevice_input, METH_VARARGS, "Input data on stdin of a spawned process." },
   { "resume", (PyCFunction) PyDevice_resume, METH_VARARGS, "Resume a process from the attachable state." },
   { "kill", (PyCFunction) PyDevice_kill, METH_VARARGS, "Kill a PID." },
   { "attach", (PyCFunction) PyDevice_attach, METH_VARARGS, "Attach to a PID." },
@@ -1221,6 +1223,30 @@ PyDevice_spawn (PyDevice * self, PyObject * args)
     return PyFrida_raise (error);
 
   return PyLong_FromLong (pid);
+}
+
+static PyObject *
+PyDevice_input (PyDevice * self, PyObject * args)
+{
+  long pid;
+  guint8 * data;
+  int data_length;
+  GError * error = NULL;
+
+#if PY_MAJOR_VERSION >= 3
+  if (!PyArg_ParseTuple (args, "ly#", &pid, &data, &data_length))
+#else
+  if (!PyArg_ParseTuple (args, "ls#", &pid, &data, &data_length))
+#endif
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_device_input_sync (self->handle, (guint) pid, data, data_length, &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
 }
 
 static PyObject *
