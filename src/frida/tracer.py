@@ -373,6 +373,8 @@ var state = {};
 var pending = [];
 var timer = null;
 
+installFlushBeforeExitHandlers();
+
 rpc.exports = {
     add: function (targets) {
         targets.forEach(function (target) {
@@ -428,21 +430,29 @@ rpc.exports = {
 function emit(event) {
     pending.push(event);
 
-    if (timer === null) {
-        timer = setTimeout(function () {
-            var items = pending;
-            pending = [];
-            timer = null;
+    if (timer === null)
+        timer = setTimeout(flush, 50);
+}
 
-            send({
-                from: "/events",
-                name: '+add',
-                payload: {
-                    items: items
-                }
-            });
-        }, 50);
+function flush() {
+    if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
     }
+
+    if (pending.length === 0)
+        return;
+
+    var items = pending;
+    pending = [];
+
+    send({
+        from: "/events",
+        name: '+add',
+        payload: {
+            items: items
+        }
+    });
 }
 
 function parseHandler(target) {
@@ -459,17 +469,47 @@ function parseHandler(target) {
         return {};
     }
 }
+
+function installFlushBeforeExitHandlers() {
+    if (Process.platform === 'windows') {
+        attachFlushBeforeExitHandler("kernel32.dll", "ExitProcess");
+    } else {
+        attachFlushBeforeExitHandler(null, "abort");
+        attachFlushBeforeExitHandler(null, "exit");
+    }
+}
+
+function attachFlushBeforeExitHandler(module, name) {
+    Interceptor.attach(Module.findExportByName(module, name), performFlushBeforeExit);
+}
+
+function performFlushBeforeExit() {
+    flush();
+
+    send({
+        from: "/events",
+        name: '+flush',
+        payload: {}
+    });
+    recv('+flush-ack', function () {}).wait();
+}
 """
 
     def _process_message(self, message, data, ui):
         handled = False
         if message['type'] == 'send':
             stanza = message['payload']
-            if stanza['from'] == "/events" and stanza['name'] == '+add':
-                events = [(timestamp, thread_id, depth, int(target_address.rstrip("L"), 16), message) for timestamp, thread_id, depth, target_address, message in stanza['payload']['items']]
-                ui.on_trace_events(events)
-
-                handled = True
+            if stanza['from'] == "/events":
+                if stanza['name'] == '+add':
+                    events = [(timestamp, thread_id, depth, int(target_address.rstrip("L"), 16), message) for timestamp, thread_id, depth, target_address, message in stanza['payload']['items']]
+                    ui.on_trace_events(events)
+                    handled = True
+                elif stanza['name'] == '+flush':
+                    try:
+                        self._script.post_message({ 'type': '+flush-ack' })
+                    except Exception as e:
+                        pass
+                    handled = True
             elif stanza['from'] == "/targets" and stanza['name'] == '+error':
                 ui.on_trace_error(stanza['payload'])
                 handled = True
