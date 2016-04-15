@@ -242,6 +242,8 @@ class ConsoleApplication(object):
             self._print("Waiting for USB device to appear...")
 
     def _on_output(self, pid, fd, data):
+        if data is None:
+            return
         if fd == 1:
             prefix = "stdout> "
             stream = sys.stdout
