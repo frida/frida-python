@@ -9,6 +9,7 @@ def main():
     import json
     import os
     import platform
+    import re
     from prompt_toolkit.shortcuts import create_prompt_application, create_output, create_eventloop
     from prompt_toolkit.history import FileHistory
     from prompt_toolkit.completion import Completion, Completer
@@ -417,7 +418,7 @@ rpc.exports.evaluate = function (expression) {
                                 } catch (e) {
                                     [];
                                 }"""):
-                        if key.startswith(after_dot):
+                        if self._pattern_matches(after_dot, key):
                             yield Completion(key, -len(after_dot))
                 else:
                     if magic:
@@ -425,7 +426,7 @@ rpc.exports.evaluate = function (expression) {
                     else:
                         keys = self._get_keys("Object.getOwnPropertyNames(this)")
                     for key in keys:
-                        if not key.startswith(before_dot) or (key.startswith('_') and before_dot == ''):
+                        if not self._pattern_matches(before_dot, key) or (key.startswith('_') and before_dot == ''):
                             continue
                         yield Completion(key, -len(before_dot))
             except frida.InvalidOperationError:
@@ -441,6 +442,9 @@ rpc.exports.evaluate = function (expression) {
         def _is_valid_name(self, name):
             tokens = list(self._lexer.get_tokens(name))
             return len(tokens) == 2 and tokens[0][0] in Token.Name.subtypes
+
+        def _pattern_matches(self, pattern, text):
+            return re.search(re.escape(pattern), text, re.IGNORECASE) != None
 
     def hexdump(src, length=16):
         try:
