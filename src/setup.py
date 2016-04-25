@@ -61,6 +61,8 @@ class FridaPrebuiltExt(build_ext):
             elif system == 'Linux':
                 os_version = "linux-x86_64" if arch == 64 else "linux-i686"
 
+            network_error = None
+
             try:
                 print("querying pypi for available prebuilds")
                 client = xmlrpclib.ServerProxy("https://pypi.python.org/pypi")
@@ -89,15 +91,22 @@ class FridaPrebuiltExt(build_ext):
 
                 print("downloading prebuilt extension from", egg_url)
                 egg_data = urlopen(egg_url).read()
-            except Exception as network_error:
-                egg_path = os.path.join(os.getcwd(), egg_filename)
-                print("download failed")
-                print("looking for prebuilt extension in the current directory, i.e.", egg_path)
+            except Exception as e:
+                network_error = e
+
+            if network_error is not None:
+                print("network query failed")
+
+                egg_path = os.path.expanduser("~/frida-{}-py{}.{}-{}.egg".format(frida_version, python_version[0], python_version[1], os_version))
+                print("looking for prebuilt extension in home directory, i.e.", egg_path)
                 try:
                     with open(egg_path, "rb") as f:
                         egg_data = f.read()
                 except:
-                    print("no prebuilt extension found in the current directory")
+                    print("no prebuilt extension found in home directory")
+                    egg_data = None
+
+                if egg_data is None:
                     raise network_error
 
             egg_file = BytesIO(egg_data)
