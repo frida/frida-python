@@ -21,6 +21,10 @@ try:
 except:
     from urllib2 import urlopen
 import zipfile
+try:
+    import xmlrpclib
+except ImportError:
+    import xmlrpc.client as xmlrpclib
 
 package_dir = os.path.dirname(os.path.realpath(__file__))
 pkg_info = os.path.join(package_dir, "PKG-INFO")
@@ -45,44 +49,59 @@ class FridaPrebuiltExt(build_ext):
         except:
             pass
         if in_source_package:
-            python_version = "%d.%d" % sys.version_info[0:2]
+            python_version = sys.version_info[0:2]
+            python_major_version = python_version[0]
             system = platform.system()
             arch = struct.calcsize('P') * 8
             if system == 'Windows':
                 os_version = "win-amd64" if arch == 64 else "win32"
             elif system == 'Darwin':
-                os_version = "macosx-10.6-intel" if sys.version_info[0] == 3 else "macosx-10.11-intel"
+                os_version = "macosx-10.6-intel" if python_major_version == 3 else "macosx-10.11-intel"
             elif system == 'Linux':
                 os_version = "linux-x86_64" if arch == 64 else "linux-i686"
-            egg_filename = "frida-{frida_version}-py{python_version}-{os_version}.egg".format(
-                frida_version=frida_version,
-                python_version=python_version,
-                os_version=os_version
-            )
-            egg_url = "https://pypi.python.org/packages/{python_version}/f/frida/{egg_filename}".format(
-                python_version=python_version,
-                egg_filename=egg_filename
-            )
+
+            print("querying pypi for available prebuilds")
+            client = xmlrpclib.ServerProxy("https://pypi.python.org/pypi")
+            urls = client.release_urls("frida", frida_version)
+
+            urls = [url for url in urls if url['python_version'] != 'source']
+
+            def parse_version(version):
+                return tuple(map(int, version.split(".")))
+
+            if python_major_version >= 3:
+                urls = [url for url in urls if parse_version(url['python_version'])[0] == python_major_version]
+            else:
+                urls = [url for url in urls if parse_version(url['python_version']) == python_version]
+
+            os_suffix = "-{}.egg".format(os_version)
+            urls = [url for url in urls if url['filename'].endswith(os_suffix)]
+
+            if len(urls) == 0:
+                raise Exception("Could not find prebuilt Frida extension. "
+                                "Prebuilds only provided for python 2.6-2.7 and 3.x.")
+
+            url = urls[0]
+            egg_filename = url['filename']
+            egg_url = url['url']
 
             try:
-                print('downloading prebuilt extension from', egg_url)
+                print("downloading prebuilt extension from", egg_url)
                 egg_data = urlopen(egg_url).read()
-            except:
+            except Exception as network_error:
                 egg_path = os.path.join(os.getcwd(), egg_filename)
-                print('trying to get prebuilt extension from the current folder', egg_path)
+                print("download failed")
+                print("looking for prebuilt extension in the current directory, i.e.", egg_path)
                 try:
                     with open(egg_path, "rb") as f:
                         egg_data = f.read()
                 except:
-                    egg_data = None
-
-            if egg_data is None:
-                raise Exception("Could not find prebuilt Frida extension. "
-                                "Prebuilts only provided for python 2.6-2.7 and 3.5")
+                    print("no prebuilt extension found in the current directory")
+                    raise network_error
 
             egg_file = BytesIO(egg_data)
 
-            print('extracting prebuilt extension')
+            print("extracting prebuilt extension")
             egg_zip = zipfile.ZipFile(egg_file)
             egg_zip.extract(os.path.basename(target), target_dir)
         else:
