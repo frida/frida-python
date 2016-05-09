@@ -89,38 +89,38 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalLibraryDirectories>C:\Program Files (x86)\Python27\libs;$(SolutionDir)python\2.7\x86\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Program Files (x86)\Python 2.7\libs;$(SolutionDir)python\2.7\x86\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files (x86)\Python27\include;$(SolutionDir)python\2.7\x86\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files (x86)\Python 2.7\include;$(SolutionDir)python\2.7\x86\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalLibraryDirectories>C:\Program Files\Python27\libs;$(SolutionDir)python\2.7\x64\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Program Files\Python 2.7\libs;$(SolutionDir)python\2.7\x64\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files\Python27\include;$(SolutionDir)python\2.7\x64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files\Python 2.7\include;$(SolutionDir)python\2.7\x64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalLibraryDirectories>C:\Program Files (x86)\Python27\libs;$(SolutionDir)python\2.7\x86\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Program Files (x86)\Python 2.7\libs;$(SolutionDir)python\2.7\x86\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files (x86)\Python27\include;$(SolutionDir)python\2.7\x86\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files (x86)\Python 2.7\include;$(SolutionDir)python\2.7\x86\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalLibraryDirectories>C:\Program Files\Python27\libs;$(SolutionDir)python\2.7\x64\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Program Files\Python 2.7\libs;$(SolutionDir)python\2.7\x64\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files\Python27\include;$(SolutionDir)python\2.7\x64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files\Python 2.7\include;$(SolutionDir)python\2.7\x64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <Import Project="frida-python-common.props" />
