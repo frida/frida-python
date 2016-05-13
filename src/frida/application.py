@@ -92,6 +92,10 @@ class ConsoleApplication(object):
 
         (options, args) = parser.parse_args()
 
+        if sys.version_info[0] < 3:
+            input_encoding = sys.stdin.encoding or 'UTF-8'
+            args = [arg.decode(input_encoding) for arg in args]
+
         self._device_id = options.device_id
         self._device_type = options.device_type
         self._host = options.host
