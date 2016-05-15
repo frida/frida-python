@@ -58,14 +58,12 @@ def main():
                 return
 
             if self._watch:
-                handler_dir = os.path.dirname(self._user_script)
                 monitor = self._script_monitor
                 if monitor is None:
-                    monitor = frida.FileMonitor(handler_dir)
+                    monitor = frida.FileMonitor(self._user_script)
                     monitor.on('change', self._on_change)
                     monitor.enable()
                     self._script_monitor = monitor
-
 
             if self._spawned_argv is not None:
                 self._update_status("Spawned `{command}`. Use %resume to let the main thread start executing!".format(command=" ".join(self._spawned_argv)))
@@ -344,8 +342,6 @@ def main():
                 self._print("message:", message, "data:", data)
 
         def _on_change(self, changed_file, other_file, event_type):
-            if changed_file != self._user_script:
-                return
             self._last_change_id += 1
             change_id = self._last_change_id
             self._reactor.schedule(lambda: self._watcher_reload(change_id), delay=0.05)
