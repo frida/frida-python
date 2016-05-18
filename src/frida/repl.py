@@ -27,6 +27,9 @@ def main():
             self._history = FileHistory(os.path.join(os.path.expanduser('~'), '.frida_history'))
             self._completer = FridaCompleter(self)
             self._cli = None
+            self._last_change_id = 0
+            self._script_monitor = None
+            self._monitored_file = None
 
             super(REPLApplication, self).__init__(self._process_input, self._on_stop)
 
@@ -51,6 +54,7 @@ def main():
                 self._update_status("Failed to load script: {error}".format(error=e))
                 self._exit(1)
                 return
+
             if self._spawned_argv is not None:
                 self._update_status("Spawned `{command}`. Use %resume to let the main thread start executing!".format(command=" ".join(self._spawned_argv)))
             else:
@@ -68,8 +72,10 @@ def main():
 
         def _stop(self):
             self._unload_script()
+            self._unmonitor_script()
 
         def _load_script(self):
+            self._monitor_script()
             self._seqno += 1
             script = self._session.create_script(name="repl%d" % self._seqno, source=self._create_repl_script())
             script.set_log_handler(self._log)
@@ -83,11 +89,32 @@ def main():
         def _unload_script(self):
             if self._script is None:
                 return
+
             try:
                 self._script.unload()
             except:
                 pass
             self._script = None
+
+        def _monitor_script(self):
+            if self._monitored_file == self._user_script:
+                return
+
+            self._unmonitor_script()
+
+            if self._user_script is not None:
+                monitor = frida.FileMonitor(self._user_script)
+                monitor.on('change', self._on_change)
+                monitor.enable()
+                self._script_monitor = monitor
+            self._monitored_file = self._user_script
+
+        def _unmonitor_script(self):
+            if self._script_monitor is None:
+                return
+
+            self._script_monitor.disable()
+            self._script_monitor = None
 
         def _process_input(self, reactor):
             self._print_startup_message()
@@ -252,7 +279,7 @@ def main():
                 self._reactor.schedule(lambda: self._resume())
             elif command == 'load':
                 old_user_script = self._user_script
-                self._user_script = args[0]
+                self._user_script = os.path.abspath(args[0])
                 if not self._reload():
                     self._user_script = old_user_script
             elif command == 'reload':
@@ -324,6 +351,21 @@ def main():
                 self._log('error', text)
             else:
                 self._print("message:", message, "data:", data)
+
+        def _on_change(self, changed_file, other_file, event_type):
+            if event_type == 'changes-done-hint':
+                return
+            self._last_change_id += 1
+            change_id = self._last_change_id
+            self._reactor.schedule(lambda: self._process_change(change_id), delay=0.05)
+
+        def _process_change(self, change_id):
+            if change_id != self._last_change_id:
+                return
+            try:
+                self._load_script()
+            except Exception as e:
+                self._print("Failed to load script: {error}".format(error=e))
 
         def _create_repl_script(self):
             user_script = ""
