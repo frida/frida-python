@@ -57,12 +57,6 @@ def main():
                 self._exit(1)
                 return
 
-            if self._user_script is not None and self._watch:
-                monitor = frida.FileMonitor(self._user_script)
-                monitor.on('change', self._on_change)
-                monitor.enable()
-                self._script_monitor = monitor
-
             if self._spawned_argv is not None:
                 self._update_status("Spawned `{command}`. Use %resume to let the main thread start executing!".format(command=" ".join(self._spawned_argv)))
             else:
@@ -79,8 +73,6 @@ def main():
                 pass
 
         def _stop(self):
-            if self._script_monitor is not None:
-                self._script_monitor.disable()
             self._unload_script()
 
         def _load_script(self):
@@ -94,6 +86,13 @@ def main():
             script.on('message', on_message)
             script.load()
 
+            if self._user_script is not None and self._watch:
+                monitor = frida.FileMonitor(self._user_script)
+                monitor.on('change', self._on_change)
+                monitor.enable()
+                self._script_monitor = monitor
+
+
         def _unload_script(self):
             if self._script is None:
                 return
@@ -102,6 +101,10 @@ def main():
             except:
                 pass
             self._script = None
+
+            if self._script_monitor is not None:
+                self._script_monitor.disable()
+                self._script_monitor = None
 
         def _process_input(self, reactor):
             self._print_startup_message()
