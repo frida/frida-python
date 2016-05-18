@@ -350,7 +350,7 @@ class Script(object):
         mtype = message['type']
         payload = message.get('payload', None)
         if mtype == 'log':
-            level = message.get('level', 'info')
+            level = message['level']
             text = payload
             self._log_handler(level, text)
         elif mtype == 'send' and isinstance(payload, list) and payload[0] == 'frida:rpc':
