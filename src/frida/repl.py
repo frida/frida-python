@@ -29,6 +29,7 @@ def main():
             self._cli = None
             self._last_change_id = 0
             self._script_monitor = None
+            self._monitored_file = None
 
             super(REPLApplication, self).__init__(self._process_input, self._on_stop)
 
@@ -74,8 +75,10 @@ def main():
 
         def _stop(self):
             self._unload_script()
+            self._unmonitor_script()
 
         def _load_script(self):
+            self._monitor_script()
             self._seqno += 1
             script = self._session.create_script(name="repl%d" % self._seqno, source=self._create_repl_script())
             script.set_log_handler(self._log)
@@ -86,25 +89,35 @@ def main():
             script.on('message', on_message)
             script.load()
 
-            if self._user_script is not None and self._watch:
-                monitor = frida.FileMonitor(self._user_script)
-                monitor.on('change', self._on_change)
-                monitor.enable()
-                self._script_monitor = monitor
-
-
         def _unload_script(self):
             if self._script is None:
                 return
+
             try:
                 self._script.unload()
             except:
                 pass
             self._script = None
 
-            if self._script_monitor is not None:
-                self._script_monitor.disable()
-                self._script_monitor = None
+        def _monitor_script(self):
+            if not self._watch or self._monitored_file == self._user_script:
+                return
+
+            self._unmonitor_script()
+
+            if self._user_script is not None:
+                monitor = frida.FileMonitor(self._user_script)
+                monitor.on('change', self._on_change)
+                monitor.enable()
+                self._script_monitor = monitor
+            self._monitored_file = self._user_script
+
+        def _unmonitor_script(self):
+            if self._script_monitor is None:
+                return
+
+            self._script_monitor.disable()
+            self._script_monitor = None
 
         def _process_input(self, reactor):
             self._print_startup_message()
@@ -343,11 +356,13 @@ def main():
                 self._print("message:", message, "data:", data)
 
         def _on_change(self, changed_file, other_file, event_type):
+            if event_type == 'changes-done-hint':
+                return
             self._last_change_id += 1
             change_id = self._last_change_id
-            self._reactor.schedule(lambda: self._watcher_reload(change_id), delay=0.05)
+            self._reactor.schedule(lambda: self._process_change(change_id), delay=0.05)
 
-        def _watcher_reload(self, change_id):
+        def _process_change(self, change_id):
             if change_id != self._last_change_id:
                 return
             try:
