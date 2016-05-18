@@ -36,12 +36,9 @@ def main():
         def _add_options(self, parser):
             parser.add_option("-l", "--load", help="load SCRIPT", metavar="SCRIPT",
                 type='string', action='store', dest="user_script", default=None)
-            parser.add_option("-w", "--watch", help="watch SCRIPT for changes and automatically reload it",
-                action='store_true', dest="watch", default=False)
 
         def _initialize(self, parser, options, args):
             self._user_script = options.user_script
-            self._watch = options.watch
 
         def _usage(self):
             return "usage: %prog [options] target"
@@ -100,7 +97,7 @@ def main():
             self._script = None
 
         def _monitor_script(self):
-            if not self._watch or self._monitored_file == self._user_script:
+            if self._monitored_file == self._user_script:
                 return
 
             self._unmonitor_script()
