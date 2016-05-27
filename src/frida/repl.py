@@ -59,7 +59,6 @@ def main():
                 if self._no_pause:
                     self._update_status("Spawned `{command}`. Resuming main thread!".format(command=" ".join(self._spawned_argv)))
                     self._do_magic("resume")
-
                 else:
                     self._update_status("Spawned `{command}`. Use %resume to let the main thread start executing!".format(command=" ".join(self._spawned_argv)))
             else:
