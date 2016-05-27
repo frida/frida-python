@@ -88,7 +88,7 @@ class ConsoleApplication(object):
                 action='store_true', dest="enable_debugger", default=False)
             parser.add_option("--disable-jit", help="disable JIT",
                 action='store_true', dest="disable_jit", default=False)
-            parser.add_option("--nopause", help="automatically start main thread after startup",
+            parser.add_option("--no-pause", help="automatically start main thread after startup",
                 action='store_true', dest="no_pause", default=False)
 
         self._add_options(parser)
