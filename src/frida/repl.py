@@ -63,7 +63,6 @@ def main():
                     self._update_status("Spawned `{command}`. Use %resume to let the main thread start executing!".format(command=" ".join(self._spawned_argv)))
             else:
                 self._clear_status()
-                
             self._ready.set()
 
         def _on_stop(self):
