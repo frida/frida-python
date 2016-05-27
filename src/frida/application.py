@@ -88,8 +88,6 @@ class ConsoleApplication(object):
                 action='store_true', dest="enable_debugger", default=False)
             parser.add_option("--disable-jit", help="disable JIT",
                 action='store_true', dest="disable_jit", default=False)
-            parser.add_option("--no-pause", help="automatically start main thread after startup",
-                action='store_true', dest="no_pause", default=False)
 
         self._add_options(parser)
 
@@ -103,7 +101,6 @@ class ConsoleApplication(object):
         self._device_type = options.device_type
         self._host = options.host
         self._device = None
-        self._no_pause = options.no_pause
         self._schedule_on_output = lambda pid, fd, data: self._reactor.schedule(lambda: self._on_output(pid, fd, data))
         self._schedule_on_device_lost = lambda: self._reactor.schedule(self._on_device_lost)
         self._spawned_pid = None

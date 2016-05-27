@@ -36,9 +36,12 @@ def main():
         def _add_options(self, parser):
             parser.add_option("-l", "--load", help="load SCRIPT", metavar="SCRIPT",
                 type='string', action='store', dest="user_script", default=None)
+            parser.add_option("--no-pause", help="automatically start main thread after startup",
+                action='store_true', dest="no_pause", default=False)
 
         def _initialize(self, parser, options, args):
             self._user_script = options.user_script
+            self._no_pause = options.no_pause
 
         def _usage(self):
             return "usage: %prog [options] target"
