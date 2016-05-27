@@ -101,7 +101,6 @@ class ConsoleApplication(object):
         self._device_type = options.device_type
         self._host = options.host
         self._device = None
-        self._no_pause = options.no_pause
         self._schedule_on_output = lambda pid, fd, data: self._reactor.schedule(lambda: self._on_output(pid, fd, data))
         self._schedule_on_device_lost = lambda: self._reactor.schedule(self._on_device_lost)
         self._spawned_pid = None
