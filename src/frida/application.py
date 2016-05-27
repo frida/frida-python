@@ -88,7 +88,6 @@ class ConsoleApplication(object):
                 action='store_true', dest="enable_debugger", default=False)
             parser.add_option("--disable-jit", help="disable JIT",
                 action='store_true', dest="disable_jit", default=False)
-            
         self._add_options(parser)
 
         (options, args) = parser.parse_args()
