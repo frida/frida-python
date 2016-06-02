@@ -174,6 +174,12 @@ class Session(FunctionContainer):
     def create_script(self, *args, **kwargs):
         return Script(self._impl.create_script(*args, **kwargs))
 
+    def create_script_from_bytes(self, *args, **kwargs):
+        return Script(self._impl.create_script_from_bytes(*args, **kwargs))
+
+    def compile_script(self, *args, **kwargs):
+        return self._impl.compile_script(*args, **kwargs)
+
     def enable_debugger(self, *args, **kwargs):
         return self._impl.enable_debugger(*args, **kwargs)
 

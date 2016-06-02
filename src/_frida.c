@@ -226,6 +226,8 @@ static int PySession_init (PySession * self);
 static void PySession_dealloc (PySession * self);
 static PyObject * PySession_detach (PySession * self);
 static PyObject * PySession_create_script (PySession * self, PyObject * args, PyObject * kw);
+static PyObject * PySession_create_script_from_bytes (PySession * self, PyObject * args, PyObject * kw);
+static PyObject * PySession_compile_script (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_disable_debugger (PySession * self);
 static PyObject * PySession_disable_jit (PySession * self);
@@ -346,6 +348,8 @@ static PyMethodDef PySession_methods[] =
 {
   { "detach", (PyCFunction) PySession_detach, METH_NOARGS, "Detach session from the process." },
   { "create_script", (PyCFunction) PySession_create_script, METH_VARARGS | METH_KEYWORDS, "Create a new script." },
+  { "create_script_from_bytes", (PyCFunction) PySession_create_script_from_bytes, METH_VARARGS | METH_KEYWORDS, "Create a new script from bytecode." },
+  { "compile_script", (PyCFunction) PySession_compile_script, METH_VARARGS | METH_KEYWORDS, "Compile script source code to bytecode." },
   { "enable_debugger", (PyCFunction) PySession_enable_debugger, METH_VARARGS | METH_KEYWORDS, "Enable the Node.js compatible script debugger." },
   { "disable_debugger", (PyCFunction) PySession_disable_debugger, METH_NOARGS, "Disable the Node.js compatible script debugger." },
   { "disable_jit", (PyCFunction) PySession_disable_jit, METH_NOARGS, "Disable JIT." },
@@ -1890,6 +1894,69 @@ PySession_create_script (PySession * self, PyObject * args, PyObject * kw)
     return PyFrida_raise (error);
 
   return PyScript_from_handle (handle);
+}
+
+static PyObject *
+PySession_create_script_from_bytes (PySession * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "data", "name", NULL };
+  guint8 * data;
+  int size;
+  char * name = NULL;
+  GBytes * bytes;
+  GError * error = NULL;
+  FridaScript * handle;
+
+#if PY_MAJOR_VERSION >= 3
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "y#|es", keywords, &data, &size, "utf-8", &name))
+#else
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s#|es", keywords, &data, &size, "utf-8", &name))
+#endif
+    return NULL;
+
+  bytes = g_bytes_new (data, size);
+
+  Py_BEGIN_ALLOW_THREADS
+  handle = frida_session_create_script_from_bytes_sync (self->handle, name, bytes, &error);
+  Py_END_ALLOW_THREADS
+
+  g_bytes_unref (bytes);
+  PyMem_Free (name);
+
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  return PyScript_from_handle (handle);
+}
+
+static PyObject *
+PySession_compile_script (PySession * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "source", NULL };
+  char * source;
+  GError * error = NULL;
+  GBytes * bytes;
+  gconstpointer data;
+  gsize size;
+  PyObject * result;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es", keywords, "utf-8", &source))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  bytes = frida_session_compile_script_sync (self->handle, source, &error);
+  Py_END_ALLOW_THREADS
+
+  PyMem_Free (source);
+
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  data = g_bytes_get_data (bytes, &size);
+  result = PyBytes_FromStringAndSize (data, size);
+  g_bytes_unref (bytes);
+
+  return result;
 }
 
 static PyObject *
