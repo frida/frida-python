@@ -342,7 +342,7 @@ class Script(object):
             if operation == 'ok':
                 value = params[0] if data is None else data
             else:
-                error = Exception(params[0])
+                error = RPCException(*params[0:2])
 
             callback(value, error)
 
@@ -370,6 +370,10 @@ class Script(object):
             print(text, file=sys.stdout)
         else:
             print(text, file=sys.stderr)
+
+class RPCException(Exception):
+    def __str__(self):
+        return self.args[1] if len(self.args) >= 2 else self.args[0]
 
 class ScriptExports(object):
     def __init__(self, script):
