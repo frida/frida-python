@@ -92,7 +92,7 @@ class Capture(NSObject):
         script, message = params
         pool = NSAutoreleasePool.alloc().init()
         try:
-            script.post_message(message)
+            script.post(message)
         except Exception, e:
             print "Failed to post to script:", e
         del pool

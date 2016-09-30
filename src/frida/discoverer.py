@@ -27,7 +27,7 @@ class Discoverer(object):
         self._script.load()
 
     def stop(self):
-        self._script.post_message({
+        self._script.post({
             'to': "/sampler",
             'name': '+stop',
             'payload': {}

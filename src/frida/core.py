@@ -294,8 +294,8 @@ class Script(object):
     def unload(self):
         self._impl.unload()
 
-    def post_message(self, message):
-        self._impl.post_message(message)
+    def post(self, *args, **kwargs):
+        self._impl.post(*args, **kwargs)
 
     def on(self, signal, callback):
         if signal == 'message':
@@ -330,7 +330,7 @@ class Script(object):
             self._pending[request_id] = on_complete
             message = ['frida:rpc', request_id]
             message.extend(args)
-            self.post_message(message)
+            self.post(message)
             while not result[0]:
                 self._cond.wait()
 

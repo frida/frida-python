@@ -194,7 +194,7 @@ static PyObject * PyDevice_attach (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_on (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_off (PyDevice * self, PyObject * args);
 static void PyDevice_on_spawned (PyDevice * self, FridaSpawn * spawn, FridaDevice * handle);
-static void PyDevice_on_output (PyDevice * self, guint pid, gint fd, const guint8 * data, gint data_size, FridaDevice * handle);
+static void PyDevice_on_output (PyDevice * self, guint pid, gint fd, GBytes * data, FridaDevice * handle);
 static void PyDevice_on_lost (PyDevice * self, FridaDevice * handle);
 
 static PyObject * PyApplication_from_handle (FridaApplication * handle);
@@ -240,10 +240,10 @@ static int PyScript_init (PyScript * self);
 static void PyScript_dealloc (PyScript * self);
 static PyObject * PyScript_load (PyScript * self);
 static PyObject * PyScript_unload (PyScript * self);
-static PyObject * PyScript_post_message (PyScript * self, PyObject * args);
+static PyObject * PyScript_post (PyScript * self, PyObject * args, PyObject * kw);
 static PyObject * PyScript_on (PyScript * self, PyObject * args);
 static PyObject * PyScript_off (PyScript * self, PyObject * args);
-static void PyScript_on_message (PyScript * self, const gchar * message, const gchar * data, gint data_size, FridaScript * handle);
+static void PyScript_on_message (PyScript * self, const gchar * message, GBytes * data, FridaScript * handle);
 
 static int PyFileMonitor_init (PyFileMonitor * self, PyObject * args);
 static void PyFileMonitor_dealloc (PyFileMonitor * self);
@@ -362,7 +362,7 @@ static PyMethodDef PyScript_methods[] =
 {
   { "load", (PyCFunction) PyScript_load, METH_NOARGS, "Load the script." },
   { "unload", (PyCFunction) PyScript_unload, METH_NOARGS, "Unload the script." },
-  { "post_message", (PyCFunction) PyScript_post_message, METH_VARARGS, "Post a JSON-formatted message to the script." },
+  { "post", (PyCFunction) PyScript_post, METH_VARARGS | METH_KEYWORDS, "Post a JSON-formatted message to the script." },
   { "on", (PyCFunction) PyScript_on, METH_VARARGS, "Add an event handler." },
   { "off", (PyCFunction) PyScript_off, METH_VARARGS, "Remove an event handler." },
   { NULL }
@@ -1233,20 +1233,26 @@ static PyObject *
 PyDevice_input (PyDevice * self, PyObject * args)
 {
   long pid;
-  guint8 * data;
-  int data_length;
+  gconstpointer data_buffer;
+  int data_size;
+  GBytes * data;
   GError * error = NULL;
 
 #if PY_MAJOR_VERSION >= 3
-  if (!PyArg_ParseTuple (args, "ly#", &pid, &data, &data_length))
+  if (!PyArg_ParseTuple (args, "ly#", &pid, &data_buffer, &data_size))
 #else
-  if (!PyArg_ParseTuple (args, "ls#", &pid, &data, &data_length))
+  if (!PyArg_ParseTuple (args, "ls#", &pid, &data_buffer, &data_size))
 #endif
     return NULL;
 
+  data = g_bytes_new (data_buffer, data_size);
+
   Py_BEGIN_ALLOW_THREADS
-  frida_device_input_sync (self->handle, (guint) pid, data, data_length, &error);
+  frida_device_input_sync (self->handle, (guint) pid, data, &error);
   Py_END_ALLOW_THREADS
+
+  g_bytes_unref (data);
+
   if (error != NULL)
     return PyFrida_raise (error);
 
@@ -1473,7 +1479,7 @@ PyDevice_on_spawned (PyDevice * self, FridaSpawn * spawn, FridaDevice * handle)
 }
 
 static void
-PyDevice_on_output (PyDevice * self, guint pid, gint fd, const guint8 * data, gint data_size, FridaDevice * handle)
+PyDevice_on_output (PyDevice * self, guint pid, gint fd, GBytes * data, FridaDevice * handle)
 {
   PyGILState_STATE gstate;
 
@@ -1481,13 +1487,17 @@ PyDevice_on_output (PyDevice * self, guint pid, gint fd, const guint8 * data, gi
 
   if (g_object_get_data (G_OBJECT (handle), "pyobject") == self)
   {
+    gconstpointer data_buffer;
+    gsize data_size;
     PyObject * args;
     GList * callbacks, * cur;
 
+    data_buffer = g_bytes_get_data (data, &data_size);
+
 #if PY_MAJOR_VERSION >= 3
-    args = Py_BuildValue ("Iiy#", pid, fd, data, data_size);
+    args = Py_BuildValue ("Iiy#", pid, fd, data_buffer, (int) data_size);
 #else
-    args = Py_BuildValue ("Iis#", pid, fd, data, data_size);
+    args = Py_BuildValue ("Iis#", pid, fd, data_buffer, (int) data_size);
 #endif
 
     g_list_foreach (self->on_output, (GFunc) Py_IncRef, NULL);
@@ -1768,8 +1778,8 @@ PyIcon_from_handle (FridaIcon * handle)
   {
     PyObject * result;
     PyIcon * icon;
-    guint8 * pixels;
-    gint pixels_length;
+    gconstpointer pixels;
+    gsize pixels_size;
 
     result = PyObject_CallFunction ((PyObject *) &PyIconType, NULL);
 
@@ -1777,8 +1787,8 @@ PyIcon_from_handle (FridaIcon * handle)
     icon->width = frida_icon_get_width (handle);
     icon->height = frida_icon_get_height (handle);
     icon->rowstride = frida_icon_get_rowstride (handle);
-    pixels = frida_icon_get_pixels (handle, &pixels_length);
-    icon->pixels = PyBytes_FromStringAndSize ((char *) pixels, (Py_ssize_t) pixels_length);
+    pixels = g_bytes_get_data (frida_icon_get_pixels (handle), &pixels_size);
+    icon->pixels = PyBytes_FromStringAndSize ((char *) pixels, (Py_ssize_t) pixels_size);
 
     return result;
   }
@@ -2179,13 +2189,17 @@ PyScript_unload (PyScript * self)
 }
 
 static PyObject *
-PyScript_post_message (PyScript * self, PyObject * args)
+PyScript_post (PyScript * self, PyObject * args, PyObject * kw)
 {
+  static char * keywords[] = { "message", "data", NULL };
   PyObject * message_object, * message_json;
+  gconstpointer data_buffer = NULL;
+  int data_size = 0;
   char * message_utf8;
+  GBytes * data;
   GError * error = NULL;
 
-  if (!PyArg_ParseTuple (args, "O", &message_object))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "O|z#", keywords, &message_object, &data_buffer, &data_size))
     return NULL;
 
   message_json = PyObject_CallFunction (json_dumps, "O", message_object);
@@ -2206,9 +2220,13 @@ PyScript_post_message (PyScript * self, PyObject * args)
   message_utf8 = PyString_AsString (message_json);
 #endif
 
+  data = (data_buffer != NULL) ? g_bytes_new (data_buffer, data_size) : NULL;
+
   Py_BEGIN_ALLOW_THREADS
-  frida_script_post_message_sync (self->handle, message_utf8, &error);
+  frida_script_post_sync (self->handle, message_utf8, data, &error);
   Py_END_ALLOW_THREADS
+
+  g_bytes_unref (data);
 
   Py_DECREF (message_json);
 
@@ -2276,7 +2294,7 @@ PyScript_off (PyScript * self, PyObject * args)
 }
 
 static void
-PyScript_on_message (PyScript * self, const gchar * message, const gchar * data, gint data_size, FridaScript * handle)
+PyScript_on_message (PyScript * self, const gchar * message, GBytes * data, FridaScript * handle)
 {
   PyGILState_STATE gstate;
 
@@ -2285,15 +2303,27 @@ PyScript_on_message (PyScript * self, const gchar * message, const gchar * data,
   if (g_object_get_data (G_OBJECT (handle), "pyobject") == self)
   {
     PyObject * message_object, * args;
+    gconstpointer data_buffer;
+    gsize data_size;
     GList * callbacks, * cur;
 
     message_object = PyObject_CallFunction (json_loads, "s", message);
     g_assert (message_object != NULL);
 
+    if (data != NULL)
+    {
+      data_buffer = g_bytes_get_data (data, &data_size);
+    }
+    else
+    {
+      data_buffer = NULL;
+      data_size = 0;
+    }
+
 #if PY_MAJOR_VERSION >= 3
-    args = Py_BuildValue ("Oy#", message_object, data, data_size);
+    args = Py_BuildValue ("Oy#", message_object, data_buffer, (int) data_size);
 #else
-    args = Py_BuildValue ("Os#", message_object, data, data_size);
+    args = Py_BuildValue ("Os#", message_object, data_buffer, (int) data_size);
 #endif
 
     g_list_foreach (self->on_message, (GFunc) Py_IncRef, NULL);

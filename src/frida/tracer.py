@@ -506,7 +506,7 @@ function performFlushBeforeExit() {
                     handled = True
                 elif stanza['name'] == '+flush':
                     try:
-                        self._script.post_message({ 'type': '+flush-ack' })
+                        self._script.post({ 'type': '+flush-ack' })
                     except Exception as e:
                         pass
                     handled = True
