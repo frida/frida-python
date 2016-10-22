@@ -24,6 +24,7 @@ def main():
             self._script = None
             self._seqno = 0
             self._ready = threading.Event()
+            self._errors = 0
             self._history = FileHistory(os.path.join(os.path.expanduser('~'), '.frida_history'))
             self._completer = FridaCompleter(self)
             self._cli = None
@@ -36,11 +37,17 @@ def main():
         def _add_options(self, parser):
             parser.add_option("-l", "--load", help="load SCRIPT", metavar="SCRIPT",
                 type='string', action='store', dest="user_script", default=None)
+            parser.add_option("-e", "--eval", help="evaluate CODE", metavar="CODE",
+                type='string', action='append', dest="eval_items", default=None)
+            parser.add_option("-q", help="quiet mode (no prompt) and quit after -l and -e",
+                action='store_true', dest="quiet", default=False)
             parser.add_option("--no-pause", help="automatically start main thread after startup",
                 action='store_true', dest="no_pause", default=False)
 
         def _initialize(self, parser, options, args):
             self._user_script = options.user_script
+            self._pending_eval = options.eval_items
+            self._quiet = options.quiet
             self._no_pause = options.no_pause
 
         def _usage(self):
@@ -124,7 +131,9 @@ def main():
             self._script_monitor = None
 
         def _process_input(self, reactor):
-            self._print_startup_message()
+            if not self._quiet:
+                self._print_startup_message()
+
             while self._ready.wait(0.5) != True:
                 if not reactor.is_running():
                     return
@@ -135,38 +144,52 @@ def main():
                 while len(expression) == 0 or line.endswith("\\"):
                     if not reactor.is_running():
                         return
-                    try:
-                        prompt = "[%s]" % self._prompt_string + "-> " if len(expression) == 0 else "... "
 
-                        # We create the prompt manually instead of using get_input,
-                        # so we can use the cli in the _on_stop method
-                        eventloop = create_eventloop()
+                    prompt = "[%s]" % self._prompt_string + "-> " if len(expression) == 0 else "... "
 
-                        self._cli = CommandLineInterface(
-                            application=create_prompt_application(prompt, history=self._history, completer=self._completer, lexer=JavascriptLexer),
-                            eventloop=eventloop,
-                            output=create_output())
+                    pending_eval = self._pending_eval
+                    if pending_eval is not None:
+                        if len(pending_eval) > 0:
+                            expression = pending_eval.pop(0)
+                            if not self._quiet:
+                                self._print(prompt + expression)
+                        else:
+                            self._pending_eval = None
+                    else:
+                        if self._quiet:
+                            self._exit_status = 0 if self._errors == 0 else 1
+                            return
 
                         try:
-                            line = None
+                            # We create the prompt manually instead of using get_input,
+                            # so we can use the cli in the _on_stop method
+                            eventloop = create_eventloop()
 
-                            document = self._cli.run()
+                            self._cli = CommandLineInterface(
+                                application=create_prompt_application(prompt, history=self._history, completer=self._completer, lexer=JavascriptLexer),
+                                eventloop=eventloop,
+                                output=create_output())
 
-                            if document:
-                                line = document.text
-                        finally:
-                            eventloop.close()
-                    except EOFError:
-                        # An extra newline after EOF to exit the REPL cleanly
-                        self._print("\nThank you for using Frida!")
-                        return
-                    except KeyboardInterrupt:
-                        line = ""
-                        continue
-                    if len(line.strip()) > 0:
-                        if len(expression) > 0:
-                            expression += "\n"
-                        expression += line.rstrip("\\")
+                            try:
+                                line = None
+
+                                document = self._cli.run()
+
+                                if document:
+                                    line = document.text
+                            finally:
+                                eventloop.close()
+                        except EOFError:
+                            # An extra newline after EOF to exit the REPL cleanly
+                            self._print("\nThank you for using Frida!")
+                            return
+                        except KeyboardInterrupt:
+                            line = ""
+                            continue
+                        if len(line.strip()) > 0:
+                            if len(expression) > 0:
+                                expression += "\n"
+                            expression += line.rstrip("\\")
 
                 if expression.endswith("?"):
                     try:
@@ -184,9 +207,11 @@ def main():
                 elif expression == "help":
                     self._print("Help: #TODO :)")
                 else:
-                    self._eval_and_print(expression)
+                    if not self._eval_and_print(expression):
+                        self._errors += 1
 
         def _eval_and_print(self, expression):
+            success = False
             try:
                 (t, value) = self._evaluate(expression)
                 if t in ('function', 'undefined', 'null'):
@@ -195,12 +220,14 @@ def main():
                     output = hexdump(value).rstrip("\n")
                 else:
                     output = json.dumps(value, sort_keys=True, indent=4, separators=(",", ": "))
+                success = True
             except JavaScriptError as e:
                 error = e.error
                 output = Fore.RED + Style.BRIGHT + error['name'] + Style.RESET_ALL + ": " + error['message']
             except frida.InvalidOperationError:
-                return
+                return success
             self._print(output)
+            return success
 
         def _print_startup_message(self):
             self._print("""\
@@ -356,6 +383,7 @@ def main():
             if message_type == 'error':
                 text = message.get('stack', message['description'])
                 self._log('error', text)
+                self._errors += 1
             else:
                 self._print("message:", message, "data:", data)
 
