@@ -118,6 +118,7 @@ class ConsoleApplication(object):
         self._reactor = Reactor(run_until_return, on_stop)
         self._exit_status = None
         self._console_state = ConsoleState.EMPTY
+        self._quiet = False
 
         if sum(map(lambda v: int(v is not None), (self._device_id, self._device_type, self._host))) > 1:
             parser.error("Only one of -D, -U, -R, and -H may be specified")
@@ -217,13 +218,15 @@ class ConsoleApplication(object):
                 target_type, target_value = self._target
                 if target_type == 'file':
                     argv = target_value
-                    self._update_status("Spawning `%s`..." % " ".join(argv))
+                    if not self._quiet:
+                        self._update_status("Spawning `%s`..." % " ".join(argv))
                     self._spawned_pid = self._device.spawn(argv)
                     self._spawned_argv = argv
                     attach_target = self._spawned_pid
                 else:
                     attach_target = target_value
-                    self._update_status("Attaching...")
+                    if not self._quiet:
+                        self._update_status("Attaching...")
                 spawning = False
                 self._session = self._device.attach(attach_target)
                 if self._disable_jit:
