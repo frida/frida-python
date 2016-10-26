@@ -260,6 +260,7 @@ static const gchar * PyFileMonitor_event_type_to_string (GFileMonitorEvent event
 static PyObject * PyFrida_raise (GError * error);
 static const gchar * PyFrida_device_type_to_string (FridaDeviceType type);
 static gboolean PyFrida_parse_signal_method_args (PyObject * args, const char ** signal, PyObject ** callback);
+static gint PyFrida_compare_pyobjects (gconstpointer a, gconstpointer b);
 
 static PyMethodDef PyDeviceManager_methods[] =
 {
@@ -883,7 +884,7 @@ PyDeviceManager_off (PyDeviceManager * self, PyObject * args)
   {
     GList * entry;
 
-    entry = g_list_find (self->on_changed, callback);
+    entry = g_list_find_custom (self->on_changed, callback, PyFrida_compare_pyobjects);
     if (entry != NULL)
     {
       self->on_changed = g_list_delete_link (self->on_changed, entry);
@@ -1375,7 +1376,7 @@ PyDevice_off (PyDevice * self, PyObject * args)
   {
     GList * entry;
 
-    entry = g_list_find (self->on_spawned, callback);
+    entry = g_list_find_custom (self->on_spawned, callback, PyFrida_compare_pyobjects);
     if (entry != NULL)
     {
       self->on_spawned = g_list_delete_link (self->on_spawned, entry);
@@ -1396,7 +1397,7 @@ PyDevice_off (PyDevice * self, PyObject * args)
   {
     GList * entry;
 
-    entry = g_list_find (self->on_output, callback);
+    entry = g_list_find_custom (self->on_output, callback, PyFrida_compare_pyobjects);
     if (entry != NULL)
     {
       self->on_output = g_list_delete_link (self->on_output, entry);
@@ -1417,7 +1418,7 @@ PyDevice_off (PyDevice * self, PyObject * args)
   {
     GList * entry;
 
-    entry = g_list_find (self->on_lost, callback);
+    entry = g_list_find_custom (self->on_lost, callback, PyFrida_compare_pyobjects);
     if (entry != NULL)
     {
       self->on_lost = g_list_delete_link (self->on_lost, entry);
@@ -2057,7 +2058,7 @@ PySession_off (PySession * self, PyObject * args)
   {
     GList * entry;
 
-    entry = g_list_find (self->on_detached, callback);
+    entry = g_list_find_custom (self->on_detached, callback, PyFrida_compare_pyobjects);
     if (entry != NULL)
     {
       self->on_detached = g_list_delete_link (self->on_detached, entry);
@@ -2272,7 +2273,7 @@ PyScript_off (PyScript * self, PyObject * args)
   {
     GList * entry;
 
-    entry = g_list_find (self->on_message, callback);
+    entry = g_list_find_custom (self->on_message, callback, PyFrida_compare_pyobjects);
     if (entry != NULL)
     {
       self->on_message = g_list_delete_link (self->on_message, entry);
@@ -2505,7 +2506,7 @@ PyFileMonitor_off (PyFileMonitor * self, PyObject * args)
   {
     GList * entry;
 
-    entry = g_list_find (self->on_change, callback);
+    entry = g_list_find_custom (self->on_change, callback, PyFrida_compare_pyobjects);
     if (entry != NULL)
     {
       self->on_change = g_list_delete_link (self->on_change, entry);
@@ -2676,6 +2677,12 @@ PyFrida_parse_signal_method_args (PyObject * args, const char ** signal, PyObjec
   }
 
   return TRUE;
+}
+
+static gint
+PyFrida_compare_pyobjects (gconstpointer a, gconstpointer b)
+{
+  return PyObject_Compare ((PyObject *) a, (PyObject *) b);
 }
 
 
