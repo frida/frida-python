@@ -2682,7 +2682,11 @@ PyFrida_parse_signal_method_args (PyObject * args, const char ** signal, PyObjec
 static gint
 PyFrida_compare_pyobjects (gconstpointer a, gconstpointer b)
 {
-  return PyObject_Compare ((PyObject *) a, (PyObject *) b);
+  int result;
+
+  result = PyObject_RichCompareBool ((PyObject *) a, (PyObject *) b, Py_EQ);
+
+  return (result == 1) ? 0 : -1;
 }
 
 
