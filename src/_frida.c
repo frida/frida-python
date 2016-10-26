@@ -260,7 +260,7 @@ static const gchar * PyFileMonitor_event_type_to_string (GFileMonitorEvent event
 static PyObject * PyFrida_raise (GError * error);
 static const gchar * PyFrida_device_type_to_string (FridaDeviceType type);
 static gboolean PyFrida_parse_signal_method_args (PyObject * args, const char ** signal, PyObject ** callback);
-static gint PyFrida_compare_pyobjects(gconstpointer a, gconstpointer b);
+static gint PyFrida_compare_pyobjects (gconstpointer a, gconstpointer b);
 
 static PyMethodDef PyDeviceManager_methods[] =
 {
@@ -2680,9 +2680,9 @@ PyFrida_parse_signal_method_args (PyObject * args, const char ** signal, PyObjec
 }
 
 static gint
-PyFrida_compare_pyobjects(gconstpointer a, gconstpointer b)
+PyFrida_compare_pyobjects (gconstpointer a, gconstpointer b)
 {
-  return PyObject_Compare ((PyObject *)a, (PyObject *)b);
+  return PyObject_Compare ((PyObject *) a, (PyObject *) b);
 }
 
 
