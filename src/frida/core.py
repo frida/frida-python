@@ -95,6 +95,12 @@ class Device(object):
     def attach(self, target):
         return Session(self._impl.attach(self._pid_of(target)))
 
+    def inject_library_file(self, target, path, entrypoint, data):
+        return self._impl.inject_library_file(self._pid_of(target), path, entrypoint, data)
+
+    def inject_library_blob(self, target, blob, entrypoint, data):
+        return self._impl.inject_library_blob(self._pid_of(target), blob, entrypoint, data)
+
     def on(self, signal, callback):
         self._impl.on(signal, callback)
 

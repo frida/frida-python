@@ -97,6 +97,7 @@ struct _PyDevice
 
   GList * on_spawned;
   GList * on_output;
+  GList * on_uninjected;
   GList * on_lost;
 };
 
@@ -191,10 +192,13 @@ static PyObject * PyDevice_input (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_resume (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_kill (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_attach (PyDevice * self, PyObject * args);
+static PyObject * PyDevice_inject_library_file (PyDevice * self, PyObject * args);
+static PyObject * PyDevice_inject_library_blob (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_on (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_off (PyDevice * self, PyObject * args);
 static void PyDevice_on_spawned (PyDevice * self, FridaSpawn * spawn, FridaDevice * handle);
 static void PyDevice_on_output (PyDevice * self, guint pid, gint fd, GBytes * data, FridaDevice * handle);
+static void PyDevice_on_uninjected (PyDevice * self, guint id, FridaDevice * handle);
 static void PyDevice_on_lost (PyDevice * self, FridaDevice * handle);
 
 static PyObject * PyApplication_from_handle (FridaApplication * handle);
@@ -286,6 +290,8 @@ static PyMethodDef PyDevice_methods[] =
   { "resume", (PyCFunction) PyDevice_resume, METH_VARARGS, "Resume a process from the attachable state." },
   { "kill", (PyCFunction) PyDevice_kill, METH_VARARGS, "Kill a PID." },
   { "attach", (PyCFunction) PyDevice_attach, METH_VARARGS, "Attach to a PID." },
+  { "inject_library_file", (PyCFunction) PyDevice_inject_library_file, METH_VARARGS, "Inject a library file to a PID." },
+  { "inject_library_blob", (PyCFunction) PyDevice_inject_library_blob, METH_VARARGS, "Inject a library blob to a PID." },
   { "on", (PyCFunction) PyDevice_on, METH_VARARGS, "Add an event handler." },
   { "off", (PyCFunction) PyDevice_off, METH_VARARGS, "Remove an event handler." },
   { NULL }
@@ -987,6 +993,7 @@ PyDevice_init (PyDevice * self)
 
   self->on_spawned = NULL;
   self->on_output = NULL;
+  self->on_uninjected = NULL;
   self->on_lost = NULL;
 
   return 0;
@@ -1005,6 +1012,12 @@ PyDevice_dealloc (PyDevice * self)
   {
     g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_output), self);
     g_list_free_full (self->on_output, (GDestroyNotify) Py_DecRef);
+  }
+
+  if (self->on_uninjected != NULL)
+  {
+    g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_uninjected), self);
+    g_list_free_full (self->on_uninjected, (GDestroyNotify) Py_DecRef);
   }
 
   if (self->on_lost != NULL)
@@ -1227,7 +1240,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  return PyLong_FromLong (pid);
+  return PyLong_FromUnsignedLong (pid);
 }
 
 static PyObject *
@@ -1316,6 +1329,58 @@ PyDevice_attach (PyDevice * self, PyObject * args)
 }
 
 static PyObject *
+PyDevice_inject_library_file (PyDevice * self, PyObject * args)
+{
+  long pid;
+  const char * path, * entrypoint, * data;
+  GError * error = NULL;
+  guint id;
+
+  if (!PyArg_ParseTuple (args, "lsss", &pid, &path, &entrypoint, &data))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  id = frida_device_inject_library_file_sync (self->handle, (guint) pid, path, entrypoint, data, &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  return PyLong_FromUnsignedLong (id);
+}
+
+static PyObject *
+PyDevice_inject_library_blob (PyDevice * self, PyObject * args)
+{
+  long pid;
+  GBytes * blob;
+  gconstpointer blob_buffer;
+  int blob_size;
+  const char * entrypoint, * data;
+  GError * error = NULL;
+  guint id;
+
+#if PY_MAJOR_VERSION >= 3
+  if (!PyArg_ParseTuple (args, "ly#ss", &pid, &blob_buffer, &blob_size, &entrypoint, &data))
+#else
+  if (!PyArg_ParseTuple (args, "ls#ss", &pid, &blob_buffer, &blob_size, &entrypoint, &data))
+#endif
+    return NULL;
+
+  blob = g_bytes_new (blob_buffer, blob_size);
+
+  Py_BEGIN_ALLOW_THREADS
+  id = frida_device_inject_library_blob_sync (self->handle, (guint) pid, blob, entrypoint, data, &error);
+  Py_END_ALLOW_THREADS
+
+  g_bytes_unref (blob);
+
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  return PyLong_FromUnsignedLong (id);
+}
+
+static PyObject *
 PyDevice_on (PyDevice * self, PyObject * args)
 {
   const char * signal;
@@ -1343,6 +1408,16 @@ PyDevice_on (PyDevice * self, PyObject * args)
 
     Py_INCREF (callback);
     self->on_output = g_list_append (self->on_output, callback);
+  }
+  else if (strcmp (signal, "uninjected") == 0)
+  {
+    if (self->on_uninjected == NULL)
+    {
+      g_signal_connect_swapped (self->handle, "uninjected", G_CALLBACK (PyDevice_on_uninjected), self);
+    }
+
+    Py_INCREF (callback);
+    self->on_uninjected = g_list_append (self->on_uninjected, callback);
   }
   else if (strcmp (signal, "lost") == 0)
   {
@@ -1412,6 +1487,27 @@ PyDevice_off (PyDevice * self, PyObject * args)
     if (self->on_output == NULL)
     {
       g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_output), self);
+    }
+  }
+  else if (strcmp (signal, "uninjected") == 0)
+  {
+    GList * entry;
+
+    entry = g_list_find_custom (self->on_uninjected, callback, PyFrida_compare_pyobjects);
+    if (entry != NULL)
+    {
+      self->on_uninjected = g_list_delete_link (self->on_uninjected, entry);
+      Py_DECREF (callback);
+    }
+    else
+    {
+      PyErr_SetString (PyExc_ValueError, "unknown callback");
+      return NULL;
+    }
+
+    if (self->on_uninjected == NULL)
+    {
+      g_signal_handlers_disconnect_by_func (self->handle, FRIDA_FUNCPTR_TO_POINTER (PyDevice_on_uninjected), self);
     }
   }
   else if (strcmp (signal, "lost") == 0)
@@ -1503,6 +1599,40 @@ PyDevice_on_output (PyDevice * self, guint pid, gint fd, GBytes * data, FridaDev
 
     g_list_foreach (self->on_output, (GFunc) Py_IncRef, NULL);
     callbacks = g_list_copy (self->on_output);
+
+    for (cur = callbacks; cur != NULL; cur = cur->next)
+    {
+      PyObject * result = PyObject_CallObject ((PyObject *) cur->data, args);
+      if (result == NULL)
+        PyErr_Print ();
+      else
+        Py_DECREF (result);
+    }
+
+    g_list_free_full (callbacks, (GDestroyNotify) Py_DecRef);
+
+    Py_DECREF (args);
+  }
+
+  PyGILState_Release (gstate);
+}
+
+static void
+PyDevice_on_uninjected (PyDevice * self, guint id, FridaDevice * handle)
+{
+  PyGILState_STATE gstate;
+
+  gstate = PyGILState_Ensure ();
+
+  if (g_object_get_data (G_OBJECT (handle), "pyobject") == self)
+  {
+    PyObject * args;
+    GList * callbacks, * cur;
+
+    args = Py_BuildValue ("(I)", id);
+
+    g_list_foreach (self->on_uninjected, (GFunc) Py_IncRef, NULL);
+    callbacks = g_list_copy (self->on_uninjected);
 
     for (cur = callbacks; cur != NULL; cur = cur->next)
     {

@@ -56,6 +56,12 @@ def kill(target):
 def attach(target):
     return get_local_device().attach(target)
 
+def inject_library_file(target, path, entrypoint, data):
+    return get_local_device().inject_library_file(target, path, entrypoint, data)
+
+def inject_library_blob(target, blob, entrypoint, data):
+    return get_local_device().inject_library_blob(target, blob, entrypoint, data)
+
 def enumerate_devices():
     return get_device_manager().enumerate_devices()
 
