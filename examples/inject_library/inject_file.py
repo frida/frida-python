@@ -1,9 +1,9 @@
 #
 # Compile example.dylib like this:
-# $ clang -Wall -pipe -Os -shared -o /Users/oleavr/.Trash/example.dylib example.c
+# $ clang -shared example.c -o ~/.Trash/example.dylib
 #
 # Then run:
-# $ python inject_blob.py Twitter /Users/oleavr/.Trash/example.dylib
+# $ python inject_file.py Twitter ~/.Trash/example.dylib
 #
 
 from __future__ import unicode_literals, print_function

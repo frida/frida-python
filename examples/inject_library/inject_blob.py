@@ -1,6 +1,6 @@
 #
 # Compile example.dylib like this:
-# $ clang -Wall -pipe -Os -shared -o example.dylib example.c
+# $ clang -shared example.c -o example.dylib
 #
 # Then run:
 # $ python inject_blob.py Twitter example.dylib
