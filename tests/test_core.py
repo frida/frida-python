@@ -17,7 +17,7 @@ class TestCore(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         system = platform.system()
-        cls.target = subprocess.Popen([target_program])
+        cls.target = subprocess.Popen([target_program], stdin=subprocess.PIPE)
         cls.session = frida.attach(cls.target.pid)
 
     @classmethod
