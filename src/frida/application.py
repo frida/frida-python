@@ -74,7 +74,6 @@ class ConsoleApplication(object):
         parser.add_option("-H", "--host", help="connect to remote frida-server on HOST",
                 metavar="HOST", type='string', action='store', dest="host", default=None)
         parser.add_option("-o", "--output", help="output to log file", dest="logfile", default=None)
-
         if self._needs_target():
             def store_target(option, opt_str, target_value, parser, target_type, *args, **kwargs):
                 if target_type == 'file':
@@ -122,15 +121,12 @@ class ConsoleApplication(object):
         self._console_state = ConsoleState.EMPTY
         self._quiet = False
         self._logfile = options.logfile
-
-        if self._logfile:
+        if self._logfile is not None:
             try:
                 self._f = open(self._logfile, 'w')
             except Exception as e:
                 self._update_status('Failed to open logfile "%s"' % self._logfile)
                 sys.exit(1)
-
-
         if sum(map(lambda v: int(v is not None), (self._device_id, self._device_type, self._host))) > 1:
             parser.error("Only one of -D, -U, -R, and -H may be specified")
 
@@ -276,7 +272,6 @@ class ConsoleApplication(object):
         lines = text.split("\n")
         self._print(prefix + ("\n" + prefix).join(lines))
 
-
     def _on_device_lost(self):
         if self._exit_status is not None:
             return
@@ -314,7 +309,6 @@ class ConsoleApplication(object):
             else:
                 encoded_args.append(arg)
         print(*encoded_args, **kwargs)
-
         self._console_state = ConsoleState.TEXT
 
     def _log(self, level, text):
@@ -323,7 +317,7 @@ class ConsoleApplication(object):
         else:
             color = Fore.RED if level == 'error' else Fore.YELLOW
             self._print(color + Style.BRIGHT + text + Style.RESET_ALL)
-        if self._logfile:
+        if self._logfile is not None:
             self._f.write(text + "\n");
 
 def find_device(type):
