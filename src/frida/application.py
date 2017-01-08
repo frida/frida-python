@@ -120,12 +120,11 @@ class ConsoleApplication(object):
         self._exit_status = None
         self._console_state = ConsoleState.EMPTY
         self._quiet = False
-        self._logfile = options.logfile
-        if self._logfile is not None:
+        if options.logfile is not None:
             try:
-                self._f = open(self._logfile, 'w')
+                self._logfile = open(options.logfile, 'w')
             except Exception as e:
-                self._update_status('Failed to open logfile "%s"' % self._logfile)
+                self._update_status('Failed to open logfile "%s"' % options.logfile)
                 sys.exit(1)
         if sum(map(lambda v: int(v is not None), (self._device_id, self._device_type, self._host))) > 1:
             parser.error("Only one of -D, -U, -R, and -H may be specified")
@@ -318,7 +317,7 @@ class ConsoleApplication(object):
             color = Fore.RED if level == 'error' else Fore.YELLOW
             self._print(color + Style.BRIGHT + text + Style.RESET_ALL)
         if self._logfile is not None:
-            self._f.write(text + "\n");
+            self._logfile.write(text + "\n");
 
 def find_device(type):
     for device in frida.enumerate_devices():
