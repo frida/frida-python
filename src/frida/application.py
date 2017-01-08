@@ -120,6 +120,7 @@ class ConsoleApplication(object):
         self._exit_status = None
         self._console_state = ConsoleState.EMPTY
         self._quiet = False
+        self._logfile = None;
         if options.logfile is not None:
             try:
                 self._logfile = open(options.logfile, 'w')
