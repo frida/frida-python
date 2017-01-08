@@ -192,8 +192,8 @@ class Session(FunctionContainer):
     def disable_debugger(self):
         return self._impl.disable_debugger()
 
-    def disable_jit(self):
-        return self._impl.disable_jit()
+    def enable_jit(self):
+        return self._impl.enable_jit()
 
     def on(self, signal, callback):
         self._impl.on(signal, callback)
