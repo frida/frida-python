@@ -43,12 +43,26 @@ def main():
                 action='store_true', dest="quiet", default=False)
             parser.add_option("--no-pause", help="automatically start main thread after startup",
                 action='store_true', dest="no_pause", default=False)
+            parser.add_option("-o", "--output", help="output to log file", dest="logfile", default=None)
 
         def _initialize(self, parser, options, args):
             self._user_script = options.user_script
             self._pending_eval = options.eval_items
             self._quiet = options.quiet
             self._no_pause = options.no_pause
+            if options.logfile is not None:
+                try:
+                    self._logfile = open(options.logfile, 'w')
+                except Exception as e:
+                    self._update_status('Failed to open logfile "%s"' % options.logfile)
+                    self._exit(1)
+            else:
+                self._logfile = None
+
+        def _log(self, level, text):
+            ConsoleApplication._log(self, level, text)
+            if self._logfile is not None:
+                self._logfile.write(text + "\n")
 
         def _usage(self):
             return "usage: %prog [options] target"
