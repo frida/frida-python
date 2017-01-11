@@ -61,6 +61,7 @@
 
 #define FRIDA_FUNCPTR_TO_POINTER(f) (GSIZE_TO_POINTER (f))
 
+static PyObject * inspect_getargspec;
 static PyObject * json_loads;
 static PyObject * json_dumps;
 
@@ -237,7 +238,7 @@ static PyObject * PySession_disable_debugger (PySession * self);
 static PyObject * PySession_enable_jit (PySession * self);
 static PyObject * PySession_on (PySession * self, PyObject * args);
 static PyObject * PySession_off (PySession * self, PyObject * args);
-static void PySession_on_detached (PySession * self, FridaSession * handle);
+static void PySession_on_detached (PySession * self, FridaSessionDetachReason reason, FridaSession * handle);
 
 static PyObject * PyScript_from_handle (FridaScript * handle);
 static int PyScript_init (PyScript * self);
@@ -264,6 +265,7 @@ static const gchar * PyFileMonitor_event_type_to_string (GFileMonitorEvent event
 static PyObject * PyFrida_raise (GError * error);
 static const gchar * PyFrida_device_type_to_string (FridaDeviceType type);
 static gboolean PyFrida_parse_signal_method_args (PyObject * args, const char ** signal, PyObject ** callback);
+static guint PyFrida_get_max_argument_count (PyObject * callable);
 static gint PyFrida_compare_pyobjects (gconstpointer a, gconstpointer b);
 
 static PyMethodDef PyDeviceManager_methods[] =
@@ -2215,7 +2217,7 @@ PySession_off (PySession * self, PyObject * args)
 }
 
 static void
-PySession_on_detached (PySession * self, FridaSession * handle)
+PySession_on_detached (PySession * self, FridaSessionDetachReason reason, FridaSession * handle)
 {
   PyGILState_STATE gstate;
 
@@ -2223,14 +2225,27 @@ PySession_on_detached (PySession * self, FridaSession * handle)
 
   if (g_object_get_data (G_OBJECT (handle), "pyobject") == self)
   {
+    GEnumClass * enum_class;
+    GEnumValue * enum_value;
+    PyObject * args;
     GList * callbacks, * cur;
+
+    enum_class = g_type_class_ref (FRIDA_TYPE_SESSION_DETACH_REASON);
+    enum_value = g_enum_get_value (enum_class, reason);
+    g_assert (enum_value != NULL);
+    args = Py_BuildValue ("(s)", enum_value->value_nick);
+    g_type_class_unref (enum_class);
 
     g_list_foreach (self->on_detached, (GFunc) Py_IncRef, NULL);
     callbacks = g_list_copy (self->on_detached);
 
     for (cur = callbacks; cur != NULL; cur = cur->next)
     {
-      PyObject * result = PyObject_CallFunction ((PyObject *) cur->data, NULL);
+      PyObject * callback = (PyObject *) cur->data;
+      PyObject * result;
+
+      /* TODO: remove this argument list kludge in Frida 10.x */
+      result = PyObject_CallObject (callback, (PyFrida_get_max_argument_count (callback) == 0) ? NULL : args);
       if (result == NULL)
         PyErr_Print ();
       else
@@ -2238,6 +2253,8 @@ PySession_on_detached (PySession * self, FridaSession * handle)
     }
 
     g_list_free_full (callbacks, (GDestroyNotify) Py_DecRef);
+
+    Py_DECREF (args);
   }
 
   PyGILState_Release (gstate);
@@ -2811,6 +2828,37 @@ PyFrida_parse_signal_method_args (PyObject * args, const char ** signal, PyObjec
   return TRUE;
 }
 
+static guint
+PyFrida_get_max_argument_count (PyObject * callable)
+{
+  guint result = G_MAXUINT;
+  PyObject * spec;
+  PyObject * varargs = NULL;
+  PyObject * args = NULL;
+
+  spec = PyObject_CallFunction (inspect_getargspec, "O", callable);
+  if (spec == NULL)
+  {
+    PyErr_Clear ();
+    goto beach;
+  }
+
+  varargs = PyTuple_GetItem (spec, 1);
+  if (varargs != Py_None)
+    goto beach;
+
+  args = PyTuple_GetItem (spec, 0);
+
+  result = PyObject_Size (args);
+
+beach:
+  Py_XDECREF (args);
+  Py_XDECREF (varargs);
+  Py_XDECREF (spec);
+
+  return result;
+}
+
 static gint
 PyFrida_compare_pyobjects (gconstpointer a, gconstpointer b)
 {
@@ -2824,10 +2872,14 @@ PyFrida_compare_pyobjects (gconstpointer a, gconstpointer b)
 
 MOD_INIT (_frida)
 {
-  PyObject * json;
+  PyObject * inspect, * json;
   PyObject * module;
 
   PyEval_InitThreads ();
+
+  inspect = PyImport_ImportModule ("inspect");
+  inspect_getargspec = PyObject_GetAttrString (inspect, "getargspec");
+  Py_DECREF (inspect);
 
   json = PyImport_ImportModule ("json");
   json_loads = PyObject_GetAttrString (json, "loads");
