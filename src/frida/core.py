@@ -4,6 +4,7 @@ from __future__ import unicode_literals, print_function
 import _frida
 import bisect
 import fnmatch
+import json
 import numbers
 import sys
 import threading
@@ -300,8 +301,9 @@ class Script(object):
     def unload(self):
         self._impl.unload()
 
-    def post(self, *args, **kwargs):
-        self._impl.post(*args, **kwargs)
+    def post(self, message, **kwargs):
+        raw_message = json.dumps(message)
+        self._impl.post(raw_message, **kwargs)
 
     def on(self, signal, callback):
         if signal == 'message':
@@ -328,7 +330,7 @@ class Script(object):
                 result[0] = True
                 result[1] = value
                 result[2] = error
-                self._cond.notifyAll()
+                self._cond.notify_all()
 
         with self._cond:
             request_id = self._next_request_id
@@ -336,7 +338,12 @@ class Script(object):
             self._pending[request_id] = on_complete
             message = ['frida:rpc', request_id]
             message.extend(args)
-            self.post(message)
+            try:
+                self.post(message)
+            except Exception as e:
+                del self._pending[request_id]
+                raise
+
             while not result[0]:
                 self._cond.wait()
 
@@ -358,7 +365,9 @@ class Script(object):
 
             callback(value, error)
 
-    def _on_message(self, message, data):
+    def _on_message(self, raw_message, data):
+        message = json.loads(raw_message)
+
         mtype = message['type']
         payload = message.get('payload', None)
         if mtype == 'log':
