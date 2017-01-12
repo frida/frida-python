@@ -95,33 +95,6 @@ send(hello);
         self.assertIsInstance(repr(r), str)
         self.assertIsInstance(str(r), str)
 
-    def test_rpc(self):
-        script = self.session.create_script(name="test-rpc", source="""\
-"use strict";
-
-rpc.exports = {
-    add: function (a, b) {
-        var result = a + b;
-        if (result < 0)
-          throw new Error("No");
-        return result;
-    },
-    sub: function (a, b) {
-        return a - b;
-    },
-    speak: function () {
-        var buf = Memory.allocUtf8String("Yo");
-        return Memory.readByteArray(buf, 2);
-    }
-};
-""")
-        script.load()
-        self.assertEqual(script.exports.add(2, 3), 5)
-        self.assertEqual(script.exports.sub(5, 3), 2)
-        self.assertRaises(Exception, lambda: script.exports.add(1, -2))
-        self.assertListEqual([x for x in iterbytes(script.exports.speak())],
-            [0x59, 0x6f])
-
 if sys.version_info[0] >= 3:
     iterbytes = lambda x: iter(x)
 else:

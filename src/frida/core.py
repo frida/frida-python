@@ -290,6 +290,7 @@ class Script(object):
         self._next_request_id = 1
         self._cond = threading.Condition()
 
+        impl.on('destroyed', self._on_destroyed)
         impl.on('message', self._on_message)
 
     def __repr__(self):
@@ -325,6 +326,7 @@ class Script(object):
 
     def _rpc_request(self, *args):
         result = [False, None, None]
+
         def on_complete(value, error):
             with self._cond:
                 result[0] = True
@@ -336,14 +338,16 @@ class Script(object):
             request_id = self._next_request_id
             self._next_request_id += 1
             self._pending[request_id] = on_complete
-            message = ['frida:rpc', request_id]
-            message.extend(args)
-            try:
-                self.post(message)
-            except Exception as e:
-                del self._pending[request_id]
-                raise
 
+        message = ['frida:rpc', request_id]
+        message.extend(args)
+        try:
+            self.post(message)
+        except Exception as e:
+            del self._pending[request_id]
+            raise
+
+        with self._cond:
             while not result[0]:
                 self._cond.wait()
 
@@ -364,6 +368,20 @@ class Script(object):
                 error = RPCException(*params[0:3])
 
             callback(value, error)
+
+    def _on_destroyed(self):
+        while True:
+            next_pending = None
+
+            with self._cond:
+                pending_ids = self._pending.keys()
+                if len(pending_ids) > 0:
+                    next_pending = self._pending.pop(pending_ids[0])
+
+            if next_pending is None:
+                break
+
+            next_pending(None, _frida.InvalidOperationError('script is destroyed'))
 
     def _on_message(self, raw_message, data):
         message = json.loads(raw_message)
