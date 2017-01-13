@@ -67,7 +67,7 @@ rpc.exports = {
         agent = script.exports
 
         self.session.detach()
-        self.assertRaisesRegex(frida.InvalidOperationError, "script is destroyed", lambda: agent.init())
+        self.assertRaisesScriptDestroyed(lambda: agent.init())
         self.assertEqual(script._pending, {})
 
     def test_unload_mid_request(self):
@@ -88,7 +88,7 @@ rpc.exports = {
             script.unload()
 
         threading.Thread(target=unload_script_after_100ms).start()
-        self.assertRaisesRegex(frida.InvalidOperationError, "script is destroyed", lambda: agent.wait_forever())
+        self.assertRaisesScriptDestroyed(lambda: agent.wait_forever())
         self.assertEqual(script._pending, {})
 
     def test_detach_mid_request(self):
@@ -109,8 +109,12 @@ rpc.exports = {
             self.target.terminate()
 
         threading.Thread(target=terminate_target_after_100ms).start()
-        self.assertRaisesRegex(frida.InvalidOperationError, "script is destroyed", lambda: agent.wait_forever())
+        self.assertRaisesScriptDestroyed(lambda: agent.wait_forever())
         self.assertEqual(script._pending, {})
+
+    def assertRaisesScriptDestroyed(self, operation):
+        m = self.assertRaisesRegex if sys.version_info[0] >= 3 else self.assertRaisesRegexp
+        m(frida.InvalidOperationError, "script is destroyed", operation)
 
 if sys.version_info[0] >= 3:
     iterbytes = lambda x: iter(x)
