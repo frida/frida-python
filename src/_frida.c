@@ -212,6 +212,7 @@ static void PyGObjectSignalClosure_marshal (GClosure * closure, GValue * return_
     gpointer invocation_hint, gpointer marshal_data);
 static PyObject * PyGObjectSignalClosure_marshal_params (const GValue * params, guint params_length);
 static PyObject * PyGObject_marshal_value (const GValue * value);
+static PyObject * PyGObject_marshal_string (const gchar * str);
 static PyObject * PyGObject_marshal_enum (gint value, GType type);
 static PyObject * PyGObject_marshal_bytes (GBytes * bytes);
 static PyObject * PyGObject_marshal_object (gpointer handle, GType type);
@@ -1210,7 +1211,7 @@ PyGObject_marshal_value (const GValue * value)
     case G_TYPE_DOUBLE:
       return PyFloat_FromDouble (g_value_get_double (value));
     case G_TYPE_STRING:
-      return PyUnicode_FromUTF8String (g_value_get_string (value));
+      return PyGObject_marshal_string (g_value_get_string (value));
     default: {
       if (G_TYPE_IS_ENUM (type))
         return PyGObject_marshal_enum (g_value_get_enum (value), type);
@@ -1231,6 +1232,15 @@ unsupported_type:
         "unsupported type: '%s'",
         g_type_name (type));
   }
+}
+
+static PyObject *
+PyGObject_marshal_string (const gchar * str)
+{
+  if (str == NULL)
+    Py_RETURN_NONE;
+
+  return PyUnicode_FromUTF8String (str);
 }
 
 static PyObject *
