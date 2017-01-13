@@ -24,6 +24,7 @@ class TestCore(unittest.TestCase):
     def tearDownClass(cls):
         cls.session.detach()
         cls.target.terminate()
+        cls.target.stdin.close()
 
     def test_enumerate_devices(self):
         devices = frida.get_device_manager().enumerate_devices()

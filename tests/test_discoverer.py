@@ -25,6 +25,7 @@ class TestDiscoverer(unittest.TestCase):
     def tearDownClass(cls):
         cls.session.detach()
         cls.target.terminate()
+        cls.target.stdin.close()
 
     def test_basics(self):
         test_ui = TestUI()

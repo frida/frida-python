@@ -374,7 +374,7 @@ class Script(object):
             next_pending = None
 
             with self._cond:
-                pending_ids = self._pending.keys()
+                pending_ids = list(self._pending.keys())
                 if len(pending_ids) > 0:
                     next_pending = self._pending.pop(pending_ids[0])
 

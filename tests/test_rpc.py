@@ -25,6 +25,7 @@ class TestCore(unittest.TestCase):
     def tearDown(cls):
         cls.session.detach()
         cls.target.terminate()
+        cls.target.stdin.close()
 
     def test_basics(self):
         script = self.session.create_script(name="test-rpc", source="""\
@@ -66,7 +67,7 @@ rpc.exports = {
         agent = script.exports
 
         self.session.detach()
-        self.assertRaisesRegexp(frida.InvalidOperationError, "script is destroyed", lambda: agent.init())
+        self.assertRaisesRegex(frida.InvalidOperationError, "script is destroyed", lambda: agent.init())
         self.assertEqual(script._pending, {})
 
     def test_unload_mid_request(self):
@@ -87,7 +88,7 @@ rpc.exports = {
             script.unload()
 
         threading.Thread(target=unload_script_after_100ms).start()
-        self.assertRaisesRegexp(frida.InvalidOperationError, "script is destroyed", lambda: agent.wait_forever())
+        self.assertRaisesRegex(frida.InvalidOperationError, "script is destroyed", lambda: agent.wait_forever())
         self.assertEqual(script._pending, {})
 
     def test_detach_mid_request(self):
@@ -108,7 +109,7 @@ rpc.exports = {
             self.target.terminate()
 
         threading.Thread(target=terminate_target_after_100ms).start()
-        self.assertRaisesRegexp(frida.InvalidOperationError, "script is destroyed", lambda: agent.wait_forever())
+        self.assertRaisesRegex(frida.InvalidOperationError, "script is destroyed", lambda: agent.wait_forever())
         self.assertEqual(script._pending, {})
 
 if sys.version_info[0] >= 3:

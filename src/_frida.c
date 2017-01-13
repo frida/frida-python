@@ -50,6 +50,7 @@
 # define MOD_SUCCESS_VAL(val) val
 # define MOD_ERROR_VAL NULL
 # define PyRepr_FromFormat PyUnicode_FromFormat
+# define PYFRIDA_GETARGSPEC_FUNCTION "getfullargspec"
 #else
 # define MOD_INIT(name) PyMODINIT_FUNC init##name (void)
 # define MOD_DEF(ob, name, doc, methods) \
@@ -57,6 +58,7 @@
 # define MOD_SUCCESS_VAL(val)
 # define MOD_ERROR_VAL
 # define PyRepr_FromFormat PyString_FromFormat
+# define PYFRIDA_GETARGSPEC_FUNCTION "getargspec"
 #endif
 
 #define PYFRIDA_TYPE(name) \
@@ -1199,9 +1201,9 @@ PyGObject_marshal_value (const GValue * value)
     case G_TYPE_BOOLEAN:
       return PyBool_FromLong (g_value_get_boolean (value));
     case G_TYPE_INT:
-      return PyInt_FromLong (g_value_get_int (value));
+      return PyLong_FromLong (g_value_get_int (value));
     case G_TYPE_UINT:
-      return PyInt_FromSize_t (g_value_get_uint (value));
+      return PyLong_FromUnsignedLong (g_value_get_uint (value));
     case G_TYPE_FLOAT:
       return PyFloat_FromDouble (g_value_get_float (value));
     case G_TYPE_DOUBLE:
@@ -2362,7 +2364,7 @@ MOD_INIT (_frida)
   PyEval_InitThreads ();
 
   inspect = PyImport_ImportModule ("inspect");
-  inspect_getargspec = PyObject_GetAttrString (inspect, "getargspec");
+  inspect_getargspec = PyObject_GetAttrString (inspect, PYFRIDA_GETARGSPEC_FUNCTION);
   inspect_ismethod = PyObject_GetAttrString (inspect, "ismethod");
   Py_DECREF (inspect);
 
