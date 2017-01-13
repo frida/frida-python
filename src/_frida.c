@@ -66,7 +66,7 @@
 #define PYFRIDA_TYPE_SPEC(name) \
   G_PASTE (PYFRIDA_TYPE (name), _type_spec)
 #define PYFRIDA_DEFINE_TYPE(name, init_from_handle, destroy) \
-  static const PyGObjectTypeSpec PYFRIDA_TYPE_SPEC (name) = { &PYFRIDA_TYPE (name), init_from_handle, destroy }
+  static const PyGObjectTypeSpec PYFRIDA_TYPE_SPEC (name) = { &PYFRIDA_TYPE (name), (PyGObjectInitFromHandleFunc) init_from_handle, destroy }
 #define PYFRIDA_REGISTER_TYPE(name, gtype) \
   G_BEGIN_DECLS \
   { \
@@ -120,7 +120,7 @@ struct _PyGObject
 struct _PyGObjectTypeSpec
 {
   PyTypeObject * type;
-  gpointer init_from_handle;
+  PyGObjectInitFromHandleFunc init_from_handle;
   GDestroyNotify destroy;
 };
 
@@ -206,8 +206,8 @@ static PyObject * PyGObject_off (PyGObject * self, PyObject * args);
 static gint PyGObject_compare_signal_closure_callback (PyGObjectSignalClosure * closure, PyObject * callback);
 static gboolean PyGObject_parse_signal_method_args (PyObject * args, GType instance_type, guint * signal_id, PyObject ** callback);
 static const gchar * PyGObject_class_name_from_c (const gchar * cname);
-static GClosure * PyGObject_make_closure_for_signal (GType instance_type, guint signal_id, PyObject * callback, guint max_arg_count);
-static void PyGObjectSignalClosure_finalize (gpointer data, GClosure * closure);
+static GClosure * PyGObject_make_closure_for_signal (guint signal_id, PyObject * callback, guint max_arg_count);
+static void PyGObjectSignalClosure_finalize (PyObject * callback);
 static void PyGObjectSignalClosure_marshal (GClosure * closure, GValue * return_gvalue, guint n_param_values, const GValue * param_values,
     gpointer invocation_hint, gpointer marshal_data);
 static PyObject * PyGObjectSignalClosure_marshal_params (const GValue * params, guint params_length);
@@ -851,7 +851,7 @@ PyGObject_new_take_handle (gpointer handle, const PyGObjectTypeSpec * spec)
     PyGObject_take_handle (PY_GOBJECT (object), handle, spec);
 
     if (spec->init_from_handle != NULL)
-      ((PyGObjectInitFromHandleFunc) spec->init_from_handle) (object, handle);
+      spec->init_from_handle (object, handle);
   }
   else
   {
@@ -956,7 +956,7 @@ PyGObject_on (PyGObject * self, PyObject * args)
       goto too_many_arguments;
   }
 
-  closure = PyGObject_make_closure_for_signal (instance_type, signal_id, callback, max_arg_count);
+  closure = PyGObject_make_closure_for_signal (signal_id, callback, max_arg_count);
   g_signal_connect_closure_by_id (self->handle, signal_id, 0, closure, TRUE);
 
   self->signal_closures = g_slist_prepend (self->signal_closures, closure);
@@ -1094,7 +1094,7 @@ PyGObject_register_type (GType instance_type, const PyGObjectTypeSpec * spec)
 }
 
 static GClosure *
-PyGObject_make_closure_for_signal (GType instance_type, guint signal_id, PyObject * callback, guint max_arg_count)
+PyGObject_make_closure_for_signal (guint signal_id, PyObject * callback, guint max_arg_count)
 {
   GClosure * closure;
   PyGObjectSignalClosure * pyclosure;
@@ -1102,7 +1102,7 @@ PyGObject_make_closure_for_signal (GType instance_type, guint signal_id, PyObjec
   closure = g_closure_new_simple (sizeof (PyGObjectSignalClosure), callback);
   Py_IncRef (callback);
 
-  g_closure_add_finalize_notifier (closure, callback, PyGObjectSignalClosure_finalize);
+  g_closure_add_finalize_notifier (closure, callback, (GClosureNotify) PyGObjectSignalClosure_finalize);
   g_closure_set_marshal (closure, PyGObjectSignalClosure_marshal);
 
   pyclosure = PY_GOBJECT_SIGNAL_CLOSURE (closure);
@@ -1113,15 +1113,12 @@ PyGObject_make_closure_for_signal (GType instance_type, guint signal_id, PyObjec
 }
 
 static void
-PyGObjectSignalClosure_finalize (gpointer data, GClosure * closure)
+PyGObjectSignalClosure_finalize (PyObject * callback)
 {
-  PyObject * callback = data;
   PyGILState_STATE gstate;
 
   gstate = PyGILState_Ensure ();
-
   Py_DecRef (callback);
-
   PyGILState_Release (gstate);
 }
 
@@ -1133,6 +1130,10 @@ PyGObjectSignalClosure_marshal (GClosure * closure, GValue * return_gvalue, guin
   PyObject * callback = closure->data;
   PyGILState_STATE gstate;
   PyObject * args, * result;
+
+  (void) return_gvalue;
+  (void) invocation_hint;
+  (void) marshal_data;
 
   gstate = PyGILState_Ensure ();
 
