@@ -90,6 +90,27 @@ rpc.exports = {
         self.assertRaisesRegexp(frida.InvalidOperationError, "script is destroyed", lambda: agent.wait_forever())
         self.assertEqual(script._pending, {})
 
+    def test_detach_mid_request(self):
+        script = self.session.create_script(name="test-rpc", source="""\
+"use strict";
+
+rpc.exports = {
+    waitForever: function () {
+        return new Promise(function () {});
+    },
+};
+""")
+        script.load()
+        agent = script.exports
+
+        def terminate_target_after_100ms():
+            time.sleep(0.1)
+            self.target.terminate()
+
+        threading.Thread(target=terminate_target_after_100ms).start()
+        self.assertRaisesRegexp(frida.InvalidOperationError, "script is destroyed", lambda: agent.wait_forever())
+        self.assertEqual(script._pending, {})
+
 if sys.version_info[0] >= 3:
     iterbytes = lambda x: iter(x)
 else:
