@@ -1212,7 +1212,7 @@ PyGObject_marshal_value (const GValue * value)
       return PyFloat_FromDouble (g_value_get_double (value));
     case G_TYPE_STRING:
       return PyGObject_marshal_string (g_value_get_string (value));
-    default: {
+    default:
       if (G_TYPE_IS_ENUM (type))
         return PyGObject_marshal_enum (g_value_get_enum (value), type);
       else if (type == G_TYPE_BYTES)
@@ -1221,7 +1221,6 @@ PyGObject_marshal_value (const GValue * value)
         return PyGObject_marshal_object (g_value_get_object (value), type);
       else
         goto unsupported_type;
-    }
   }
 
   g_assert_not_reached ();
