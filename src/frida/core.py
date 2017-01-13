@@ -4,6 +4,7 @@ from __future__ import unicode_literals, print_function
 import _frida
 import bisect
 import fnmatch
+import json
 import numbers
 import sys
 import threading
@@ -289,6 +290,7 @@ class Script(object):
         self._next_request_id = 1
         self._cond = threading.Condition()
 
+        impl.on('destroyed', self._on_destroyed)
         impl.on('message', self._on_message)
 
     def __repr__(self):
@@ -300,8 +302,9 @@ class Script(object):
     def unload(self):
         self._impl.unload()
 
-    def post(self, *args, **kwargs):
-        self._impl.post(*args, **kwargs)
+    def post(self, message, **kwargs):
+        raw_message = json.dumps(message)
+        self._impl.post(raw_message, **kwargs)
 
     def on(self, signal, callback):
         if signal == 'message':
@@ -323,20 +326,28 @@ class Script(object):
 
     def _rpc_request(self, *args):
         result = [False, None, None]
+
         def on_complete(value, error):
             with self._cond:
                 result[0] = True
                 result[1] = value
                 result[2] = error
-                self._cond.notifyAll()
+                self._cond.notify_all()
 
         with self._cond:
             request_id = self._next_request_id
             self._next_request_id += 1
             self._pending[request_id] = on_complete
-            message = ['frida:rpc', request_id]
-            message.extend(args)
+
+        message = ['frida:rpc', request_id]
+        message.extend(args)
+        try:
             self.post(message)
+        except Exception as e:
+            del self._pending[request_id]
+            raise
+
+        with self._cond:
             while not result[0]:
                 self._cond.wait()
 
@@ -358,7 +369,23 @@ class Script(object):
 
             callback(value, error)
 
-    def _on_message(self, message, data):
+    def _on_destroyed(self):
+        while True:
+            next_pending = None
+
+            with self._cond:
+                pending_ids = self._pending.keys()
+                if len(pending_ids) > 0:
+                    next_pending = self._pending.pop(pending_ids[0])
+
+            if next_pending is None:
+                break
+
+            next_pending(None, _frida.InvalidOperationError('script is destroyed'))
+
+    def _on_message(self, raw_message, data):
+        message = json.loads(raw_message)
+
         mtype = message['type']
         payload = message.get('payload', None)
         if mtype == 'log':
