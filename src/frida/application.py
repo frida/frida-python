@@ -112,7 +112,7 @@ class ConsoleApplication(object):
         else:
             self._enable_debugger = False
             self._enable_jit = False
-        self._schedule_on_session_detached = lambda: self._reactor.schedule(self._on_session_detached)
+        self._schedule_on_session_detached = lambda reason: self._reactor.schedule(lambda: self._on_session_detached(reason))
         self._started = False
         self._resumed = False
         self._reactor = Reactor(run_until_return, on_stop)
@@ -270,8 +270,9 @@ class ConsoleApplication(object):
         self._print("Device disconnected.")
         self._exit(1)
 
-    def _on_session_detached(self):
-        self._print("Target process terminated.")
+    def _on_session_detached(self, reason):
+        message = reason[0].upper() + reason[1:].replace("-", " ")
+        self._print(Fore.RED + Style.BRIGHT + message + Style.RESET_ALL)
         self._exit(1)
 
     def _clear_status(self):
