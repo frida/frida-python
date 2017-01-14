@@ -809,7 +809,6 @@ def main():
                 self._exit(1)
 
         def _stop(self):
-            self._print("Stopping...")
             self._tracer.stop()
             self._tracer = None
 
