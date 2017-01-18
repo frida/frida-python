@@ -17,9 +17,9 @@ import shutil
 import struct
 import sys
 try:
-    from urllib.request import urlopen
+    from urllib.request import urlopen, Request
 except:
-    from urllib2 import urlopen
+    from urllib2 import urlopen, Request
 import zipfile
 try:
     import xmlrpclib
@@ -39,6 +39,18 @@ else:
     frida_version = os.environ['FRIDA_VERSION']
     long_description = open(os.path.join(root_dir, "README.md")).read()
     frida_extension = os.environ['FRIDA_EXTENSION']
+
+class UrllibTransport(xmlrpclib.Transport):
+    def __init__(self, *args, **kwargs):
+        xmlrpclib.Transport.__init__(self, *args, **kwargs)
+
+    def request(self, host, handler, request_body, verbose=0):
+        self.verbose = verbose
+        scheme = "https"
+        url = "%(scheme)s://%(host)s%(handler)s" % locals()
+        req = Request(url, data=request_body, headers={'Content-Type': 'text/xml'})
+        fp = urlopen(req)
+        return self.parse_response(fp)
 
 class FridaPrebuiltExt(build_ext):
     def build_extension(self, ext):
@@ -65,7 +77,7 @@ class FridaPrebuiltExt(build_ext):
 
             try:
                 print("querying pypi for available prebuilds")
-                client = xmlrpclib.ServerProxy("https://pypi.python.org/pypi")
+                client = xmlrpclib.ServerProxy("https://pypi.python.org/pypi", transport=UrllibTransport())
                 urls = client.release_urls("frida", frida_version)
 
                 urls = [url for url in urls if url['python_version'] != 'source']
