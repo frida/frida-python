@@ -22,7 +22,7 @@
     <ProjectGuid>{7505F884-DD69-4F23-ADE6-1E0E049AB018}</ProjectGuid>
     <RootNamespace>frida</RootNamespace>
     <Keyword>Win32Proj</Keyword>
-    <ProjectName>frida-python35</ProjectName>
+    <ProjectName>frida-python36</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -73,10 +73,10 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.5\site-packages\</OutDir>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.5\site-packages\</OutDir>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.5\site-packages\</OutDir>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.5\site-packages\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.6\site-packages\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.6\site-packages\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.6\site-packages\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)build\frida-windows\$(PlatformName)-$(Configuration)\lib\python3.6\site-packages\</OutDir>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">_frida</TargetName>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">_frida</TargetName>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">_frida</TargetName>
@@ -89,37 +89,37 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalLibraryDirectories>C:\Program Files (x86)\Python 3.5\libs;$(SolutionDir)python\3.5\x86\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Program Files (x86)\Python 3.6\libs;$(SolutionDir)python\3.6\x86\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files (x86)\Python 3.5\include;$(SolutionDir)python\3.5\x86\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files (x86)\Python 3.6\include;$(SolutionDir)python\3.6\x86\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalLibraryDirectories>C:\Program Files\Python 3.5\libs;$(SolutionDir)python\3.5\x64\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Program Files\Python 3.6\libs;$(SolutionDir)python\3.6\x64\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files\Python 3.5\include;$(SolutionDir)python\3.5\x64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files\Python 3.6\include;$(SolutionDir)python\3.6\x64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalLibraryDirectories>C:\Program Files (x86)\Python 3.5\libs;$(SolutionDir)python\3.5\x86\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Program Files (x86)\Python 3.6\libs;$(SolutionDir)python\3.6\x86\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files (x86)\Python 3.5\include;$(SolutionDir)python\3.5\x86\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files (x86)\Python 3.6\include;$(SolutionDir)python\3.6\x86\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalLibraryDirectories>C:\Program Files\Python 3.5\libs;$(SolutionDir)python\3.5\x64\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Program Files\Python 3.6\libs;$(SolutionDir)python\3.6\x64\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files\Python 3.5\include;$(SolutionDir)python\3.5\x64\include;$(SolutionDir)python\3.5\x64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files\Python 3.6\include;$(SolutionDir)python\3.6\x64\include;$(SolutionDir)python\3.6\x64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <Import Project="frida-python-common.props" />
