@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-import sys
 
 def main():
     import frida
@@ -16,7 +15,8 @@ def main():
             try:
                 self._device.kill(self._process)
             except frida.ProcessNotFoundError:
-                self._update_status('unable to find process: %s' % self._process)
+                self._update_status(
+                    'unable to find process: %s' % self._process)
                 self._exit(1)
             self._exit(0)
 
