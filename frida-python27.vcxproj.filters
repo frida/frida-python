@@ -35,6 +35,9 @@
     <None Include="src\frida\ps.py">
       <Filter>Source Files\frida</Filter>
     </None>
+    <None Include="src\frida\kill.py">
+      <Filter>Source Files\frida</Filter>
+    </None>
     <None Include="src\frida\discoverer.py">
       <Filter>Source Files\frida</Filter>
     </None>

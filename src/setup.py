@@ -174,6 +174,7 @@ setup(
             "frida-discover = frida.discoverer:main",
             "frida-ls-devices = frida.lsd:main",
             "frida-ps = frida.ps:main",
+            "frida-kill = frida.kill:main",
             "frida-trace = frida.tracer:main"
         ]
     },
