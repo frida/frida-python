@@ -3,6 +3,7 @@ frida_PYTHON = \
 	core.py \
 	application.py \
 	ps.py \
+	kill.py \
 	discoverer.py \
 	tracer.py \
 	repl.py

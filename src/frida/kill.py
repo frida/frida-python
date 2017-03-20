@@ -4,8 +4,7 @@ from __future__ import print_function
 
 def main():
     import frida
-    from frida.application import ConsoleApplication, infer_target, \
-        expand_target
+    from frida.application import ConsoleApplication, infer_target, expand_target
 
     class KillApplication(ConsoleApplication):
         def _usage(self):
@@ -15,8 +14,7 @@ def main():
             try:
                 self._device.kill(self._process)
             except frida.ProcessNotFoundError:
-                self._update_status(
-                    'unable to find process: %s' % self._process)
+                self._update_status('unable to find process: %s' % self._process)
                 self._exit(1)
             self._exit(0)
 
