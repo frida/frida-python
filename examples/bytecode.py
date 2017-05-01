@@ -3,7 +3,7 @@ from __future__ import print_function
 import frida
 
 system_session = frida.attach(0)
-bytecode = system_session.compile_script("""\
+bytecode = system_session.compile_script(name="bytecode-example", source="""\
 'use strict';
 
 rpc.exports = {

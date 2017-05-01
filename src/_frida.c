@@ -2085,29 +2085,27 @@ PySession_create_script (PySession * self, PyObject * args, PyObject * kw)
 static PyObject *
 PySession_create_script_from_bytes (PySession * self, PyObject * args, PyObject * kw)
 {
-  static char * keywords[] = { "data", "name", NULL };
+  static char * keywords[] = { "data", NULL };
   guint8 * data;
   int size;
-  char * name = NULL;
   GBytes * bytes;
   GError * error = NULL;
   FridaScript * handle;
 
-#if PY_MAJOR_VERSION >= 3
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "y#|es", keywords, &data, &size, "utf-8", &name))
-#else
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "s#|es", keywords, &data, &size, "utf-8", &name))
-#endif
+ #if PY_MAJOR_VERSION >= 3
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "y#", keywords, &data, &size))
+ #else
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s#", keywords, &data, &size))
+ #endif
     return NULL;
 
   bytes = g_bytes_new (data, size);
 
   Py_BEGIN_ALLOW_THREADS
-  handle = frida_session_create_script_from_bytes_sync (PY_GOBJECT_HANDLE (self), name, bytes, &error);
+  handle = frida_session_create_script_from_bytes_sync (PY_GOBJECT_HANDLE (self), bytes, &error);
   Py_END_ALLOW_THREADS
 
   g_bytes_unref (bytes);
-  PyMem_Free (name);
 
   if (error != NULL)
     return PyFrida_raise (error);
@@ -2118,22 +2116,23 @@ PySession_create_script_from_bytes (PySession * self, PyObject * args, PyObject 
 static PyObject *
 PySession_compile_script (PySession * self, PyObject * args, PyObject * kw)
 {
-  static char * keywords[] = { "source", NULL };
-  char * source;
+  static char * keywords[] = { "source", "name", NULL };
+  char * source, * name = NULL;
   GError * error = NULL;
   GBytes * bytes;
   gconstpointer data;
   gsize size;
   PyObject * result;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "es", keywords, "utf-8", &source))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|es", keywords, "utf-8", &source, "utf-8", &name))
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  bytes = frida_session_compile_script_sync (PY_GOBJECT_HANDLE (self), source, &error);
+  bytes = frida_session_compile_script_sync (PY_GOBJECT_HANDLE (self), name, source, &error);
   Py_END_ALLOW_THREADS
 
   PyMem_Free (source);
+  PyMem_Free (name);
 
   if (error != NULL)
     return PyFrida_raise (error);
