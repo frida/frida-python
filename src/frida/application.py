@@ -292,6 +292,8 @@ class ConsoleApplication(object):
         if sys.version_info[0] >= 3:
             string_type = str
             decoder = "unicode-escape"
+            if platform.system() == 'Darwin':
+                decoder = "UTF-8"
         else:
             string_type = unicode
             decoder = "string-escape"
