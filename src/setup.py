@@ -147,7 +147,7 @@ setup(
     ],
     license="wxWindows Library Licence, Version 3.1",
     zip_safe=True,
-    keywords="frida debugger inject javascript windows mac linux ios iphone ipad android",
+    keywords="frida debugger inject javascript windows macos linux ios iphone ipad android",
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Environment :: Console",
