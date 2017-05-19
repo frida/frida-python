@@ -1,0 +1,19 @@
+/* config.h.in.  Generated from configure.ac by autoheader.  */
+
+/* Define to 1 if OS is Android based. */
+#mesondefine HAVE_ANDROID
+
+/* Define to 1 if OS is Darwin based. */
+#mesondefine HAVE_DARWIN
+
+/* Define to 1 if OS is iOS. */
+#mesondefine HAVE_IOS
+
+/* Define to 1 if OS is Linux based. */
+#mesondefine HAVE_LINUX
+
+/* Define to 1 if OS is macOS. */
+#mesondefine HAVE_MACOS
+
+/* Define to 1 if OS is QNX based. */
+#mesondefine HAVE_QNX

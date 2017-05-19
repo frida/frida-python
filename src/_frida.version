@@ -1,0 +1,8 @@
+FRIDA_PYTHON {
+  global:
+    PyInit__frida;
+    init_frida;
+
+  local:
+    *;
+};

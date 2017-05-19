@@ -1,7 +1,8 @@
 #!@PYTHON@
 
+from os.path import dirname, join, realpath
 import sys
-sys.path.insert(1, '@pythondir@')
+sys.path.insert(1, join(dirname(dirname(realpath(__file__))), '@pythondir@'))
 
 import frida.lsd
 
