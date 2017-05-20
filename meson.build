@@ -91,7 +91,7 @@ endif
 
 frida_core_dep = dependency('frida-core-1.0')
 
-configure_file(input: 'config.h.meson',
+configure_file(input: 'config.h.in',
   output: 'config.h',
   configuration: cdata)
 
