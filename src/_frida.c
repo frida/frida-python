@@ -34,7 +34,7 @@
 #ifdef _MSC_VER
 # pragma warning (pop)
 #endif
-#ifdef HAVE_MAC
+#ifdef HAVE_MACOS
 # include <crt_externs.h>
 #endif
 
