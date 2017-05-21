@@ -1,51 +1,32 @@
 project('frida-python', 'c', version: '1.0.0')
 
-host_os_family = ''
-host_os = host_machine.system()
-host_is_64bit = host_machine.cpu_family() == 'x86_64' or host_machine.cpu_family() == 'arm64'
+host_os_family = host_machine.system()
+host_os = host_os_family
 
-if not meson.is_cross_build()
-  target_conditionals_prefix = '#include <TargetConditionals.h>'
+cc = meson.get_compiler('c')
 
-  is_macos_src = target_conditionals_prefix + '''
-  #if !TARGET_OS_OSX
-  # error Not macOS
-  #endif
-  '''
-  if cc.compiles(is_macos_src, name: 'compiling for macOS')
-    host_os = 'macos'
-  endif
+target_conditionals_prefix = '#include <TargetConditionals.h>'
 
-  is_ios_src = target_conditionals_prefix + '''
-  #if !TARGET_OS_IOS
-  # error Not iOS
-  #endif
-  '''
-  if cc.compiles(is_ios_src, name: 'compiling for iOS')
-    host_os = 'ios'
-  endif
-
-  if cc.has_header('android/api-level.h')
-    host_os = 'android'
-  endif
+is_macos_src = target_conditionals_prefix + '''
+#if !TARGET_OS_OSX
+# error Not macOS
+#endif
+'''
+if cc.compiles(is_macos_src, name: 'compiling for macOS')
+  host_os = 'macos'
 endif
 
-os_families = [
-  ['windows', 'windows'],
-  ['macos', 'darwin'],
-  ['linux', 'linux'],
-  ['ios', 'darwin'],
-  ['android', 'linux'],
-  ['qnx', 'qnx'],
-]
-foreach f : os_families
-  if f.get(0) == host_os
-    host_os_family = f.get(1)
-  endif
-endforeach
+is_ios_src = target_conditionals_prefix + '''
+#if !TARGET_OS_IOS
+# error Not iOS
+#endif
+'''
+if cc.compiles(is_ios_src, name: 'compiling for iOS')
+  host_os = 'ios'
+endif
 
-if host_os_family == ''
-  error('Unsupported OS')
+if cc.has_header('android/api-level.h')
+  host_os = 'android'
 endif
 
 python = get_option('with-python')
@@ -79,8 +60,6 @@ if result.returncode() != 0
   error('Unable to detect Python plugin export name: ' + result.stdout() + result.stderr())
 endif
 python_plugin_export_name = result.stdout()
-
-cc = meson.get_compiler('c')
 
 cdata = configuration_data()
 
