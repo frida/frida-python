@@ -9,6 +9,9 @@ def main():
         def _usage(self):
             return "usage: %prog [options]"
 
+        def _needs_device(self):
+            return False
+
         def _start(self):
             try:
                 devices = frida.enumerate_devices()

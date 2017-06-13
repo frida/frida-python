@@ -65,14 +65,17 @@ class ConsoleApplication(object):
         colorama.init()
 
         parser = OptionParser(usage=self._usage(), version=frida.__version__)
-        parser.add_option("-D", "--device", help="connect to device with the given ID",
-                metavar="ID", type='string', action='store', dest="device_id", default=None)
-        parser.add_option("-U", "--usb", help="connect to USB device",
-                action='store_const', const='tether', dest="device_type", default=None)
-        parser.add_option("-R", "--remote", help="connect to remote frida-server",
-                action='store_const', const='remote', dest="device_type", default=None)
-        parser.add_option("-H", "--host", help="connect to remote frida-server on HOST",
-                metavar="HOST", type='string', action='store', dest="host", default=None)
+
+        if self._needs_device():
+            parser.add_option("-D", "--device", help="connect to device with the given ID",
+                    metavar="ID", type='string', action='store', dest="device_id", default=None)
+            parser.add_option("-U", "--usb", help="connect to USB device",
+                    action='store_const', const='tether', dest="device_type", default=None)
+            parser.add_option("-R", "--remote", help="connect to remote frida-server",
+                    action='store_const', const='remote', dest="device_type", default=None)
+            parser.add_option("-H", "--host", help="connect to remote frida-server on HOST",
+                    metavar="HOST", type='string', action='store', dest="host", default=None)
+
         if self._needs_target():
             def store_target(option, opt_str, target_value, parser, target_type, *args, **kwargs):
                 if target_type == 'file':
@@ -97,9 +100,14 @@ class ConsoleApplication(object):
             input_encoding = sys.stdin.encoding or 'UTF-8'
             args = [arg.decode(input_encoding) for arg in args]
 
-        self._device_id = options.device_id
-        self._device_type = options.device_type
-        self._host = options.host
+        if self._needs_device():
+            self._device_id = options.device_id
+            self._device_type = options.device_type
+            self._host = options.host
+        else:
+            self._device_id = None
+            self._device_type = None
+            self._host = None
         self._device = None
         self._schedule_on_output = lambda pid, fd, data: self._reactor.schedule(lambda: self._on_output(pid, fd, data))
         self._schedule_on_device_lost = lambda: self._reactor.schedule(self._on_device_lost)
@@ -170,6 +178,9 @@ class ConsoleApplication(object):
 
     def _initialize(self, parser, options, args):
         pass
+
+    def _needs_device(self):
+        return True
 
     def _needs_target(self):
         return False
