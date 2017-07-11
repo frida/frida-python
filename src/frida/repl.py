@@ -9,6 +9,7 @@ def main():
     import json
     import os
     import re
+    import hashlib
     from prompt_toolkit.shortcuts import create_prompt_application, create_output, create_eventloop
     from prompt_toolkit.history import FileHistory
     from prompt_toolkit.completion import Completion, Completer
@@ -17,6 +18,11 @@ def main():
     from pygments.token import Token
     import sys
     import threading
+
+    try:
+        from urllib.request import urlopen
+    except:
+        from urllib2 import urlopen
 
     class REPLApplication(ConsoleApplication):
         def __init__(self):
@@ -36,6 +42,8 @@ def main():
         def _add_options(self, parser):
             parser.add_option("-l", "--load", help="load SCRIPT", metavar="SCRIPT",
                 type='string', action='store', dest="user_script", default=None)
+            parser.add_option("-c", "--codeshare", help="load CODESHARE_URI", metavar="CODESHARE_URI",
+                type='string', action='store', dest="codeshare_repo", default=None)
             parser.add_option("-e", "--eval", help="evaluate CODE", metavar="CODE",
                 type='string', action='append', dest="eval_items", default=None)
             parser.add_option("-q", help="quiet mode (no prompt) and quit after -l and -e",
@@ -46,6 +54,7 @@ def main():
 
         def _initialize(self, parser, options, args):
             self._user_script = options.user_script
+            self._codeshare_uri = options.codeshare_repo
             self._pending_eval = options.eval_items
             self._quiet = options.quiet
             self._no_pause = options.no_pause
@@ -422,6 +431,57 @@ def main():
                 with codecs.open(self._user_script, 'rb', 'utf-8') as f:
                     user_script = f.read().rstrip("\r\n") + "\n\n// Frida REPL script:\n"
 
+            if self._codeshare_uri is not None:
+                trust_store = self._get_or_create_truststore()
+                project_url = 'https://codeshare.frida.re/api/project/{}/'.format(self._codeshare_uri)
+                response_json = None
+                try:
+                    response = urlopen(project_url)
+                    response_content = response.read()
+                    response_json = json.loads(response_content)
+                except Exception as e:
+                    self._print("Got an unhandled exception while trying to retrieve {} - {}".format(self._codeshare_uri, e))
+
+                if response_json:
+                    trusted_signature = trust_store.get(self._codeshare_uri, '')
+                    fingerprint = hashlib.sha256(response_json['source'].encode('utf-8')).hexdigest()
+                    if fingerprint == trusted_signature:
+                        user_script = response_json['source']
+                    else:
+                        self._print("""Hello! This is the first time you're running this particular snippit, or the snippit's source code has changed.
+
+Project Name: {project_name}
+Author: {author}
+Slug: {slug}
+Fingerprint: {fingerprint}
+URL: {url}
+                        """.format(
+                            project_name=response_json['project_name'],
+                            author="@" + self._codeshare_uri.split('/')[0],
+                            slug=self._codeshare_uri,
+                            fingerprint=fingerprint,
+                            url="https://codeshare.frida.re/@{}".format(self._codeshare_uri)
+                        ))
+
+                        while True:
+                            input_string = "Are you sure you'd like to trust this project? [y/N] "
+                            try:
+                                response = raw_input(input_string)
+                            except NameError:
+                                response = input(input_string)
+
+                            if response.lower() in 'no' or response == '':
+                                self._print("Dropping into a normal REPL shell!")
+                                break
+
+                            if response.lower() in 'yes':
+                                self._print("Adding fingerprint {} to the trust store! You won't be prompted again unless the code changes.".format(fingerprint))
+                                user_script = response_json['source']
+                                self._update_truststore({
+                                    self._codeshare_uri: fingerprint
+                                })
+                                break
+
             return user_script + """\
 
 rpc.exports.evaluate = function (expression) {
@@ -442,6 +502,42 @@ rpc.exports.evaluate = function (expression) {
     }
 };
 """
+        def _update_truststore(self, record):
+            trust_store = self._get_or_create_truststore()
+            trust_store.update(record)
+
+            config_dir = os.path.join(os.path.expanduser('~'), '.frida')
+            codeshare_trust_store = os.path.join(config_dir, "codeshare-truststore.json")
+
+            with open(codeshare_trust_store, 'w') as f:
+                f.write(json.dumps(trust_store))
+
+        def _get_or_create_truststore(self):
+            '''
+            Look for a trust store located at ~/.frida/codeshare-truststore.json, which holds known fingerprints of scripts previously
+            run before, prompting if the fingerprint changes (due to a code change pushed to codeshare).
+            :return:
+            '''
+            config_dir = os.path.join(os.path.expanduser('~'), '.frida')
+            if not os.path.exists(config_dir):
+                os.makedirs(config_dir)
+
+            codeshare_trust_store = os.path.join(config_dir, "codeshare-truststore.json")
+
+            if os.path.exists(codeshare_trust_store):
+                try:
+                    with open(codeshare_trust_store) as f:
+                        trust_store = json.load(f)
+                except Exception as e:
+                    self._print("Unable to load the codeshare truststore ({}), defaulting to an empty truststore. You will be prompted every time you want to run a script!".format(e))
+                    trust_store = {}
+            else:
+                # Initialize an empty truststore
+                with open(codeshare_trust_store, 'w') as f:
+                    f.write(json.dumps({}))
+                trust_store = {}
+
+            return trust_store
 
     class FridaCompleter(Completer):
         def __init__(self, repl):
