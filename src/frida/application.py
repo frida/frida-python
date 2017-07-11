@@ -382,6 +382,7 @@ class Reactor(object):
             now = time.time()
             work = None
             timeout = None
+            previous_pending_length = -1
             with self._lock:
                 for item in self._pending:
                     (f, when) = item
@@ -391,10 +392,11 @@ class Reactor(object):
                         break
                 if len(self._pending) > 0:
                     timeout = max([min(map(lambda item: item[1], self._pending)) - now, 0])
+                previous_pending_length = len(self._pending)
             if work is not None:
                 work()
             with self._lock:
-                if self._running:
+                if self._running and len(self._pending) == previous_pending_length:
                     self._cond.wait(timeout)
                 running = self._running
 
