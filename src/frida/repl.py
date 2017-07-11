@@ -8,7 +8,6 @@ def main():
     from frida.application import ConsoleApplication
     import json
     import os
-    import platform
     import re
     from prompt_toolkit.shortcuts import create_prompt_application, create_output, create_eventloop
     from prompt_toolkit.history import FileHistory
