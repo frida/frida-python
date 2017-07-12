@@ -56,6 +56,7 @@ def main():
         def _initialize(self, parser, options, args):
             self._user_script = options.user_script
             self._codeshare_uri = options.codeshare_uri
+            self._codeshare_script = None
             self._pending_eval = options.eval_items
             self._quiet = options.quiet
             self._no_pause = options.no_pause
@@ -81,6 +82,14 @@ def main():
 
         def _start(self):
             self._prompt_string = self._create_prompt()
+
+            if self._codeshare_uri is not None:
+                self._codeshare_script = self._load_codeshare_script(self._codeshare_uri)
+                if self._codeshare_script is None:
+                    self._print("Exiting!")
+                    self._exit(1)
+                    return
+
             try:
                 self._load_script()
             except Exception as e:
@@ -428,58 +437,8 @@ def main():
         def _create_repl_script(self):
             user_script = ""
 
-            if self._codeshare_uri is not None:
-                trust_store = self._get_or_create_truststore()
-                project_url = "https://codeshare.frida.re/api/project/{}/".format(self._codeshare_uri)
-                response_json = None
-                try:
-                    request = build_opener()
-                    request.addheaders = [('User-Agent', 'Frida v{} | {}'.format(frida.__version__, platform.platform()))]
-                    response = request.open(project_url)
-                    response_content = response.read()
-                    response_json = json.loads(response_content)
-                except Exception as e:
-                    self._print("Got an unhandled exception while trying to retrieve {} - {}".format(self._codeshare_uri, e))
-
-                if response_json:
-                    trusted_signature = trust_store.get(self._codeshare_uri, "")
-                    fingerprint = hashlib.sha256(response_json['source'].encode('utf-8')).hexdigest()
-                    if fingerprint == trusted_signature:
-                        user_script = response_json['source']
-                    else:
-                        self._print("""Hello! This is the first time you're running this particular snippet, or the snippet's source code has changed.
-
-Project Name: {project_name}
-Author: {author}
-Slug: {slug}
-Fingerprint: {fingerprint}
-URL: {url}
-                        """.format(
-                            project_name=response_json['project_name'],
-                            author="@" + self._codeshare_uri.split('/')[0],
-                            slug=self._codeshare_uri,
-                            fingerprint=fingerprint,
-                            url="https://codeshare.frida.re/@{}".format(self._codeshare_uri)
-                        ))
-
-                        while True:
-                            input_string = "Are you sure you'd like to trust this project? [y/N] "
-                            try:
-                                response = raw_input(input_string)
-                            except NameError:
-                                response = input(input_string)
-
-                            if response.lower() in ('n', 'no') or response == '':
-                                self._print("Exiting!")
-                                sys.exit(1)
-
-                            if response.lower() in ('y', 'yes'):
-                                self._print("Adding fingerprint {} to the trust store! You won't be prompted again unless the code changes.".format(fingerprint))
-                                user_script = response_json['source']
-                                self._update_truststore({
-                                    self._codeshare_uri: fingerprint
-                                })
-                                break
+            if self._codeshare_script is not None:
+                user_script = self._codeshare_script
 
             if self._user_script is not None:
                 with codecs.open(self._user_script, 'rb', 'utf-8') as f:
@@ -505,6 +464,59 @@ rpc.exports.evaluate = function (expression) {
     }
 };
 """
+
+        def _load_codeshare_script(self, uri):
+            trust_store = self._get_or_create_truststore()
+
+            project_url = "https://codeshare.frida.re/api/project/{}/".format(uri)
+            response_json = None
+            try:
+                request = build_opener()
+                request.addheaders = [('User-Agent', 'Frida v{} | {}'.format(frida.__version__, platform.platform()))]
+                response = request.open(project_url)
+                response_content = response.read()
+                response_json = json.loads(response_content)
+            except Exception as e:
+                self._print("Got an unhandled exception while trying to retrieve {} - {}".format(uri, e))
+                return None
+
+            trusted_signature = trust_store.get(uri, "")
+            fingerprint = hashlib.sha256(response_json['source'].encode('utf-8')).hexdigest()
+            if fingerprint == trusted_signature:
+                return response_json['source']
+
+            self._print("""Hello! This is the first time you're running this particular snippet, or the snippet's source code has changed.
+
+Project Name: {project_name}
+Author: {author}
+Slug: {slug}
+Fingerprint: {fingerprint}
+URL: {url}
+            """.format(
+                project_name=response_json['project_name'],
+                author="@" + uri.split('/')[0],
+                slug=uri,
+                fingerprint=fingerprint,
+                url="https://codeshare.frida.re/@{}".format(uri)
+            ))
+
+            while True:
+                input_string = "Are you sure you'd like to trust this project? [y/N] "
+                try:
+                    response = raw_input(input_string)
+                except NameError:
+                    response = input(input_string)
+
+                if response.lower() in ('n', 'no') or response == '':
+                    return None
+
+                if response.lower() in ('y', 'yes'):
+                    self._print("Adding fingerprint {} to the trust store! You won't be prompted again unless the code changes.".format(fingerprint))
+                    script = response_json['source']
+                    self._update_truststore({
+                        uri: fingerprint
+                    })
+                    return script
 
         def _get_or_create_config_dir(self):
             config_dir = os.path.join(os.path.expanduser('~'), '.frida')
