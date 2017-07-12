@@ -30,7 +30,8 @@ def main():
             self._seqno = 0
             self._ready = threading.Event()
             self._errors = 0
-            self._history = FileHistory(os.path.join(os.path.expanduser('~'), '.frida_history'))
+            config_dir = self._get_or_create_config_dir()
+            self._history = FileHistory(os.path.join(config_dir, 'history'))
             self._completer = FridaCompleter(self)
             self._cli = None
             self._last_change_id = 0
@@ -504,20 +505,25 @@ rpc.exports.evaluate = function (expression) {
     }
 };
 """
+
+        def _get_or_create_config_dir(self):
+            config_dir = os.path.join(os.path.expanduser('~'), '.frida')
+            if not os.path.exists(config_dir):
+                os.makedirs(config_dir)
+            return config_dir
+
         def _update_truststore(self, record):
             trust_store = self._get_or_create_truststore()
             trust_store.update(record)
 
-            config_dir = os.path.join(os.path.expanduser('~'), '.frida')
+            config_dir = self._get_or_create_config_dir()
             codeshare_trust_store = os.path.join(config_dir, "codeshare-truststore.json")
 
             with open(codeshare_trust_store, 'w') as f:
                 f.write(json.dumps(trust_store))
 
         def _get_or_create_truststore(self):
-            config_dir = os.path.join(os.path.expanduser('~'), '.frida')
-            if not os.path.exists(config_dir):
-                os.makedirs(config_dir)
+            config_dir = self._get_or_create_config_dir()
 
             codeshare_trust_store = os.path.join(config_dir, "codeshare-truststore.json")
 
@@ -529,7 +535,6 @@ rpc.exports.evaluate = function (expression) {
                     self._print("Unable to load the codeshare truststore ({}), defaulting to an empty truststore. You will be prompted every time you want to run a script!".format(e))
                     trust_store = {}
             else:
-                # Initialize an empty truststore
                 with open(codeshare_trust_store, 'w') as f:
                     f.write(json.dumps({}))
                 trust_store = {}
