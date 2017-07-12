@@ -426,10 +426,6 @@ def main():
         def _create_repl_script(self):
             user_script = ""
 
-            if self._user_script is not None:
-                with codecs.open(self._user_script, 'rb', 'utf-8') as f:
-                    user_script = f.read().rstrip("\r\n") + "\n\n// Frida REPL script:\n"
-
             if self._codeshare_uri is not None:
                 trust_store = self._get_or_create_truststore()
                 project_url = "https://codeshare.frida.re/api/project/{}/".format(self._codeshare_uri)
@@ -480,6 +476,10 @@ URL: {url}
                                     self._codeshare_uri: fingerprint
                                 })
                                 break
+
+            if self._user_script is not None:
+                with codecs.open(self._user_script, 'rb', 'utf-8') as f:
+                    user_script += f.read().rstrip("\r\n") + "\n\n// Frida REPL script:\n"
 
             return user_script + """\
 
