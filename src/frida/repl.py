@@ -433,7 +433,7 @@ def main():
                 response_json = None
                 try:
                     request = build_opener()
-                    request.addheaders = [('User-Agent', 'Frida Codeshare v{} | {}'.format(frida.__version__, platform.platform()))]
+                    request.addheaders = [('User-Agent', 'Frida v{} | {}'.format(frida.__version__, platform.platform()))]
                     response = request.open(project_url)
                     response_content = response.read()
                     response_json = json.loads(response_content)
