@@ -18,7 +18,6 @@ def main():
     from pygments.token import Token
     import sys
     import threading
-
     try:
         from urllib.request import urlopen
     except:
@@ -43,7 +42,7 @@ def main():
             parser.add_option("-l", "--load", help="load SCRIPT", metavar="SCRIPT",
                 type='string', action='store', dest="user_script", default=None)
             parser.add_option("-c", "--codeshare", help="load CODESHARE_URI", metavar="CODESHARE_URI",
-                type='string', action='store', dest="codeshare_repo", default=None)
+                type='string', action='store', dest="codeshare_uri", default=None)
             parser.add_option("-e", "--eval", help="evaluate CODE", metavar="CODE",
                 type='string', action='append', dest="eval_items", default=None)
             parser.add_option("-q", help="quiet mode (no prompt) and quit after -l and -e",
@@ -54,7 +53,7 @@ def main():
 
         def _initialize(self, parser, options, args):
             self._user_script = options.user_script
-            self._codeshare_uri = options.codeshare_repo
+            self._codeshare_uri = options.codeshare_uri
             self._pending_eval = options.eval_items
             self._quiet = options.quiet
             self._no_pause = options.no_pause
@@ -433,7 +432,7 @@ def main():
 
             if self._codeshare_uri is not None:
                 trust_store = self._get_or_create_truststore()
-                project_url = 'https://codeshare.frida.re/api/project/{}/'.format(self._codeshare_uri)
+                project_url = "https://codeshare.frida.re/api/project/{}/".format(self._codeshare_uri)
                 response_json = None
                 try:
                     response = urlopen(project_url)
@@ -443,12 +442,12 @@ def main():
                     self._print("Got an unhandled exception while trying to retrieve {} - {}".format(self._codeshare_uri, e))
 
                 if response_json:
-                    trusted_signature = trust_store.get(self._codeshare_uri, '')
+                    trusted_signature = trust_store.get(self._codeshare_uri, "")
                     fingerprint = hashlib.sha256(response_json['source'].encode('utf-8')).hexdigest()
                     if fingerprint == trusted_signature:
                         user_script = response_json['source']
                     else:
-                        self._print("""Hello! This is the first time you're running this particular snippit, or the snippit's source code has changed.
+                        self._print("""Hello! This is the first time you're running this particular snippet, or the snippet's source code has changed.
 
 Project Name: {project_name}
 Author: {author}
@@ -470,11 +469,11 @@ URL: {url}
                             except NameError:
                                 response = input(input_string)
 
-                            if response.lower() in 'no' or response == '':
+                            if response.lower() in ('n', 'no') or response == '':
                                 self._print("Dropping into a normal REPL shell!")
                                 break
 
-                            if response.lower() in 'yes':
+                            if response.lower() in ('y', 'yes'):
                                 self._print("Adding fingerprint {} to the trust store! You won't be prompted again unless the code changes.".format(fingerprint))
                                 user_script = response_json['source']
                                 self._update_truststore({
@@ -513,11 +512,10 @@ rpc.exports.evaluate = function (expression) {
                 f.write(json.dumps(trust_store))
 
         def _get_or_create_truststore(self):
-            '''
+            """
             Look for a trust store located at ~/.frida/codeshare-truststore.json, which holds known fingerprints of scripts previously
             run before, prompting if the fingerprint changes (due to a code change pushed to codeshare).
-            :return:
-            '''
+            """
             config_dir = os.path.join(os.path.expanduser('~'), '.frida')
             if not os.path.exists(config_dir):
                 os.makedirs(config_dir)
