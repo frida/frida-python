@@ -6,10 +6,9 @@ def main():
     from colorama import Fore, Style
     import frida
     from frida.application import ConsoleApplication
+    import hashlib
     import json
     import os
-    import re
-    import hashlib
     import platform
     from prompt_toolkit.shortcuts import create_prompt_application, create_output, create_eventloop
     from prompt_toolkit.history import FileHistory
@@ -17,6 +16,7 @@ def main():
     from prompt_toolkit.interface import CommandLineInterface
     from pygments.lexers import JavascriptLexer
     from pygments.token import Token
+    import re
     import sys
     import threading
     try:
