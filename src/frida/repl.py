@@ -469,8 +469,8 @@ URL: {url}
                                 response = input(input_string)
 
                             if response.lower() in ('n', 'no') or response == '':
-                                self._print("Dropping into a normal REPL shell!")
-                                break
+                                self._print("Exiting!")
+                                sys.exit(1)
 
                             if response.lower() in ('y', 'yes'):
                                 self._print("Adding fingerprint {} to the trust store! You won't be prompted again unless the code changes.".format(fingerprint))
@@ -515,10 +515,6 @@ rpc.exports.evaluate = function (expression) {
                 f.write(json.dumps(trust_store))
 
         def _get_or_create_truststore(self):
-            """
-            Look for a trust store located at ~/.frida/codeshare-truststore.json, which holds known fingerprints of scripts previously
-            run before, prompting if the fingerprint changes (due to a code change pushed to codeshare).
-            """
             config_dir = os.path.join(os.path.expanduser('~'), '.frida')
             if not os.path.exists(config_dir):
                 os.makedirs(config_dir)
