@@ -10,6 +10,7 @@ def main():
     import os
     import re
     import hashlib
+    import platform
     from prompt_toolkit.shortcuts import create_prompt_application, create_output, create_eventloop
     from prompt_toolkit.history import FileHistory
     from prompt_toolkit.completion import Completion, Completer
@@ -19,9 +20,9 @@ def main():
     import sys
     import threading
     try:
-        from urllib.request import urlopen
+        from urllib.request import build_opener
     except:
-        from urllib2 import urlopen
+        from urllib2 import build_opener
 
     class REPLApplication(ConsoleApplication):
         def __init__(self):
@@ -431,7 +432,9 @@ def main():
                 project_url = "https://codeshare.frida.re/api/project/{}/".format(self._codeshare_uri)
                 response_json = None
                 try:
-                    response = urlopen(project_url)
+                    request = build_opener()
+                    request.addheaders = [('User-Agent', 'Frida Codeshare v{} | {}'.format(frida.__version__, platform.platform()))]
+                    response = request.open(project_url)
                     response_content = response.read()
                     response_json = json.loads(response_content)
                 except Exception as e:
