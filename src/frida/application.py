@@ -156,7 +156,7 @@ class ConsoleApplication(object):
         mgr.on('changed', on_devices_changed)
 
         self._reactor.schedule(self._try_start)
-        self._reactor.schedule(self._show_message_if_no_device, delay=0.1)
+        self._reactor.schedule(self._show_message_if_no_device, delay=1)
 
         old_sigterm_handler = signal.signal(signal.SIGTERM, lambda n, f: self._exit(0))
 
