@@ -7,9 +7,10 @@ from optparse import OptionParser
 import os
 import platform
 import select
+import signal
 import sys
 import threading
-import time
+from time import time
 
 import colorama
 from colorama import Fore, Style
@@ -21,7 +22,7 @@ if platform.system() == 'Windows':
 
 def input_with_timeout(timeout):
     if platform.system() == 'Windows':
-        start_time = time.time()
+        start_time = time()
         s = ''
         while True:
             while msvcrt.kbhit():
@@ -30,7 +31,7 @@ def input_with_timeout(timeout):
                     break
                 elif ord(c) >= 32: #space_char
                     s += c
-            if time.time() - start_time > timeout:
+            if time() - start_time > timeout:
                 return None
 
         return s
@@ -150,26 +151,39 @@ class ConsoleApplication(object):
 
     def run(self):
         mgr = frida.get_device_manager()
+
         on_devices_changed = lambda: self._reactor.schedule(self._try_start)
         mgr.on('changed', on_devices_changed)
+
         self._reactor.schedule(self._try_start)
         self._reactor.schedule(self._show_message_if_no_device, delay=0.1)
+
+        old_sigterm_handler = signal.signal(signal.SIGTERM, lambda n, f: self._exit(0))
+
         self._reactor.run()
+
+        signal.signal(signal.SIGTERM, old_sigterm_handler)
+
         if self._started:
             self._stop()
+
         if self._session is not None:
             self._session.off('detached', self._schedule_on_session_detached)
             self._session.detach()
             self._session = None
+
         if self._spawned_pid is not None:
             try:
                 self._device.kill(self._spawned_pid)
             except:
                 pass
+
         if self._device is not None:
             self._device.off('output', self._schedule_on_output)
             self._device.off('lost', self._schedule_on_device_lost)
+
         mgr.off('changed', on_devices_changed)
+
         frida.shutdown()
         sys.exit(self._exit_status)
 
@@ -379,7 +393,7 @@ class Reactor(object):
     def _run(self):
         running = True
         while running:
-            now = time.time()
+            now = time()
             work = None
             timeout = None
             previous_pending_length = -1
@@ -409,7 +423,7 @@ class Reactor(object):
             self._cond.notify()
 
     def schedule(self, f, delay=None):
-        now = time.time()
+        now = time()
         if delay is not None:
             when = now + delay
         else:
