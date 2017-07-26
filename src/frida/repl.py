@@ -29,6 +29,7 @@ def main():
             self._script = None
             self._seqno = 0
             self._ready = threading.Event()
+            self._stopping = threading.Event()
             self._errors = 0
             config_dir = self._get_or_create_config_dir()
             self._history = FileHistory(os.path.join(config_dir, 'history'))
@@ -111,10 +112,13 @@ def main():
             def set_return():
                 raise EOFError()
 
-            try:
-                self._cli.eventloop.call_from_executor(set_return)
-            except Exception:
-                pass
+            self._stopping.set()
+
+            if self._cli is not None:
+                try:
+                    self._cli.eventloop.call_from_executor(set_return)
+                except Exception:
+                    pass
 
         def _stop(self):
             self._unload_script()
@@ -170,6 +174,8 @@ def main():
                 if not reactor.is_running():
                     return
 
+            have_terminal = sys.stdin.isatty() and sys.stdout.isatty()
+
             while True:
                 expression = ""
                 line = ""
@@ -193,27 +199,33 @@ def main():
                             return
 
                         try:
-                            # We create the prompt manually instead of using get_input,
-                            # so we can use the cli in the _on_stop method
-                            eventloop = create_eventloop()
+                            if have_terminal:
+                                # We create the prompt manually instead of using get_input,
+                                # so we can use the cli in the _on_stop method
+                                eventloop = create_eventloop()
 
-                            self._cli = CommandLineInterface(
-                                application=create_prompt_application(prompt, history=self._history, completer=self._completer, lexer=JavascriptLexer),
-                                eventloop=eventloop,
-                                output=create_output())
+                                self._cli = CommandLineInterface(
+                                    application=create_prompt_application(prompt, history=self._history, completer=self._completer, lexer=JavascriptLexer),
+                                    eventloop=eventloop,
+                                    output=create_output())
 
-                            try:
-                                line = None
+                                try:
+                                    line = None
 
-                                document = self._cli.run()
+                                    document = self._cli.run()
 
-                                if document:
-                                    line = document.text
-                            finally:
-                                eventloop.close()
+                                    if document:
+                                        line = document.text
+                                finally:
+                                    eventloop.close()
+                            else:
+                                line = get_input()
                         except EOFError:
-                            # An extra newline after EOF to exit the REPL cleanly
-                            self._print("\nThank you for using Frida!")
+                            if have_terminal:
+                                self._print("\nThank you for using Frida!")
+                            else:
+                                while not self._stopping.wait(1):
+                                    pass
                             return
                         except KeyboardInterrupt:
                             line = ""
@@ -502,10 +514,7 @@ URL: {url}
 
             while True:
                 input_string = "Are you sure you'd like to trust this project? [y/N] "
-                try:
-                    response = raw_input(input_string)
-                except NameError:
-                    response = input(input_string)
+                response = get_input()
 
                 if response.lower() in ('n', 'no') or response == '':
                     return None
@@ -680,6 +689,14 @@ class JavaScriptError(Exception):
         super(JavaScriptError, self).__init__(error['message'])
 
         self.error = error
+
+try:
+    input_impl = raw_input
+except NameError:
+    input_impl = input
+
+def get_input():
+    return input_impl()
 
 
 if __name__ == '__main__':
