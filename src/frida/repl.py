@@ -513,8 +513,8 @@ URL: {url}
             ))
 
             while True:
-                input_string = "Are you sure you'd like to trust this project? [y/N] "
-                response = get_input()
+                prompt_string = "Are you sure you'd like to trust this project? [y/N] "
+                response = get_input(prompt_string)
 
                 if response.lower() in ('n', 'no') or response == '':
                     return None
@@ -695,8 +695,8 @@ try:
 except NameError:
     input_impl = input
 
-def get_input():
-    return input_impl()
+def get_input(prompt_string):
+    return input_impl(prompt_string)
 
 
 if __name__ == '__main__':
