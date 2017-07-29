@@ -486,7 +486,10 @@ rpc.exports.evaluate = function (expression) {
                 request = build_opener()
                 request.addheaders = [('User-Agent', 'Frida v{} | {}'.format(frida.__version__, platform.platform()))]
                 response = request.open(project_url)
-                response_content = response.read()
+                charset = response.headers.get_content_charset()
+                if charset is None:
+                    charset = 'utf-8'
+                response_content = response.read().decode(charset)
                 response_json = json.loads(response_content)
             except Exception as e:
                 self._print("Got an unhandled exception while trying to retrieve {} - {}".format(uri, e))
