@@ -395,19 +395,20 @@ def main():
         def _create_prompt(self):
             device_type = self._device.type
             type_name = self._target[0]
-            if self._target[0] == 'pid' and self._target[1] == 0:
-                target = 'System'
+            if type_name == 'pid':
+                if self._target[1] == 0:
+                    target = 'SystemSession'
+                else:
+                    target = 'PID::%u' % self._target[1]
+            elif type_name == 'file':
+                target = os.path.basename(self._target[1][0])
             else:
                 target = self._target[1]
 
             if device_type in ('local', 'remote'):
-                if self._target[0] == 'name':
-                    type_name = "ProcName"
-                elif self._target[0] == 'pid':
-                    type_name = "PID"
-                prompt_string = "%s::%s::%s" % (device_type.title(), type_name, target)
+                prompt_string = "%s::%s" % (device_type.title(), target)
             else:
-                prompt_string = "%s::%s::%s" % ("USB", self._device.name, target)
+                prompt_string = "%s::%s" % (self._device.name, target)
 
             return prompt_string
 
