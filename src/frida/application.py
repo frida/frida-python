@@ -30,7 +30,7 @@ def input_with_timeout(timeout):
                 if ord(c) == 13: # enter_key
                     break
                 elif ord(c) >= 32: #space_char
-                    s += c
+                    s += c.decode('utf-8')
             if time() - start_time > timeout:
                 return None
 
