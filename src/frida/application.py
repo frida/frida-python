@@ -323,7 +323,7 @@ class ConsoleApplication(object):
         encoding = sys.stdout.encoding or 'UTF-8'
         for arg in args:
             if isinstance(arg, string_type):
-                encoded_args.append(arg.encode(encoding, errors='replace').decode(decoder))
+                encoded_args.append(arg.encode(encoding, errors='replace').decode(decoder, errors='replace'))
             else:
                 encoded_args.append(arg)
         print(*encoded_args, **kwargs)
