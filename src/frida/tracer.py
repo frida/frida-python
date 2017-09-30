@@ -552,46 +552,76 @@ class Repository(object):
     def _create_stub_handler(self, function):
         if isinstance(function, ObjCMethod):
             display_name = function.display_name()
-            _nonlocal_i = {'val': 2}
+            state = {"index": 2}
             def objc_arg(m):
-                r = ':" + args[%d] + " ' % _nonlocal_i['val']
-                _nonlocal_i['val'] += 1
+                index = state["index"]
+                r = ":\" + args[%d] + \" " % index
+                state["index"] = index + 1
                 return r
 
             log_str = '"' + re.sub(r':', objc_arg, display_name) + '"'
+            if log_str.endswith("\" ]\""):
+                log_str = log_str[:-3] + "]\""
         else:
             display_name = function.name
 
-            args = ""
-            argc = 0
-            varargs = False
-            try:
-                with open(os.devnull, 'w') as devnull:
-                    man_argv = ["man"]
-                    if platform.system() != "Darwin":
-                        man_argv.extend(["-E", "UTF-8"])
-                    man_argv.extend(["-P", "col -b", "2", function.name])
-                    output = subprocess.check_output(man_argv, stderr=devnull)
-                match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}\w+ \**?" + function.name + r"\((?:.+\,\s*?$\n)*?(?:.+\;$\n))(?:.|\n)*^DESCRIPTION", output.decode('UTF-8', errors='replace'), re.MULTILINE)
-                if match:
-                    decl = match.group(1)
-                    for argm in re.finditer(r"([^* ]*)\s*(,|\))", decl):
-                        arg = argm.group(1)
-                        if arg == 'void':
-                            continue
-                        if arg == '...':
-                            args += '+ ", ..."'
-                            varargs = True
-                            continue
+            for man_section in (2, 3):
+                args = []
+                try:
+                    with open(os.devnull, 'w') as devnull:
+                        man_argv = ["man"]
+                        if platform.system() != "Darwin":
+                            man_argv.extend(["-E", "UTF-8"])
+                        man_argv.extend(["-P", "col -b", str(man_section), function.name])
+                        output = subprocess.check_output(man_argv, stderr=devnull)
+                    match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}\w+[ \*\n]*" + function.name + r"\((?:.+\,\s*?$\n)*?(?:.+\;$\n))(?:.|\n)*^DESCRIPTION", output.decode('UTF-8', errors='replace'), re.MULTILINE)
+                    if match:
+                        decl = match.group(1)
+                        for argm in re.finditer(r"(?:\(| )([^,\n]*?)([^* ]*)\s*(?:,|\))", decl):
+                            typ = argm.group(1)
+                            arg = argm.group(2)
+                            if arg == "void":
+                                continue
+                            if arg == "...":
+                                args.append("\", ...\" +");
+                                continue
 
-                        args += '%(pre)s%(arg)s=" + args[%(argc)s]' % {"arg": arg, "argc": argc, "pre": '"' if argc == 0 else '+ ", '}
-                        argc += 1
-            except Exception as e:
-                pass
-            if args == "":
-                args = '""'
+                            cast_pre = ""
+                            cast_post = ""
+                            annotate_pre = ""
+                            annotate_post = ""
+                            if re.sub(r"\s+", "", typ).endswith("char*"):
+                                cast_pre = "Memory.readUtf8String("
+                                cast_post = ")"
+                                annotate_pre = "\\\""
+                                annotate_post = " + \"\\\"\""
 
-            log_str = '"%(name)s(" + %(args)s + ")"' % { "name": function.name, "args": args }
+                            arg_index = len(args)
+
+                            args.append("\"%(arg_delimiter)s%(arg_name)s=%(annotate_pre)s\" + %(cast_pre)sargs[%(arg_index)s]%(cast_post)s%(annotate_post)s +" % {
+                                "arg_name": arg,
+                                "arg_index": arg_index,
+                                "arg_delimiter": ", " if arg_index > 0 else "",
+                                "cast_pre": cast_pre,
+                                "cast_post": cast_post,
+                                "annotate_pre": annotate_pre,
+                                "annotate_post": annotate_post
+                            })
+                        break
+                except Exception as e:
+                    pass
+
+            if len(args) == 0:
+                log_str = "\"%(name)s()\"" % { "name": function.name }
+            else:
+                indent_outer = "        "
+                indent_inner = "            "
+                log_str = "\"%(name)s(\" +\n%(indent_inner)s%(args)s\n%(indent_outer)s\")\"" % {
+                    "name": function.name,
+                    "args": ("\n" + indent_inner).join(args),
+                    "indent_outer": indent_outer,
+                    "indent_inner": indent_inner
+                }
 
         return """\
 /*
