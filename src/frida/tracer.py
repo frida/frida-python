@@ -589,10 +589,14 @@ class Repository(object):
                             cast_pre = ''
                             cast_post = ''
                             if re.sub('\s+','',typ).endswith('char*'):
-                                cast_pre='Memory.readCString('
+                                cast_pre='Memory.readUtf8String('
                                 cast_post = ')'
 
-                            args += '%(pre)s%(arg)s=" + %(cast_pre)sargs[%(argc)s]%(cast_post)s' % {"arg": arg, "argc": argc, "cast_pre": cast_pre, "cast_post": cast_post, "pre": '"' if argc == 0 else '+ ", '}
+                            args += '%(pre)s%(arg)s=" + %(cast_pre)sargs[%(argc)s]%(cast_post)s' % {
+                                "pre": '"' if argc == 0 else '+ ", ',
+                                "arg": arg, "argc": argc,
+                                "cast_pre": cast_pre, "cast_post": cast_post
+                            }
                             argc += 1
                         break
                 except Exception as e:
