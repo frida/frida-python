@@ -562,32 +562,45 @@ class Repository(object):
         else:
             display_name = function.name
 
-            args = ""
-            argc = 0
-            varargs = False
-            try:
-                with open(os.devnull, 'w') as devnull:
-                    man_argv = ["man"]
-                    if platform.system() != "Darwin":
-                        man_argv.extend(["-E", "UTF-8"])
-                    man_argv.extend(["-P", "col -b", "2", function.name])
-                    output = subprocess.check_output(man_argv, stderr=devnull)
-                match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}\w+ \**?" + function.name + r"\((?:.+\,\s*?$\n)*?(?:.+\;$\n))(?:.|\n)*^DESCRIPTION", output.decode('UTF-8', errors='replace'), re.MULTILINE)
-                if match:
-                    decl = match.group(1)
-                    for argm in re.finditer(r"([^* ]*)\s*(,|\))", decl):
-                        arg = argm.group(1)
-                        if arg == 'void':
-                            continue
-                        if arg == '...':
-                            args += '+ ", ..."'
-                            varargs = True
-                            continue
+            for man_section in ('2', '3'):
+                args = ""
+                argc = 0
+                varargs = False
+                try:
+                    with open(os.devnull, 'w') as devnull:
+                        man_argv = ["man"]
+                        if platform.system() != "Darwin":
+                            man_argv.extend(["-E", "UTF-8"])
+                        man_argv.extend(["-P", "col -b", man_section, function.name])
+                        output = subprocess.check_output(man_argv, stderr=devnull)
+                    match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}\w+[ \*\n]*" + function.name + r"\((?:.+\,\s*?$\n)*?(?:.+\;$\n))(?:.|\n)*^DESCRIPTION", output.decode('UTF-8', errors='replace'), re.MULTILINE)
+                    if match:
+                        decl = match.group(1)
+                        for argm in re.finditer(r"(?:\(| )([^,\n]*?)([^* ]*)\s*(?:,|\))", decl):
+                            typ = argm.group(1)
+                            arg = argm.group(2)
+                            if arg.find('void') != -1:
+                                continue
+                            if arg == '...':
+                                args += '+ ", ..."'
+                                varargs = True
+                                continue
 
-                        args += '%(pre)s%(arg)s=" + args[%(argc)s]' % {"arg": arg, "argc": argc, "pre": '"' if argc == 0 else '+ ", '}
-                        argc += 1
-            except Exception as e:
-                pass
+                            cast_pre = ''
+                            cast_post = ''
+                            if re.sub('\s+','',typ).endswith('char*'):
+                                cast_pre='Memory.readUtf8String('
+                                cast_post = ')'
+
+                            args += '%(pre)s%(arg)s=" + %(cast_pre)sargs[%(argc)s]%(cast_post)s' % {
+                                "pre": '"' if argc == 0 else '+ ", ',
+                                "arg": arg, "argc": argc,
+                                "cast_pre": cast_pre, "cast_post": cast_post
+                            }
+                            argc += 1
+                        break
+                except Exception as e:
+                    pass
             if args == "":
                 args = '""'
 
