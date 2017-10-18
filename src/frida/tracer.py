@@ -846,7 +846,7 @@ def main():
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_imports,))
             parser.add_option("-m", "--include-objc-method", help="include OBJC_METHOD", metavar="OBJC_METHOD",
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_objc_method,))
-            parser.add_option("-s", "--include-symbol", help="include DEBUG_SYMBOL", metavar="DEBUG_SYMBOL",
+            parser.add_option("-s", "--include-debug-symbol", help="include DEBUG_SYMBOL", metavar="DEBUG_SYMBOL",
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_debug_symbol,))
             self._profile_builder = pb
 
