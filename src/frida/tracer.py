@@ -61,6 +61,11 @@ class TracerProfileBuilder(object):
             self._spec.append(('include', 'objc_method', f))
         return self
 
+    def include_debug_symbol(self, *function_name_globs):
+        for f in function_name_globs:
+            self._spec.append(('include', 'debug_symbol', f))
+        return self
+
     def build(self):
         return TracerProfile(self._spec)
 
@@ -149,6 +154,10 @@ rpc.exports = {
                 case 'objc_method':
                     if (operation === 'include')
                         workingSet = includeObjCMethod(param, workingSet);
+                    break;
+                case 'debug_symbol':
+                    if (operation === 'include')
+                        workingSet = includeDebugSymbol(param, workingSet);
                     break;
             }
             return workingSet;
@@ -245,6 +254,13 @@ function includeObjCMethod(pattern, workingSet) {
     return workingSet;
 }
 
+function includeDebugSymbol(pattern, workingSet) {
+    DebugSymbol.findFunctionsMatching(pattern).forEach(function (addr) {
+        workingSet[addr.toString()] = debugSymbolFromAddress(addr);
+    });
+    return workingSet;
+}
+
 var cachedModuleResolver = null;
 function moduleResolver() {
     if (cachedModuleResolver === null)
@@ -270,6 +286,10 @@ function allModules() {
         cachedModules = Process.enumerateModulesSync();
         cachedModules._idByPath = cachedModules.reduce(function (mappings, module, index) {
             mappings[module.path] = index;
+            return mappings;
+        }, {});
+        cachedModules._idByName = cachedModules.reduce(function (mappings, module, index) {
+            mappings[module.name] = index;
             return mappings;
         }, {});
     }
@@ -303,6 +323,15 @@ function objcMethodFromMatch(m) {
             }
         },
         address: m.address
+    };
+}
+
+function debugSymbolFromAddress(address) {
+    var symbol = DebugSymbol.fromAddress(address);
+    return {
+        name: symbol.name,
+        address: symbol.address,
+        module: allModules()._idByName[symbol.moduleName]
     };
 }
 """
@@ -817,6 +846,8 @@ def main():
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_imports,))
             parser.add_option("-m", "--include-objc-method", help="include OBJC_METHOD", metavar="OBJC_METHOD",
                     type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_objc_method,))
+            parser.add_option("-s", "--include-debug-symbol", help="include DEBUG_SYMBOL", metavar="DEBUG_SYMBOL",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_debug_symbol,))
             self._profile_builder = pb
 
         def _usage(self):
