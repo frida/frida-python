@@ -174,7 +174,7 @@ def main():
                 if not reactor.is_running():
                     return
 
-            have_terminal = sys.stdin.isatty() and sys.stdout.isatty()
+            have_terminal = sys.stdin.isatty() and sys.stdout.isatty() and not os.environ.get("TERM", '') == "dumb"
 
             while True:
                 expression = ""
@@ -219,7 +219,7 @@ def main():
                                 finally:
                                     eventloop.close()
                             else:
-                                line = get_input()
+                                line = get_input(prompt)
                         except EOFError:
                             if have_terminal:
                                 self._print("\nThank you for using Frida!")
