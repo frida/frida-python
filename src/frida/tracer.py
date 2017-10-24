@@ -606,7 +606,8 @@ class Repository(object):
                     match = re.search(r"^SYNOPSIS(?:.|\n)*?((?:^.+$\n)* {5}\w+[ \*\n]*" + function.name + r"\((?:.+\,\s*?$\n)*?(?:.+\;$\n))(?:.|\n)*^DESCRIPTION", output.decode('UTF-8', errors='replace'), re.MULTILINE)
                     if match:
                         decl = match.group(1)
-                        for argm in re.finditer(r"(?:\(| )([^,\n]*?)([^* ]*)\s*(?:,|\))", decl):
+
+                        for argm in re.finditer(r"[\(,]\s*(.+?)\s*\b(\w+)(?=[,\)])", decl):
                             typ = argm.group(1)
                             arg = argm.group(2)
                             if arg == "void":
@@ -619,7 +620,11 @@ class Repository(object):
                             cast_post = ""
                             annotate_pre = ""
                             annotate_post = ""
-                            if re.sub(r"\s+", "", typ).endswith("char*"):
+
+                            normalized_type = re.sub(r"\s+", "", typ)
+                            if normalized_type.endswith("*restrict"):
+                                normalized_type = normalized_type[:-8]
+                            if normalized_type in ("char*", "constchar*"):
                                 cast_pre = "Memory.readUtf8String("
                                 cast_post = ")"
                                 annotate_pre = "\\\""
