@@ -68,7 +68,8 @@ class Device(object):
         if len(matching) == 1:
             return matching[0]
         elif len(matching) > 1:
-            raise _frida.ProcessNotFoundError("ambiguous name; it matches: %s" % ", ".join(["%s (pid: %d)" % (process.name, process.pid) for process in matching]))
+            print("ambiguous name; default use first; it matches: %s" % ", ".join(["%s (pid: %d)" % (process.name, process.pid) for process in matching]))
+            return matching[0]
         else:
             raise _frida.ProcessNotFoundError("unable to find process with name '%s'" % process_name)
 
