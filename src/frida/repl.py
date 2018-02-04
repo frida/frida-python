@@ -276,7 +276,7 @@ def main():
         def _print_startup_message(self):
             self._print("""\
      ____
-    / _  |   Frida {version} - A world-class dynamic instrumentation framework
+    / _  |   Frida {version} - A world-class dynamic instrumentation toolkit
    | (_| |
     > _  |   Commands:
    /_/ |_|       help      -> Displays the help system
