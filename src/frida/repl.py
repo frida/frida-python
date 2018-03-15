@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals, print_function
+import threading
 
 def main():
     import codecs
@@ -17,8 +18,8 @@ def main():
     from pygments.lexers import JavascriptLexer
     from pygments.token import Token
     import re
+    import signal
     import sys
-    import threading
     try:
         from urllib.request import build_opener
     except:
@@ -40,6 +41,13 @@ def main():
             self._monitored_file = None
 
             super(REPLApplication, self).__init__(self._process_input, self._on_stop)
+
+            if not self._have_terminal:
+                signal.signal(signal.SIGINT, lambda n, f: self._exit(0))
+
+                self._dumb_stdin_reader = DumbStdinReader(valid_until=self._stopping)
+            else:
+                self._dumb_stdin_reader = None
 
         def _add_options(self, parser):
             parser.add_option("-l", "--load", help="load SCRIPT", metavar="SCRIPT",
@@ -124,6 +132,8 @@ def main():
             self._unload_script()
             self._unmonitor_script()
 
+            self._print("\nThank you for using Frida!")
+
         def _load_script(self):
             self._monitor_script()
             self._seqno += 1
@@ -174,8 +184,6 @@ def main():
                 if not reactor.is_running():
                     return
 
-            have_terminal = sys.stdin.isatty() and sys.stdout.isatty() and not os.environ.get("TERM", '') == "dumb"
-
             while True:
                 expression = ""
                 line = ""
@@ -199,7 +207,7 @@ def main():
                             return
 
                         try:
-                            if have_terminal:
+                            if self._have_terminal:
                                 # We create the prompt manually instead of using get_input,
                                 # so we can use the cli in the _on_stop method
                                 eventloop = create_eventloop()
@@ -219,11 +227,10 @@ def main():
                                 finally:
                                     eventloop.close()
                             else:
-                                line = get_input(prompt)
+                                line = self._dumb_stdin_reader.read_line(prompt)
+                                self._print(line)
                         except EOFError:
-                            if have_terminal:
-                                self._print("\nThank you for using Frida!")
-                            else:
+                            if not self._have_terminal:
                                 while not self._stopping.wait(1):
                                     pass
                             return
@@ -246,7 +253,6 @@ def main():
                 elif expression.startswith("%"):
                     self._do_magic(expression[1:].rstrip())
                 elif expression in ("exit", "quit", "q"):
-                    self._print("Thank you for using Frida!")
                     return
                 elif expression == "help":
                     self._print("Help: #TODO :)")
@@ -690,6 +696,57 @@ class JavaScriptError(Exception):
         super(JavaScriptError, self).__init__(error['message'])
 
         self.error = error
+
+class DumbStdinReader(object):
+    def __init__(self, valid_until):
+        self._valid_until = valid_until
+
+        self._prompt = None
+        self._result = None
+        self._lock = threading.Lock()
+        self._cond = threading.Condition(self._lock)
+
+        worker = threading.Thread(target=self._process_requests, name="stdin-reader")
+        worker.daemon = True
+        worker.start()
+
+    def read_line(self, prompt_string):
+        with self._lock:
+            self._prompt = prompt_string
+            self._cond.notify()
+
+        with self._lock:
+            while self._result is None:
+                if self._valid_until.is_set():
+                    raise EOFError()
+                self._cond.wait(1)
+            line, error = self._result
+            self._result = None
+
+        if error is not None:
+            raise error
+
+        return line
+
+    def _process_requests(self):
+        error = None
+        while error is None:
+            with self._lock:
+                while self._prompt is None:
+                    self._cond.wait()
+                prompt = self._prompt
+
+            try:
+                line = get_input(prompt)
+                error = None
+            except Exception as e:
+                line = None
+                error = e
+
+            with self._lock:
+                self._prompt = None
+                self._result = (line, error)
+                self._cond.notify()
 
 try:
     input_impl = raw_input
