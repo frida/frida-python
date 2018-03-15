@@ -127,6 +127,7 @@ class ConsoleApplication(object):
         self._reactor = Reactor(run_until_return, on_stop)
         self._exit_status = None
         self._console_state = ConsoleState.EMPTY
+        self._have_terminal = sys.stdin.isatty() and sys.stdout.isatty() and not os.environ.get("TERM", '') == "dumb"
         self._quiet = False
         if sum(map(lambda v: int(v is not None), (self._device_id, self._device_type, self._host))) > 1:
             parser.error("Only one of -D, -U, -R, and -H may be specified")
@@ -305,12 +306,15 @@ class ConsoleApplication(object):
             print("\033[A" + (80 * " "))
 
     def _update_status(self, message):
-        if self._console_state == ConsoleState.STATUS:
-            cursor_position = "\033[A"
+        if self._have_terminal:
+            if self._console_state == ConsoleState.STATUS:
+                cursor_position = "\033[A"
+            else:
+                cursor_position = ""
+            print("%-80s" % (cursor_position + Style.BRIGHT + message + Style.RESET_ALL,))
+            self._console_state = ConsoleState.STATUS
         else:
-            cursor_position = ""
-        print("%-80s" % (cursor_position + Style.BRIGHT + message + Style.RESET_ALL,))
-        self._console_state = ConsoleState.STATUS
+            print(Style.BRIGHT + message + Style.RESET_ALL)
 
     def _print(self, *args, **kwargs):
         encoded_args = []
