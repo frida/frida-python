@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals, print_function
+import signal
 import threading
 
 def main():
@@ -18,7 +19,6 @@ def main():
     from pygments.lexers import JavascriptLexer
     from pygments.token import Token
     import re
-    import signal
     import sys
     try:
         from urllib.request import build_opener
@@ -42,12 +42,7 @@ def main():
 
             super(REPLApplication, self).__init__(self._process_input, self._on_stop)
 
-            if not self._have_terminal:
-                signal.signal(signal.SIGINT, lambda n, f: self._exit(0))
-
-                self._dumb_stdin_reader = DumbStdinReader(valid_until=self._stopping)
-            else:
-                self._dumb_stdin_reader = None
+            self._dumb_stdin_reader = None if self._have_terminal else DumbStdinReader(valid_until=self._stopping)
 
         def _add_options(self, parser):
             parser.add_option("-l", "--load", help="load SCRIPT", metavar="SCRIPT",
@@ -236,6 +231,8 @@ def main():
                             return
                         except KeyboardInterrupt:
                             line = ""
+                            if not self._have_terminal:
+                                sys.stdout.write("\n" + prompt)
                             continue
                         if len(line.strip()) > 0:
                             if len(expression) > 0:
@@ -710,6 +707,8 @@ class DumbStdinReader(object):
         worker.daemon = True
         worker.start()
 
+        signal.signal(signal.SIGINT, lambda n, f: self._cancel_line())
+
     def read_line(self, prompt_string):
         with self._lock:
             self._prompt = prompt_string
@@ -738,7 +737,6 @@ class DumbStdinReader(object):
 
             try:
                 line = get_input(prompt)
-                error = None
             except Exception as e:
                 line = None
                 error = e
@@ -747,6 +745,12 @@ class DumbStdinReader(object):
                 self._prompt = None
                 self._result = (line, error)
                 self._cond.notify()
+
+    def _cancel_line(self):
+        with self._lock:
+            self._prompt = None
+            self._result = (None, KeyboardInterrupt())
+            self._cond.notify()
 
 try:
     input_impl = raw_input
