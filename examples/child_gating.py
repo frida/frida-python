@@ -12,6 +12,6 @@ device.on('delivered', on_delivered)
 pid = device.spawn(["/bin/sh", "-c", "ls /"])
 session = device.attach(pid)
 session.enable_child_gating()
-frida.resume(pid)
+device.resume(pid)
 
 sys.stdin.read()
