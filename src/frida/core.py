@@ -188,13 +188,13 @@ class Session(FunctionContainer):
         return self._impl.compile_script(*args, **kwargs)
 
     def enable_debugger(self, *args, **kwargs):
-        return self._impl.enable_debugger(*args, **kwargs)
+        self._impl.enable_debugger(*args, **kwargs)
 
     def disable_debugger(self):
-        return self._impl.disable_debugger()
+        self._impl.disable_debugger()
 
     def enable_jit(self):
-        return self._impl.enable_jit()
+        self._impl.enable_jit()
 
     def on(self, signal, callback):
         self._impl.on(signal, callback)
