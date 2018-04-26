@@ -81,6 +81,9 @@ class Device(object):
     def enumerate_pending_spawns(self):
         return self._impl.enumerate_pending_spawns()
 
+    def enumerate_pending_children(self):
+        return self._impl.enumerate_pending_children()
+
     def spawn(self, argv):
         return self._impl.spawn(argv)
 
@@ -141,6 +144,12 @@ class Session(FunctionContainer):
 
     def detach(self):
         self._impl.detach()
+
+    def enable_child_gating(self):
+        self._impl.enable_child_gating()
+
+    def disable_child_gating(self):
+        self._impl.disable_child_gating()
 
     def enumerate_modules(self):
         if self._modules is None:
