@@ -402,9 +402,10 @@ var state = {};
 var pending = [];
 var timer = null;
 
-installFlushBeforeExitHandlers();
-
 rpc.exports = {
+    dispose: function () {
+        flush();
+    },
     add: function (targets) {
         targets.forEach(function (target) {
             var h = [parseHandler(target)];
@@ -498,30 +499,6 @@ function parseHandler(target) {
         return {};
     }
 }
-
-function installFlushBeforeExitHandlers() {
-    if (Process.platform === 'windows') {
-        attachFlushBeforeExitHandler("kernel32.dll", "ExitProcess");
-    } else {
-        attachFlushBeforeExitHandler(null, "abort");
-        attachFlushBeforeExitHandler(null, "exit");
-    }
-}
-
-function attachFlushBeforeExitHandler(module, name) {
-    Interceptor.attach(Module.findExportByName(module, name), performFlushBeforeExit);
-}
-
-function performFlushBeforeExit() {
-    flush();
-
-    send({
-        from: "/events",
-        name: '+flush',
-        payload: {}
-    });
-    recv('+flush-ack', function () {}).wait();
-}
 """
 
     def _process_message(self, message, data, ui):
@@ -532,12 +509,6 @@ function performFlushBeforeExit() {
                 if stanza['name'] == '+add':
                     events = [(timestamp, thread_id, depth, int(target_address.rstrip("L"), 16), message) for timestamp, thread_id, depth, target_address, message in stanza['payload']['items']]
                     ui.on_trace_events(events)
-                    handled = True
-                elif stanza['name'] == '+flush':
-                    try:
-                        self._script.post({ 'type': '+flush-ack' })
-                    except Exception as e:
-                        pass
                     handled = True
             elif stanza['from'] == "/targets" and stanza['name'] == '+error':
                 ui.on_trace_error(stanza['payload'])
