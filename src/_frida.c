@@ -1640,7 +1640,7 @@ PyDevice_disable_spawn_gating (PyDevice * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_device_enable_spawn_gating_sync (PY_GOBJECT_HANDLE (self), &error);
+  frida_device_disable_spawn_gating_sync (PY_GOBJECT_HANDLE (self), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
