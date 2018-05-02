@@ -175,11 +175,11 @@ struct _PyChild
   PyGObject parent;
   guint pid;
   guint parent_pid;
+  PyObject * origin;
   PyObject * identifier;
   PyObject * path;
   PyObject * argv;
   PyObject * envp;
-  PyObject * origin;
 };
 
 struct _PyIcon
@@ -229,9 +229,9 @@ static PyObject * PyGObjectSignalClosure_marshal_params (const GValue * params, 
 static PyObject * PyGObject_marshal_value (const GValue * value);
 static PyObject * PyGObject_marshal_string (const gchar * str);
 static PyObject * PyGObject_marshal_strv (gchar * const * strv, gint length);
-static gboolean PyFrida_unmarshal_strv (PyObject * value, gchar *** strv, gint * length);
-static gboolean PyFrida_unmarshal_strv_optional (PyObject * value, gchar *** strv, gint * length);
+static gboolean PyGObject_unmarshal_strv (PyObject * value, gchar *** strv, gint * length);
 static PyObject * PyGObject_marshal_enum (gint value, GType type);
+static gboolean PyGObject_unmarshal_enum (const gchar * str, GType type, gpointer value);
 static PyObject * PyGObject_marshal_bytes (GBytes * bytes);
 static PyObject * PyGObject_marshal_object (gpointer handle, GType type);
 
@@ -254,7 +254,7 @@ static PyObject * PyDevice_enable_spawn_gating (PyDevice * self);
 static PyObject * PyDevice_disable_spawn_gating (PyDevice * self);
 static PyObject * PyDevice_enumerate_pending_spawn (PyDevice * self);
 static PyObject * PyDevice_enumerate_pending_children (PyDevice * self);
-static PyObject * PyDevice_spawn (PyDevice * self, PyObject * args);
+static PyObject * PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw);
 static PyObject * PyDevice_input (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_resume (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_kill (PyDevice * self, PyObject * args);
@@ -348,7 +348,7 @@ static PyMethodDef PyDevice_methods[] =
   { "disable_spawn_gating", (PyCFunction) PyDevice_disable_spawn_gating, METH_NOARGS, "Disable spawn gating." },
   { "enumerate_pending_spawn", (PyCFunction) PyDevice_enumerate_pending_spawn, METH_NOARGS, "Enumerate pending spawn." },
   { "enumerate_pending_children", (PyCFunction) PyDevice_enumerate_pending_children, METH_NOARGS, "Enumerate pending children." },
-  { "spawn", (PyCFunction) PyDevice_spawn, METH_VARARGS, "Spawn a process into an attachable state." },
+  { "spawn", (PyCFunction) PyDevice_spawn, METH_VARARGS | METH_KEYWORDS, "Spawn a process into an attachable state." },
   { "input", (PyCFunction) PyDevice_input, METH_VARARGS, "Input data on stdin of a spawned process." },
   { "resume", (PyCFunction) PyDevice_resume, METH_VARARGS, "Resume a process from the attachable state." },
   { "kill", (PyCFunction) PyDevice_kill, METH_VARARGS, "Kill a PID." },
@@ -407,11 +407,11 @@ static PyMemberDef PyChild_members[] =
 {
   { "pid", T_UINT, G_STRUCT_OFFSET (PyChild, pid), READONLY, "Process ID." },
   { "parent_pid", T_UINT, G_STRUCT_OFFSET (PyChild, parent_pid), READONLY, "Parent Process ID." },
+  { "origin", T_OBJECT_EX, G_STRUCT_OFFSET (PyChild, origin), READONLY, "Origin." },
   { "identifier", T_OBJECT_EX, G_STRUCT_OFFSET (PyChild, identifier), READONLY, "Application identifier." },
   { "path", T_OBJECT_EX, G_STRUCT_OFFSET (PyChild, path), READONLY, "Path of executable." },
   { "argv", T_OBJECT_EX, G_STRUCT_OFFSET (PyChild, argv), READONLY, "Argument vector." },
   { "envp", T_OBJECT_EX, G_STRUCT_OFFSET (PyChild, envp), READONLY, "Environment vector." },
-  { "origin", T_OBJECT_EX, G_STRUCT_OFFSET (PyChild, origin), READONLY, "Origin." },
   { NULL }
 };
 
@@ -1333,6 +1333,9 @@ PyGObject_marshal_strv (gchar * const * strv, gint length)
   PyObject * result;
   gint i;
 
+  if (strv == NULL)
+    Py_RETURN_NONE;
+
   result = PyList_New (length);
 
   for (i = 0; i != length; i++)
@@ -1344,35 +1347,10 @@ PyGObject_marshal_strv (gchar * const * strv, gint length)
 }
 
 static gboolean
-PyFrida_unmarshal_strv (PyObject * value, gchar *** strv, gint * length)
-{
-  if (!PyFrida_unmarshal_strv_optional (value, strv, length))
-    return FALSE;
-
-  if (*strv == NULL)
-    goto missing_value;
-
-  return TRUE;
-
-missing_value:
-  {
-    PyErr_SetString (PyExc_TypeError, "expected list or tuple of strings");
-    return FALSE;
-  }
-}
-
-static gboolean
-PyFrida_unmarshal_strv_optional (PyObject * value, gchar *** strv, gint * length)
+PyGObject_unmarshal_strv (PyObject * value, gchar *** strv, gint * length)
 {
   gint n, i;
   gchar ** elements;
-
-  if (value == Py_None)
-  {
-    *strv = NULL;
-    *length = -1;
-    return TRUE;
-  }
 
   if (!PyList_Check (value) && !PyTuple_Check (value))
     goto invalid_type;
@@ -1433,6 +1411,54 @@ PyGObject_marshal_enum (gint value, GType type)
   g_type_class_unref (enum_class);
 
   return result;
+}
+
+static gboolean
+PyGObject_unmarshal_enum (const gchar * str, GType type, gpointer value)
+{
+  GEnumClass * enum_class;
+  GEnumValue * enum_value;
+
+  enum_class = g_type_class_ref (type);
+
+  enum_value = g_enum_get_value_by_nick (enum_class, str);
+  if (enum_value == NULL)
+    goto invalid_value;
+
+  *((gint *) value) = enum_value->value;
+
+  g_type_class_unref (enum_class);
+
+  return TRUE;
+
+invalid_value:
+  {
+    GString * message;
+    guint i;
+
+    message = g_string_sized_new (128);
+
+    g_string_append_printf (message,
+        "Enum type %s does not have a value named '%s', it only has: ",
+        PyGObject_class_name_from_c (g_type_name (type)), str);
+
+    for (i = 0; i != enum_class->n_values; i++)
+    {
+      if (i != 0)
+        g_string_append (message, ", ");
+      g_string_append_c (message, '\'');
+      g_string_append (message, enum_class->values[i].value_nick);
+      g_string_append_c (message, '\'');
+    }
+
+    PyErr_SetString (PyExc_ValueError, message->str);
+
+    g_string_free (message, TRUE);
+
+    g_type_class_unref (enum_class);
+
+    return FALSE;
+  }
 }
 
 static PyObject *
@@ -1774,29 +1800,84 @@ PyDevice_enumerate_pending_children (PyDevice * self)
 }
 
 static PyObject *
-PyDevice_spawn (PyDevice * self, PyObject * args)
+PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
 {
-  PyObject * argv_value, * envp_value;
-  gchar ** argv = NULL, ** envp = NULL;
-  gint argv_length, envp_length;
+  static char * keywords[] = { "path", "argv", "envp", "cwd", "stdio", "aslr", NULL };
+  const char * path;
+  PyObject * argv_value = Py_None;
+  PyObject * envp_value = Py_None;
+  const char * cwd = NULL;
+  const char * stdio_value = NULL;
+  const char * aslr_value = NULL;
+  FridaSpawnOptions * options;
   GError * error = NULL;
   guint pid;
 
-  if (!PyArg_UnpackTuple (args, "spawn", 2, 2, &argv_value, &envp_value))
-    goto invalid_argument;
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|OOzss", keywords,
+      &path,
+      &argv_value,
+      &envp_value,
+      &cwd,
+      &stdio_value,
+      &aslr_value))
+    return NULL;
 
-  if (!PyFrida_unmarshal_strv (argv_value, &argv, &argv_length))
-    goto invalid_argument;
+  options = frida_spawn_options_new ();
 
-  if (!PyFrida_unmarshal_strv_optional (envp_value, &envp, &envp_length))
-    goto invalid_argument;
+  if (argv_value != Py_None)
+  {
+    gchar ** argv;
+    gint argv_length;
+
+    if (!PyGObject_unmarshal_strv (argv_value, &argv, &argv_length))
+      goto invalid_argument;
+
+    frida_spawn_options_set_argv (options, argv, argv_length);
+
+    g_strfreev (argv);
+  }
+
+  if (envp_value != Py_None)
+  {
+    gchar ** envp;
+    gint envp_length;
+
+    if (!PyGObject_unmarshal_strv (envp_value, &envp, &envp_length))
+      goto invalid_argument;
+
+    frida_spawn_options_set_envp (options, envp, envp_length);
+
+    g_strfreev (envp);
+  }
+
+  if (cwd != NULL)
+    frida_spawn_options_set_cwd (options, cwd);
+
+  if (stdio_value != NULL)
+  {
+    FridaStdio stdio;
+
+    if (!PyGObject_unmarshal_enum (stdio_value, FRIDA_TYPE_STDIO, &stdio))
+      goto invalid_argument;
+
+    frida_spawn_options_set_stdio (options, stdio);
+  }
+
+  if (aslr_value != NULL)
+  {
+    FridaAslr aslr;
+
+    if (!PyGObject_unmarshal_enum (aslr_value, FRIDA_TYPE_ASLR, &aslr))
+      goto invalid_argument;
+
+    frida_spawn_options_set_aslr (options, aslr);
+  }
 
   Py_BEGIN_ALLOW_THREADS
-  pid = frida_device_spawn_sync (PY_GOBJECT_HANDLE (self), argv[0], argv, argv_length, envp, envp_length, &error);
+  pid = frida_device_spawn_sync (PY_GOBJECT_HANDLE (self), path, options, &error);
   Py_END_ALLOW_THREADS
 
-  g_strfreev (envp);
-  g_strfreev (argv);
+  g_object_unref (options);
 
   if (error != NULL)
     return PyFrida_raise (error);
@@ -1805,8 +1886,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args)
 
 invalid_argument:
   {
-    g_strfreev (envp);
-    g_strfreev (argv);
+    g_object_unref (options);
 
     return NULL;
   }
@@ -2163,11 +2243,11 @@ PyChild_init (PyChild * self, PyObject * args, PyObject * kw)
 
   self->pid = 0;
   self->parent_pid = 0;
+  self->origin = NULL;
   self->identifier = NULL;
   self->path = NULL;
   self->argv = NULL;
   self->envp = NULL;
-  self->origin = NULL;
 
   return 0;
 }
@@ -2181,27 +2261,27 @@ PyChild_init_from_handle (PyChild * self, FridaChild * handle)
   self->pid = frida_child_get_pid (handle);
   self->parent_pid = frida_child_get_parent_pid (handle);
 
+  self->origin = PyGObject_marshal_enum (frida_child_get_origin (handle), FRIDA_TYPE_CHILD_ORIGIN);
+
   self->identifier = PyGObject_marshal_string (frida_child_get_identifier (handle));
 
-  self->path = PyUnicode_FromUTF8String (frida_child_get_path (handle));
+  self->path = PyGObject_marshal_string (frida_child_get_path (handle));
 
   argv = frida_child_get_argv (handle, &argv_length);
   self->argv = PyGObject_marshal_strv (argv, argv_length);
 
   envp = frida_child_get_envp (handle, &envp_length);
   self->envp = PyGObject_marshal_strv (envp, envp_length);
-
-  self->origin = PyGObject_marshal_enum (frida_child_get_origin (handle), FRIDA_TYPE_CHILD_ORIGIN);
 }
 
 static void
 PyChild_dealloc (PyChild * self)
 {
+  Py_XDECREF (self->origin);
   Py_XDECREF (self->identifier);
   Py_XDECREF (self->path);
   Py_XDECREF (self->argv);
   Py_XDECREF (self->envp);
-  Py_XDECREF (self->origin);
 
   PyGObjectType.tp_dealloc ((PyObject *) self);
 }
@@ -2212,8 +2292,7 @@ PyChild_repr (PyChild * self)
   PyObject * result;
   FridaChild * handle;
   GString * repr;
-  const gchar * identifier;
-  gchar * argv, * envp;
+  FridaChildOrigin origin;
   GEnumClass * origin_class;
   GEnumValue * origin_value;
 
@@ -2223,20 +2302,37 @@ PyChild_repr (PyChild * self)
 
   g_string_append_printf (repr, "Child(pid=%u, parent_pid=%u", self->pid, self->parent_pid);
 
-  identifier = frida_child_get_identifier (handle);
-  if (identifier != NULL)
-    g_string_append_printf (repr, ", identifier=\"%s\"", identifier);
-
-  argv = PyFrida_repr (self->argv);
-  envp = PyFrida_repr (self->envp);
-  g_string_append_printf (repr, ", path=\"%s\", argv=%s, envp=%s", frida_child_get_path (handle), argv, envp);
-  g_free (envp);
-  g_free (argv);
-
+  origin = frida_child_get_origin (handle);
   origin_class = g_type_class_ref (FRIDA_TYPE_CHILD_ORIGIN);
-  origin_value = g_enum_get_value (origin_class, frida_child_get_origin (handle));
+  origin_value = g_enum_get_value (origin_class, origin);
   g_string_append_printf (repr, ", origin=%s", origin_value->value_nick);
   g_type_class_unref (origin_class);
+
+  if (self->identifier != Py_None)
+  {
+    gchar * identifier;
+
+    identifier = PyFrida_repr (self->identifier);
+
+    g_string_append_printf (repr, ", identifier=%s", identifier);
+
+    g_free (identifier);
+  }
+
+  if (origin != FRIDA_CHILD_ORIGIN_FORK)
+  {
+    gchar * path, * argv, * envp;
+
+    path = PyFrida_repr (self->path);
+    argv = PyFrida_repr (self->argv);
+    envp = PyFrida_repr (self->envp);
+
+    g_string_append_printf (repr, ", path=%s, argv=%s, envp=%s", path, argv, envp);
+
+    g_free (envp);
+    g_free (argv);
+    g_free (path);
+  }
 
   g_string_append (repr, ")");
 

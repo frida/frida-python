@@ -84,8 +84,11 @@ class Device(object):
     def enumerate_pending_children(self):
         return self._impl.enumerate_pending_children()
 
-    def spawn(self, argv, envp = None):
-        return self._impl.spawn(argv, envp)
+    def spawn(self, path, argv=None, envp=None, cwd=None, stdio='inherit', aslr='auto'):
+        if not isinstance(path, string_types):
+            argv = path
+            path = argv[0]
+        return self._impl.spawn(path, argv, envp, cwd, stdio, aslr)
 
     def input(self, target, data):
         self._impl.input(self._pid_of(target), data)
@@ -585,7 +588,9 @@ def _to_camel_case(name):
     return result
 
 if sys.version_info[0] >= 3:
+    string_types = str,
     iterbytes = lambda x: iter(x)
 else:
+    string_types = basestring,
     def iterbytes(data):
         return (ord(char) for char in data)

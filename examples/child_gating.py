@@ -22,7 +22,7 @@ class Application(object):
     def _start(self):
         argv = ["/bin/sh", "-c", "cat /etc/hosts"]
         print("✔ spawn(argv={})".format(argv))
-        pid = self._device.spawn(argv)
+        pid = self._device.spawn(argv, stdio='pipe')
         self._instrument(pid)
 
     def _stop_if_idle(self):
