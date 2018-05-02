@@ -2298,9 +2298,9 @@ PyChild_repr (PyChild * self)
 
   handle = PY_GOBJECT_HANDLE (self);
 
-  repr = g_string_new ("");
+  repr = g_string_new ("Child(");
 
-  g_string_append_printf (repr, "Child(pid=%u, parent_pid=%u", self->pid, self->parent_pid);
+  g_string_append_printf (repr, "pid=%u, parent_pid=%u", self->pid, self->parent_pid);
 
   origin = frida_child_get_origin (handle);
   origin_class = g_type_class_ref (FRIDA_TYPE_CHILD_ORIGIN);
