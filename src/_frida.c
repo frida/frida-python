@@ -229,6 +229,8 @@ static PyObject * PyGObjectSignalClosure_marshal_params (const GValue * params, 
 static PyObject * PyGObject_marshal_value (const GValue * value);
 static PyObject * PyGObject_marshal_string (const gchar * str);
 static PyObject * PyGObject_marshal_strv (gchar * const * strv, gint length);
+static gboolean PyFrida_unmarshal_strv (PyObject * value, gchar *** strv, gint * length);
+static gboolean PyFrida_unmarshal_strv_optional (PyObject * value, gchar *** strv, gint * length);
 static PyObject * PyGObject_marshal_enum (gint value, GType type);
 static PyObject * PyGObject_marshal_bytes (GBytes * bytes);
 static PyObject * PyGObject_marshal_object (gpointer handle, GType type);
@@ -250,7 +252,7 @@ static PyObject * PyDevice_enumerate_applications (PyDevice * self);
 static PyObject * PyDevice_enumerate_processes (PyDevice * self);
 static PyObject * PyDevice_enable_spawn_gating (PyDevice * self);
 static PyObject * PyDevice_disable_spawn_gating (PyDevice * self);
-static PyObject * PyDevice_enumerate_pending_spawns (PyDevice * self);
+static PyObject * PyDevice_enumerate_pending_spawn (PyDevice * self);
 static PyObject * PyDevice_enumerate_pending_children (PyDevice * self);
 static PyObject * PyDevice_spawn (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_input (PyDevice * self, PyObject * args);
@@ -344,7 +346,7 @@ static PyMethodDef PyDevice_methods[] =
   { "enumerate_processes", (PyCFunction) PyDevice_enumerate_processes, METH_NOARGS, "Enumerate processes." },
   { "enable_spawn_gating", (PyCFunction) PyDevice_enable_spawn_gating, METH_NOARGS, "Enable spawn gating." },
   { "disable_spawn_gating", (PyCFunction) PyDevice_disable_spawn_gating, METH_NOARGS, "Disable spawn gating." },
-  { "enumerate_pending_spawns", (PyCFunction) PyDevice_enumerate_pending_spawns, METH_NOARGS, "Enumerate pending spawns." },
+  { "enumerate_pending_spawn", (PyCFunction) PyDevice_enumerate_pending_spawn, METH_NOARGS, "Enumerate pending spawn." },
   { "enumerate_pending_children", (PyCFunction) PyDevice_enumerate_pending_children, METH_NOARGS, "Enumerate pending children." },
   { "spawn", (PyCFunction) PyDevice_spawn, METH_VARARGS, "Spawn a process into an attachable state." },
   { "input", (PyCFunction) PyDevice_input, METH_VARARGS, "Input data on stdin of a spawned process." },
@@ -1341,6 +1343,79 @@ PyGObject_marshal_strv (gchar * const * strv, gint length)
   return result;
 }
 
+static gboolean
+PyFrida_unmarshal_strv (PyObject * value, gchar *** strv, gint * length)
+{
+  if (!PyFrida_unmarshal_strv_optional (value, strv, length))
+    return FALSE;
+
+  if (*strv == NULL)
+    goto missing_value;
+
+  return TRUE;
+
+missing_value:
+  {
+    PyErr_SetString (PyExc_TypeError, "expected list or tuple of strings");
+    return FALSE;
+  }
+}
+
+static gboolean
+PyFrida_unmarshal_strv_optional (PyObject * value, gchar *** strv, gint * length)
+{
+  gint n, i;
+  gchar ** elements;
+
+  if (value == Py_None)
+  {
+    *strv = NULL;
+    *length = -1;
+    return TRUE;
+  }
+
+  if (!PyList_Check (value) && !PyTuple_Check (value))
+    goto invalid_type;
+
+  n = PySequence_Size (value);
+  elements = g_new0 (gchar *, n + 1);
+
+  for (i = 0; i != n; i++)
+  {
+    PyObject * element;
+
+    element = PySequence_GetItem (value, i);
+    if (PyUnicode_Check (element))
+    {
+      Py_DECREF (element);
+      element = PyUnicode_AsUTF8String (element);
+    }
+    if (PyBytes_Check (element))
+      elements[i] = g_strdup (PyBytes_AsString (element));
+    Py_DECREF (element);
+
+    if (elements[i] == NULL)
+      goto invalid_element;
+  }
+
+  *strv = elements;
+  *length = n;
+
+  return TRUE;
+
+invalid_type:
+  {
+    PyErr_SetString (PyExc_TypeError, "expected list or tuple of strings");
+    return FALSE;
+  }
+invalid_element:
+  {
+    g_strfreev (elements);
+    PyErr_SetString (PyExc_TypeError, "expected list or tuple with string elements only");
+    return FALSE;
+  }
+}
+
 static PyObject *
 PyGObject_marshal_enum (gint value, GType type)
 {
@@ -1649,28 +1724,28 @@ PyDevice_disable_spawn_gating (PyDevice * self)
 }
 
 static PyObject *
-PyDevice_enumerate_pending_spawns (PyDevice * self)
+PyDevice_enumerate_pending_spawn (PyDevice * self)
 {
   GError * error = NULL;
   FridaSpawnList * result;
   gint result_length, i;
-  PyObject * spawns;
+  PyObject * spawn;
 
   Py_BEGIN_ALLOW_THREADS
-  result = frida_device_enumerate_pending_spawns_sync (PY_GOBJECT_HANDLE (self), &error);
+  result = frida_device_enumerate_pending_spawn_sync (PY_GOBJECT_HANDLE (self), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
 
   result_length = frida_spawn_list_size (result);
-  spawns = PyList_New (result_length);
+  spawn = PyList_New (result_length);
   for (i = 0; i != result_length; i++)
   {
-    PyList_SET_ITEM (spawns, i, PySpawn_new_take_handle (frida_spawn_list_get (result, i)));
+    PyList_SET_ITEM (spawn, i, PySpawn_new_take_handle (frida_spawn_list_get (result, i)));
   }
   g_object_unref (result);
 
-  return spawns;
+  return spawn;
 }
 
 static PyObject *
@@ -1701,51 +1776,23 @@ PyDevice_enumerate_pending_children (PyDevice * self)
 static PyObject *
 PyDevice_spawn (PyDevice * self, PyObject * args)
 {
-  PyObject * elements;
-  gint argc, i;
-  gchar ** argv;
-  gchar ** envp;
-  gint envp_length;
+  PyObject * argv_value, * envp_value;
+  gchar ** argv = NULL, ** envp = NULL;
+  gint argv_length, envp_length;
   GError * error = NULL;
   guint pid;
 
-  if (PyTuple_Size (args) != 1 || (!PyList_Check (PyTuple_GetItem (args, 0)) &&
-      !PyTuple_Check (PyTuple_GetItem (args, 0))))
-  {
-    PyErr_SetString (PyExc_TypeError, "expecting argv as a list or a tuple");
-    return NULL;
-  }
+  if (!PyArg_UnpackTuple (args, "spawn", 2, 2, &argv_value, &envp_value))
+    goto invalid_argument;
 
-  elements = PyTuple_GetItem (args, 0);
-  argc = PySequence_Size (elements);
-  argv = g_new0 (gchar *, argc + 1);
-  for (i = 0; i != argc; i++)
-  {
-    PyObject * element;
+  if (!PyFrida_unmarshal_strv (argv_value, &argv, &argv_length))
+    goto invalid_argument;
 
-    element = PySequence_GetItem (elements, i);
-    if (PyUnicode_Check (element))
-    {
-      Py_DECREF (element);
-      element = PyUnicode_AsUTF8String (element);
-    }
-    if (PyBytes_Check (element))
-      argv[i] = g_strdup (PyBytes_AsString (element));
-    Py_DECREF (element);
-
-    if (argv[i] == NULL)
-    {
-      g_strfreev (argv);
-      PyErr_SetString (PyExc_TypeError, "argv must be a sequence of strings");
-      return NULL;
-    }
-  }
-
-  envp = g_get_environ ();
-  envp_length = g_strv_length (envp);
+  if (!PyFrida_unmarshal_strv_optional (envp_value, &envp, &envp_length))
+    goto invalid_argument;
 
   Py_BEGIN_ALLOW_THREADS
-  pid = frida_device_spawn_sync (PY_GOBJECT_HANDLE (self), argv[0], argv, argc, envp, envp_length, &error);
+  pid = frida_device_spawn_sync (PY_GOBJECT_HANDLE (self), argv[0], argv, argv_length, envp, envp_length, &error);
   Py_END_ALLOW_THREADS
 
   g_strfreev (envp);
@@ -1755,6 +1802,14 @@ PyDevice_spawn (PyDevice * self, PyObject * args)
     return PyFrida_raise (error);
 
   return PyLong_FromUnsignedLong (pid);
+
+invalid_argument:
+  {
+    g_strfreev (envp);
+    g_strfreev (argv);
+
+    return NULL;
+  }
 }
 
 static PyObject *

@@ -11,7 +11,8 @@ class Application(object):
         self._device = frida.get_local_device()
         self._sessions = set()
 
-        self._device.on("delivered", lambda child: self._reactor.schedule(lambda: self._on_delivered(child)))
+        self._device.on("child-added", lambda child: self._reactor.schedule(lambda: self._on_child_added(child)))
+        self._device.on("child-removed", lambda child: self._reactor.schedule(lambda: self._on_child_removed(child)))
 
     def run(self):
         self._reactor.schedule(lambda: self._start())
@@ -52,9 +53,12 @@ Interceptor.attach(Module.findExportByName(null, 'open'), {
         self._device.resume(pid)
         self._sessions.add(session)
 
-    def _on_delivered(self, child):
-        print("⚡ delivered: {}".format(child))
+    def _on_child_added(self, child):
+        print("⚡ child_added: {}".format(child))
         self._instrument(child.pid)
+
+    def _on_child_removed(self, child):
+        print("⚡ child_removed: {}".format(child))
 
     def _on_detached(self, pid, session, reason):
         print("⚡ detached: pid={}, reason='{}'".format(pid, reason))

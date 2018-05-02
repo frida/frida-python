@@ -44,8 +44,8 @@ NotSupportedError = _frida.NotSupportedError
 ProtocolError = _frida.ProtocolError
 TransportError = _frida.TransportError
 
-def spawn(argv):
-    return get_local_device().spawn(argv)
+def spawn(argv, envp = None):
+    return get_local_device().spawn(argv, envp)
 
 def resume(target):
     get_local_device().resume(target)

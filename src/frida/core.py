@@ -78,14 +78,14 @@ class Device(object):
     def disable_spawn_gating(self):
         return self._impl.disable_spawn_gating()
 
-    def enumerate_pending_spawns(self):
-        return self._impl.enumerate_pending_spawns()
+    def enumerate_pending_spawn(self):
+        return self._impl.enumerate_pending_spawn()
 
     def enumerate_pending_children(self):
         return self._impl.enumerate_pending_children()
 
-    def spawn(self, argv):
-        return self._impl.spawn(argv)
+    def spawn(self, argv, envp = None):
+        return self._impl.spawn(argv, envp)
 
     def input(self, target, data):
         self._impl.input(self._pid_of(target), data)
