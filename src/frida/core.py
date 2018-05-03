@@ -84,7 +84,7 @@ class Device(object):
     def enumerate_pending_children(self):
         return self._impl.enumerate_pending_children()
 
-    def spawn(self, path, argv=None, envp=None, cwd=None, stdio='inherit', aslr='auto'):
+    def spawn(self, path, argv=None, envp=None, cwd=None, stdio=None, aslr=None):
         if not isinstance(path, string_types):
             argv = path
             path = argv[0]

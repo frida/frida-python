@@ -1813,7 +1813,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
   GError * error = NULL;
   guint pid;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|OOzss", keywords,
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|OOzzz", keywords,
       &path,
       &argv_value,
       &envp_value,
