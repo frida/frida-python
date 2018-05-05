@@ -22,8 +22,12 @@ class Application(object):
 
     def _start(self):
         argv = ["/bin/sh", "-c", "cat /etc/hosts"]
+        env = {
+            "BADGER": "badger-badger-badger",
+            "SNAKE": "mushroom-mushroom",
+        }
         print("✔ spawn(argv={})".format(argv))
-        pid = self._device.spawn(argv, stdio='pipe')
+        pid = self._device.spawn(argv, env=env, stdio='pipe')
         self._instrument(pid)
 
     def _stop_if_idle(self):

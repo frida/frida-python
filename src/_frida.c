@@ -31,6 +31,7 @@
 
 #include <Python.h>
 #include <structmember.h>
+#include <string.h>
 #ifdef _MSC_VER
 # pragma warning (pop)
 #endif
@@ -231,6 +232,8 @@ static PyObject * PyGObject_marshal_string (const gchar * str);
 static gboolean PyGObject_unmarshal_string (PyObject * value, const gchar ** str);
 static PyObject * PyGObject_marshal_strv (gchar * const * strv, gint length);
 static gboolean PyGObject_unmarshal_strv (PyObject * value, gchar *** strv, gint * length);
+static PyObject * PyGObject_marshal_envp (gchar * const * envp, gint length);
+static gboolean PyGObject_unmarshal_envp (PyObject * value, gchar *** envp, gint * length);
 static PyObject * PyGObject_marshal_enum (gint value, GType type);
 static gboolean PyGObject_unmarshal_enum (const gchar * str, GType type, gpointer value);
 static PyObject * PyGObject_marshal_bytes (GBytes * bytes);
@@ -1402,7 +1405,88 @@ invalid_type:
 invalid_element:
   {
     g_strfreev (elements);
+
     PyErr_SetString (PyExc_TypeError, "expected list or tuple with string elements only");
+    return FALSE;
+  }
+}
+
+static PyObject *
+PyGObject_marshal_envp (gchar * const * envp, gint length)
+{
+  PyObject * result;
+  gint i;
+
+  if (envp == NULL)
+    Py_RETURN_NONE;
+
+  result = PyDict_New ();
+
+  for (i = 0; i != length; i++)
+  {
+    gchar ** tokens;
+
+    tokens = g_strsplit (envp[i], "=", 2);
+
+    if (g_strv_length (tokens) == 2)
+    {
+      PyDict_SetItemString (result, tokens[0], PyGObject_marshal_string (tokens[1]));
+    }
+
+    g_strfreev (tokens);
+  }
+
+  return result;
+}
+
+static gboolean
+PyGObject_unmarshal_envp (PyObject * dict, gchar *** envp, gint * length)
+{
+  gint n;
+  gchar ** elements;
+  gint i;
+  Py_ssize_t pos;
+  PyObject * name, * value;
+
+  if (!PyDict_Check (dict))
+    goto invalid_type;
+
+  n = PyDict_Size (dict);
+  elements = g_new0 (gchar *, n + 1);
+
+  i = 0;
+  pos = 0;
+  while (PyDict_Next (dict, &pos, &name, &value))
+  {
+    const gchar * raw_name, * raw_value;
+
+    if (!PyGObject_unmarshal_string (name, &raw_name))
+      goto invalid_dict_key;
+
+    if (!PyGObject_unmarshal_string (value, &raw_value))
+      goto invalid_dict_value;
+
+    elements[i] = g_strconcat (raw_name, "=", raw_value, NULL);
+
+    i++;
+  }
+
+  *envp = elements;
+  *length = n;
+
+  return TRUE;
+
+invalid_type:
+  {
+    PyErr_SetString (PyExc_TypeError, "expected dict");
+    return FALSE;
+  }
+invalid_dict_key:
+invalid_dict_value:
+  {
+    g_strfreev (elements);
+
+    PyErr_SetString (PyExc_TypeError, "expected dict with strings only");
     return FALSE;
   }
 }
@@ -1857,7 +1941,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
     gchar ** envp;
     gint envp_length;
 
-    if (!PyGObject_unmarshal_strv (envp_value, &envp, &envp_length))
+    if (!PyGObject_unmarshal_envp (envp_value, &envp, &envp_length))
       goto invalid_argument;
 
     frida_spawn_options_set_envp (options, envp, envp_length);
@@ -1870,7 +1954,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
     gchar ** env;
     gint env_length;
 
-    if (!PyGObject_unmarshal_strv (env_value, &env, &env_length))
+    if (!PyGObject_unmarshal_envp (env_value, &env, &env_length))
       goto invalid_argument;
 
     frida_spawn_options_set_env (options, env, env_length);
@@ -2356,7 +2440,7 @@ PyChild_init_from_handle (PyChild * self, FridaChild * handle)
   self->argv = PyGObject_marshal_strv (argv, argv_length);
 
   envp = frida_child_get_envp (handle, &envp_length);
-  self->envp = PyGObject_marshal_strv (envp, envp_length);
+  self->envp = PyGObject_marshal_envp (envp, envp_length);
 }
 
 static void
