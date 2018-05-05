@@ -228,6 +228,7 @@ static void PyGObjectSignalClosure_marshal (GClosure * closure, GValue * return_
 static PyObject * PyGObjectSignalClosure_marshal_params (const GValue * params, guint params_length);
 static PyObject * PyGObject_marshal_value (const GValue * value);
 static PyObject * PyGObject_marshal_string (const gchar * str);
+static gboolean PyGObject_unmarshal_string (PyObject * value, const gchar ** str);
 static PyObject * PyGObject_marshal_strv (gchar * const * strv, gint length);
 static gboolean PyGObject_unmarshal_strv (PyObject * value, gchar *** strv, gint * length);
 static PyObject * PyGObject_marshal_enum (gint value, GType type);
@@ -320,6 +321,7 @@ static PyObject * PyFileMonitor_enable (PyFileMonitor * self);
 static PyObject * PyFileMonitor_disable (PyFileMonitor * self);
 
 static PyObject * PyFrida_raise (GError * error);
+static gboolean PyFrida_is_string (PyObject * obj);
 static gchar * PyFrida_repr (PyObject * obj);
 static guint PyFrida_get_max_argument_count (PyObject * callable);
 
@@ -1327,6 +1329,17 @@ PyGObject_marshal_string (const gchar * str)
   return PyUnicode_FromUTF8String (str);
 }
 
+static gboolean
+PyGObject_unmarshal_string (PyObject * value, const gchar ** str)
+{
+#if PY_MAJOR_VERSION >= 3
+  *str = PyUnicode_AsUTF8 (value);
+#else
+  *str = PyString_AsString (value);
+#endif
+  return *str != NULL;
+}
+
 static PyObject *
 PyGObject_marshal_strv (gchar * const * strv, gint length)
 {
@@ -1892,34 +1905,39 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
     pos = 0;
     while (PyDict_Next (aux_value, &pos, &key, &value))
     {
-      char * raw_key;
+      const gchar * raw_key;
       GVariant * raw_value;
 
-      if (!PyString_Check (key))
-        goto invalid_aux_dict;
-      raw_key = PyString_AsString (key);
+      if (!PyGObject_unmarshal_string (key, &raw_key))
+        goto invalid_dict_key;
 
-      if (PyString_Check (value))
+      if (PyFrida_is_string (value))
       {
-        raw_value = g_variant_new_string (PyString_AsString (value));
+        const gchar * str;
+
+        PyGObject_unmarshal_string (value, &str);
+
+        raw_value = g_variant_new_string (str);
       }
       else if (PyBool_Check (value))
       {
         raw_value = g_variant_new_boolean (value == Py_True);
       }
+#if PY_MAJOR_VERSION < 3
       else if (PyInt_Check (value))
       {
         raw_value = g_variant_new_int64 (PyInt_AS_LONG (value));
       }
+#endif
       else if (PyLong_Check (value))
       {
-        PY_LONG_LONG val;
+        PY_LONG_LONG l;
 
-        val = PyLong_AsLongLong (value);
-        if (val == -1 && PyErr_Occurred ())
+        l = PyLong_AsLongLong (value);
+        if (l == -1 && PyErr_Occurred ())
           goto invalid_long_value;
 
-        raw_value = g_variant_new_int64 (val);
+        raw_value = g_variant_new_int64 (l);
       }
       else
       {
@@ -1942,6 +1960,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
   return PyLong_FromUnsignedLong (pid);
 
 invalid_argument:
+invalid_dict_key:
 invalid_long_value:
   {
     g_object_unref (options);
@@ -2797,19 +2816,27 @@ PyFrida_raise (GError * error)
   return NULL;
 }
 
+static gboolean
+PyFrida_is_string (PyObject * obj)
+{
+#if PY_MAJOR_VERSION >= 3
+  return PyUnicode_Check (obj);
+#else
+  return PyString_Check (obj);
+#endif
+}
+
 static gchar *
 PyFrida_repr (PyObject * obj)
 {
   gchar * result;
   PyObject * repr_value;
+  const gchar * str;
 
   repr_value = PyObject_Repr (obj);
 
-#if PY_MAJOR_VERSION >= 3
-  result = g_strdup (PyUnicode_AsUTF8 (repr_value));
-#else
-  result = g_strdup (PyString_AsString (repr_value));
-#endif
+  PyGObject_unmarshal_string (repr_value, &str);
+  result = g_strdup (str);
 
   Py_DECREF (repr_value);
 
