@@ -1430,7 +1430,15 @@ PyGObject_marshal_envp (gchar * const * envp, gint length)
 
     if (g_strv_length (tokens) == 2)
     {
-      PyDict_SetItemString (result, tokens[0], PyGObject_marshal_string (tokens[1]));
+      const gchar * name;
+      PyObject * value;
+
+      name = tokens[0];
+      value = PyGObject_marshal_string (tokens[1]);
+
+      PyDict_SetItemString (result, name, value);
+
+      Py_DECREF (value);
     }
 
     g_strfreev (tokens);
