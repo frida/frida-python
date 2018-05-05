@@ -87,9 +87,9 @@ class Device(object):
     def spawn(self, program, argv=None, envp=None, env=None, cwd=None, stdio=None, **kwargs):
         if not isinstance(program, string_types):
             argv = program
+            program = argv[0]
             if len(argv) == 1:
                 argv = None
-            program = argv[0]
 
         aux_options = kwargs
 
