@@ -1802,24 +1802,26 @@ PyDevice_enumerate_pending_children (PyDevice * self)
 static PyObject *
 PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
 {
-  static char * keywords[] = { "path", "argv", "envp", "cwd", "stdio", "aslr", NULL };
-  const char * path;
+  static char * keywords[] = { "program", "argv", "envp", "env", "cwd", "stdio", "aux", NULL };
+  const char * program;
   PyObject * argv_value = Py_None;
   PyObject * envp_value = Py_None;
+  PyObject * env_value = Py_None;
   const char * cwd = NULL;
   const char * stdio_value = NULL;
-  const char * aslr_value = NULL;
+  PyObject * aux_value = Py_None;
   FridaSpawnOptions * options;
   GError * error = NULL;
   guint pid;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|OOzzz", keywords,
-      &path,
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|OOOzzO", keywords,
+      &program,
       &argv_value,
       &envp_value,
+      &env_value,
       &cwd,
       &stdio_value,
-      &aslr_value))
+      &aux_value))
     return NULL;
 
   options = frida_spawn_options_new ();
@@ -1850,6 +1852,19 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
     g_strfreev (envp);
   }
 
+  if (env_value != Py_None)
+  {
+    gchar ** env;
+    gint env_length;
+
+    if (!PyGObject_unmarshal_strv (env_value, &env, &env_length))
+      goto invalid_argument;
+
+    frida_spawn_options_set_env (options, env, env_length);
+
+    g_strfreev (env);
+  }
+
   if (cwd != NULL)
     frida_spawn_options_set_cwd (options, cwd);
 
@@ -1863,18 +1878,60 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
     frida_spawn_options_set_stdio (options, stdio);
   }
 
-  if (aslr_value != NULL)
+  if (aux_value != Py_None)
   {
-    FridaAslr aslr;
+    GVariantDict * aux;
+    Py_ssize_t pos;
+    PyObject * key, * value;
 
-    if (!PyGObject_unmarshal_enum (aslr_value, FRIDA_TYPE_ASLR, &aslr))
-      goto invalid_argument;
+    aux = frida_spawn_options_get_aux (options);
 
-    frida_spawn_options_set_aslr (options, aslr);
+    if (!PyDict_Check (aux_value))
+      goto invalid_aux_dict;
+
+    pos = 0;
+    while (PyDict_Next (aux_value, &pos, &key, &value))
+    {
+      char * raw_key;
+      GVariant * raw_value;
+
+      if (!PyString_Check (key))
+        goto invalid_aux_dict;
+      raw_key = PyString_AsString (key);
+
+      if (PyString_Check (value))
+      {
+        raw_value = g_variant_new_string (PyString_AsString (value));
+      }
+      else if (PyBool_Check (value))
+      {
+        raw_value = g_variant_new_boolean (value == Py_True);
+      }
+      else if (PyInt_Check (value))
+      {
+        raw_value = g_variant_new_int64 (PyInt_AS_LONG (value));
+      }
+      else if (PyLong_Check (value))
+      {
+        PY_LONG_LONG val;
+
+        val = PyLong_AsLongLong (value);
+        if (val == -1 && PyErr_Occurred ())
+          goto invalid_long_value;
+
+        raw_value = g_variant_new_int64 (val);
+      }
+      else
+      {
+        goto invalid_aux_dict;
+      }
+
+      g_variant_dict_insert_value (aux, raw_key, raw_value);
+    }
   }
 
   Py_BEGIN_ALLOW_THREADS
-  pid = frida_device_spawn_sync (PY_GOBJECT_HANDLE (self), path, options, &error);
+  pid = frida_device_spawn_sync (PY_GOBJECT_HANDLE (self), program, options, &error);
   Py_END_ALLOW_THREADS
 
   g_object_unref (options);
@@ -1885,8 +1942,17 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
   return PyLong_FromUnsignedLong (pid);
 
 invalid_argument:
+invalid_long_value:
   {
     g_object_unref (options);
+
+    return NULL;
+  }
+invalid_aux_dict:
+  {
+    g_object_unref (options);
+
+    PyErr_SetString (PyExc_TypeError, "unsupported parameter");
 
     return NULL;
   }

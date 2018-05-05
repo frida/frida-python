@@ -14,6 +14,7 @@ class Application(object):
 
         self._device.on("child-added", lambda child: self._reactor.schedule(lambda: self._on_child_added(child)))
         self._device.on("child-removed", lambda child: self._reactor.schedule(lambda: self._on_child_removed(child)))
+        self._device.on("output", lambda pid, fd, data: self._reactor.schedule(lambda: self._on_output(pid, fd, data)))
 
     def run(self):
         self._reactor.schedule(lambda: self._start())
@@ -60,6 +61,9 @@ Interceptor.attach(Module.findExportByName(null, 'open'), {
 
     def _on_child_removed(self, child):
         print("⚡ child_removed: {}".format(child))
+
+    def _on_output(self, pid, fd, data):
+        print("⚡ output: pid={}, fd={}, data={}".format(pid, fd, repr(data)))
 
     def _on_detached(self, pid, session, reason):
         print("⚡ detached: pid={}, reason='{}'".format(pid, reason))
