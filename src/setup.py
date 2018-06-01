@@ -141,9 +141,9 @@ setup(
     author_email="oleavr@nowsecure.com",
     url="https://www.frida.re",
     install_requires=[
-        "colorama >= 0.2.7",
-        "prompt-toolkit >= 0.57",
-        "pygments >= 2.0.2"
+        "colorama >= 0.3.9",
+        "prompt-toolkit >= 1.0.15",
+        "pygments >= 2.2.0"
     ],
     license="wxWindows Library Licence, Version 3.1",
     zip_safe=True,
