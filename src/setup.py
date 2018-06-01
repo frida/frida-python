@@ -139,7 +139,7 @@ setup(
     long_description=long_description,
     author="Frida Developers",
     author_email="oleavr@nowsecure.com",
-    url="http://www.frida.re",
+    url="https://www.frida.re",
     install_requires=[
         "colorama >= 0.2.7",
         "prompt-toolkit >= 0.57",
