@@ -89,6 +89,8 @@
 
 #define FRIDA_FUNCPTR_TO_POINTER(f) (GSIZE_TO_POINTER (f))
 
+static volatile gint device_managers_alive = 0;
+
 static PyObject * inspect_getargspec;
 static PyObject * inspect_ismethod;
 
@@ -1226,6 +1228,9 @@ PyGObjectSignalClosure_marshal (GClosure * closure, GValue * return_gvalue, guin
   (void) invocation_hint;
   (void) marshal_data;
 
+  if (g_atomic_int_get (&device_managers_alive) == 0)
+    return;
+
   gstate = PyGILState_Ensure ();
 
   if (PyGObject_try_get_from_handle (g_value_get_object (&param_values[0])) == NULL)
@@ -1602,6 +1607,8 @@ PyDeviceManager_init (PyDeviceManager * self, PyObject * args, PyObject * kw)
   if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
     return -1;
 
+  g_atomic_int_inc (&device_managers_alive);
+
   PyGObject_take_handle (&self->parent, frida_device_manager_new (), &PYFRIDA_TYPE_SPEC (DeviceManager));
 
   return 0;
@@ -1611,6 +1618,8 @@ static void
 PyDeviceManager_dealloc (PyDeviceManager * self)
 {
   FridaDeviceManager * handle;
+
+  g_atomic_int_dec_and_test (&device_managers_alive);
 
   handle = PyGObject_steal_handle (&self->parent);
   if (handle != NULL)
