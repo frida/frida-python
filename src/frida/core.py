@@ -162,7 +162,7 @@ class Session(FunctionContainer):
     def enumerate_modules(self):
         if self._modules is None:
             raw_modules = self._get_api().enumerate_modules()
-            self._modules = [Module(data['name'], int(data['base'], 16), data['size'], data['path'], self) for data in raw_modules]
+            self._modules = [Module(data['name'], int(data['base_address'], 16), data['size'], data['path'], self) for data in raw_modules]
         return self._modules
 
     def prefetch_modules(self):
