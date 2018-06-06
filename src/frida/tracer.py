@@ -505,14 +505,15 @@ function parseHandler(target) {
         handled = False
         if message['type'] == 'send':
             stanza = message['payload']
-            if stanza['from'] == "/events":
-                if stanza['name'] == '+add':
-                    events = [(timestamp, thread_id, depth, int(target_address.rstrip("L"), 16), message) for timestamp, thread_id, depth, target_address, message in stanza['payload']['items']]
-                    ui.on_trace_events(events)
+            if isinstance(stanza, dict):
+                if stanza['from'] == "/events":
+                    if stanza['name'] == '+add':
+                        events = [(timestamp, thread_id, depth, int(target_address.rstrip("L"), 16), message) for timestamp, thread_id, depth, target_address, message in stanza['payload']['items']]
+                        ui.on_trace_events(events)
+                        handled = True
+                elif stanza['from'] == "/targets" and stanza['name'] == '+error':
+                    ui.on_trace_error(stanza['payload'])
                     handled = True
-            elif stanza['from'] == "/targets" and stanza['name'] == '+error':
-                ui.on_trace_error(stanza['payload'])
-                handled = True
         if not handled:
             print(message)
 
