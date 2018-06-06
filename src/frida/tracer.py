@@ -514,8 +514,6 @@ function parseHandler(target) {
               elif stanza['from'] == "/targets" and stanza['name'] == '+error':
                   ui.on_trace_error(stanza['payload'])
                   handled = True
-            else:
-              print(message)
         if not handled:
             print(message)
 
