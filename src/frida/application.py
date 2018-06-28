@@ -71,7 +71,7 @@ class ConsoleApplication(object):
             parser.add_option("-D", "--device", help="connect to device with the given ID",
                     metavar="ID", type='string', action='store', dest="device_id", default=None)
             parser.add_option("-U", "--usb", help="connect to USB device",
-                    action='store_const', const='tether', dest="device_type", default=None)
+                    action='store_const', const='usb', dest="device_type", default=None)
             parser.add_option("-R", "--remote", help="connect to remote frida-server",
                     action='store_const', const='remote', dest="device_type", default=None)
             parser.add_option("-H", "--host", help="connect to remote frida-server on HOST",

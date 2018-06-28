@@ -56,7 +56,7 @@ def main():
         type = device.type
         if type == 'local':
             return 3
-        elif type == 'tether':
+        elif type == 'usb':
             return 2
         else:
             return 1

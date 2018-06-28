@@ -68,11 +68,11 @@ def enumerate_devices():
 def get_local_device():
     return _get_device(lambda device: device.type == 'local', timeout=0)
 
-def get_usb_device(timeout = 0):
-    return _get_device(lambda device: device.type == 'tether', timeout)
-
 def get_remote_device():
     return _get_device(lambda device: device.type == 'remote', timeout=0)
+
+def get_usb_device(timeout = 0):
+    return _get_device(lambda device: device.type == 'usb', timeout)
 
 def get_device(id, timeout = 0):
     return _get_device(lambda device: device.id == id, timeout)
