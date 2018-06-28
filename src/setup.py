@@ -137,6 +137,7 @@ setup(
     version=frida_version,
     description="Inject JavaScript to explore native apps on Windows, macOS, Linux, iOS, Android, and QNX",
     long_description=long_description,
+    long_description_content_type="text/markdown",
     author="Frida Developers",
     author_email="oleavr@nowsecure.com",
     url="https://www.frida.re",
