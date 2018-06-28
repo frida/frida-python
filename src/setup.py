@@ -95,7 +95,7 @@ class FridaPrebuiltExt(build_ext):
 
                 if len(urls) == 0:
                     raise Exception("Could not find prebuilt Frida extension. "
-                                    "Prebuilds only provided for python 2.6-2.7 and 3.x.")
+                                    "Prebuilds only provided for Python 2.7 and 3.4+.")
 
                 url = urls[0]
                 egg_filename = url['filename']
@@ -162,7 +162,11 @@ setup(
         "Operating System :: Microsoft :: Windows",
         "Operating System :: POSIX :: Linux",
         "Programming Language :: Python :: 2",
+        "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.4",
+        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: JavaScript",
         "Topic :: Software Development :: Debuggers",
