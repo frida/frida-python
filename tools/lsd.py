@@ -3,7 +3,7 @@ from __future__ import unicode_literals, print_function
 
 def main():
     import frida
-    from frida.application import ConsoleApplication
+    from .application import ConsoleApplication
 
     class LSDApplication(ConsoleApplication):
         def _usage(self):

@@ -176,7 +176,6 @@ setup(
     entry_points={
         'console_scripts': [
             "frida = frida.repl:main",
-            "frida-discover = frida.discoverer:main",
             "frida-ls-devices = frida.lsd:main",
             "frida-ps = frida.ps:main",
             "frida-kill = frida.kill:main",

@@ -17,34 +17,27 @@ mkdir $(OutDir)frida || exit 1
 copy /B /Y "$(ProjectDir)src\frida\*.py" $(OutDir)frida || exit 1
 echo. &gt; $(IntDir)frida-package.stamp</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)frida-package.stamp</Outputs>
-      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(ProjectDir)src\frida\core.py;$(ProjectDir)src\frida\application.py;$(ProjectDir)src\frida\lsd.py;$(ProjectDir)src\frida\ps.py;$(ProjectDir)src\frida\kill.py;$(ProjectDir)src\frida\discoverer.py;$(ProjectDir)src\frida\tracer.py;$(ProjectDir)src\frida\repl.py</AdditionalInputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(ProjectDir)src\frida\core.py</AdditionalInputs>
       <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">rmdir /S /Q $(OutDir)frida 2&gt;NUL
 mkdir $(OutDir)frida || exit 1
 copy /B /Y "$(ProjectDir)src\frida\*.py" $(OutDir)frida || exit 1
 echo. &gt; $(IntDir)frida-package.stamp</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)frida-package.stamp</Outputs>
-      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(ProjectDir)src\frida\core.py;$(ProjectDir)src\frida\application.py;$(ProjectDir)src\frida\lsd.py;$(ProjectDir)src\frida\ps.py;$(ProjectDir)src\frida\kill.py;$(ProjectDir)src\frida\discoverer.py;$(ProjectDir)src\frida\tracer.py;$(ProjectDir)src\frida\repl.py</AdditionalInputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(ProjectDir)src\frida\core.py</AdditionalInputs>
       <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">rmdir /S /Q $(OutDir)frida 2&gt;NUL
 mkdir $(OutDir)frida || exit 1
 copy /B /Y "$(ProjectDir)src\frida\*.py" $(OutDir)frida || exit 1
 echo. &gt; $(IntDir)frida-package.stamp</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(IntDir)frida-package.stamp</Outputs>
-      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)src\frida\core.py;$(ProjectDir)src\frida\application.py;$(ProjectDir)src\frida\lsd.py;$(ProjectDir)src\frida\ps.py;$(ProjectDir)src\frida\kill.py;$(ProjectDir)src\frida\discoverer.py;$(ProjectDir)src\frida\tracer.py;$(ProjectDir)src\frida\repl.py</AdditionalInputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)src\frida\core.py</AdditionalInputs>
       <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">rmdir /S /Q $(OutDir)frida 2&gt;NUL
 mkdir $(OutDir)frida || exit 1
 copy /B /Y "$(ProjectDir)src\frida\*.py" $(OutDir)frida || exit 1
 echo. &gt; $(IntDir)frida-package.stamp</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(IntDir)frida-package.stamp</Outputs>
-      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)src\frida\core.py;$(ProjectDir)src\frida\application.py;$(ProjectDir)src\frida\lsd.py;$(ProjectDir)src\frida\ps.py;$(ProjectDir)src\frida\kill.py;$(ProjectDir)src\frida\discoverer.py;$(ProjectDir)src\frida\tracer.py;$(ProjectDir)src\frida\repl.py</AdditionalInputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)src\frida\core.py</AdditionalInputs>
     </CustomBuild>
     <None Include="src\frida\core.py" />
-    <None Include="src\frida\application.py" />
-    <None Include="src\frida\lsd.py" />
-    <None Include="src\frida\ps.py" />
-    <None Include="src\frida\kill.py" />
-    <None Include="src\frida\discoverer.py" />
-    <None Include="src\frida\tracer.py" />
-    <None Include="src\frida\repl.py" />
   </ItemGroup>
 
 </Project>

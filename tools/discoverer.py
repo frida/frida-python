@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals, print_function
 
-from frida.application import await_enter
-from frida.core import ModuleFunction
+from .application import await_enter
 import threading
 
 

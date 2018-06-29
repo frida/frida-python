@@ -26,27 +26,6 @@
     <None Include="src\frida\core.py">
       <Filter>Source Files\frida</Filter>
     </None>
-    <None Include="src\frida\application.py">
-      <Filter>Source Files\frida</Filter>
-    </None>
-    <None Include="src\frida\lsd.py">
-      <Filter>Source Files\frida</Filter>
-    </None>
-    <None Include="src\frida\ps.py">
-      <Filter>Source Files\frida</Filter>
-    </None>
-    <None Include="src\frida\kill.py">
-      <Filter>Source Files\frida</Filter>
-    </None>
-    <None Include="src\frida\discoverer.py">
-      <Filter>Source Files\frida</Filter>
-    </None>
-    <None Include="src\frida\tracer.py">
-      <Filter>Source Files\frida</Filter>
-    </None>
-    <None Include="src\frida\repl.py">
-      <Filter>Source Files\frida</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="src\frida\__init__.py">
