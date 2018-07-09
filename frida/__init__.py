@@ -2,6 +2,7 @@
 from __future__ import unicode_literals, print_function
 
 import threading
+
 try:
     import _frida
 except Exception as ex:
@@ -41,38 +42,50 @@ NotSupportedError = _frida.NotSupportedError
 ProtocolError = _frida.ProtocolError
 TransportError = _frida.TransportError
 
+
 def spawn(*args, **kwargs):
     return get_local_device().spawn(*args, **kwargs)
+
 
 def resume(target):
     get_local_device().resume(target)
 
+
 def kill(target):
     get_local_device().kill(target)
+
 
 def attach(target):
     return get_local_device().attach(target)
 
+
 def inject_library_file(target, path, entrypoint, data):
     return get_local_device().inject_library_file(target, path, entrypoint, data)
+
 
 def inject_library_blob(target, blob, entrypoint, data):
     return get_local_device().inject_library_blob(target, blob, entrypoint, data)
 
+
 def enumerate_devices():
     return get_device_manager().enumerate_devices()
+
 
 def get_local_device():
     return _get_device(lambda device: device.type == 'local', timeout=0)
 
+
 def get_remote_device():
     return _get_device(lambda device: device.type == 'remote', timeout=0)
+
 
 def get_usb_device(timeout = 0):
     return _get_device(lambda device: device.type == 'usb', timeout)
 
+
 def get_device(id, timeout = 0):
     return _get_device(lambda device: device.id == id, timeout)
+
 
 def _get_device(predicate, timeout):
     mgr = get_device_manager()
@@ -99,6 +112,7 @@ def _get_device(predicate, timeout):
         if device is None:
             raise TimedOutError("timed out while waiting for device to appear")
     return device
+
 
 def shutdown():
     get_device_manager()._impl.close()

@@ -11,14 +11,13 @@ import signal
 import sys
 import threading
 from time import time
+if platform.system() == 'Windows':
+    import msvcrt
 
 import colorama
 from colorama import Fore, Style
-
 import frida
 
-if platform.system() == 'Windows':
-    import msvcrt
 
 def input_with_timeout(timeout):
     if platform.system() == 'Windows':
@@ -48,6 +47,7 @@ def input_with_timeout(timeout):
         else:
             return None
 
+
 def await_enter(reactor):
     try:
         while input_with_timeout(0.5) == None:
@@ -56,10 +56,12 @@ def await_enter(reactor):
     except KeyboardInterrupt:
         print('')
 
+
 class ConsoleState:
     EMPTY = 1
     STATUS = 2
     TEXT = 3
+
 
 class ConsoleApplication(object):
     def __init__(self, run_until_return=await_enter, on_stop=None):
@@ -340,11 +342,13 @@ class ConsoleApplication(object):
             color = Fore.RED if level == 'error' else Fore.YELLOW
             self._print(color + Style.BRIGHT + text + Style.RESET_ALL)
 
+
 def find_device(type):
     for device in frida.enumerate_devices():
         if device.type == type:
             return device
     return None
+
 
 def infer_target(target_value):
     if target_value.startswith('.') or target_value.startswith(os.path.sep) \
@@ -361,6 +365,7 @@ def infer_target(target_value):
         except:
             target_type = 'name'
     return (target_type, target_value)
+
 
 def expand_target(target):
     target_type, target_value = target

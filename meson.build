@@ -75,4 +75,5 @@ configure_file(input: 'config.h.in',
   configuration: cdata)
 
 subdir('src')
-subdir('tools')
+subdir('frida')
+subdir('frida_tools')

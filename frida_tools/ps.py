@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals, print_function
 
+
 def main():
-    from frida.application import ConsoleApplication
+    from frida_tools.application import ConsoleApplication
 
     class PSApplication(ConsoleApplication):
         def _add_options(self, parser):

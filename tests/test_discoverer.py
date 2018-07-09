@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from .data import target_program
 import platform
 import subprocess
 import threading
@@ -10,8 +9,10 @@ except:
     import unittest
 
 import frida
-from frida.application import Reactor
-from frida.discoverer import Discoverer, UI
+from frida_tools.application import Reactor
+from frida_tools.discoverer import Discoverer, UI
+
+from .data import target_program
 
 
 class TestDiscoverer(unittest.TestCase):
@@ -38,6 +39,7 @@ class TestDiscoverer(unittest.TestCase):
         reactor.run()
         self.assertIsInstance(test_ui.module_functions, dict)
         self.assertIsInstance(test_ui.dynamic_functions, list)
+
 
 class TestUI(UI):
     def __init__(self):

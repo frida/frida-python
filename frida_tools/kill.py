@@ -4,7 +4,7 @@ from __future__ import print_function
 
 def main():
     import frida
-    from frida.application import ConsoleApplication, infer_target, expand_target
+    from frida_tools.application import ConsoleApplication, infer_target, expand_target
 
     class KillApplication(ConsoleApplication):
         def _usage(self):

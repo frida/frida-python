@@ -11,7 +11,120 @@ import threading
 import time
 
 from frida import FileMonitor
-from frida.core import Function, Module, ModuleFunction, ObjCMethod
+
+
+def main():
+    from colorama import Fore, Style
+
+    from frida_tools.application import ConsoleApplication, input_with_timeout
+
+    class TracerApplication(ConsoleApplication, UI):
+        def __init__(self):
+            super(TracerApplication, self).__init__(self._await_ctrl_c)
+            self._palette = [Fore.CYAN, Fore.MAGENTA, Fore.YELLOW, Fore.GREEN, Fore.RED, Fore.BLUE]
+            self._next_color = 0
+            self._attributes_by_thread_id = {}
+            self._last_event_tid = -1
+
+        def _add_options(self, parser):
+            pb = TracerProfileBuilder()
+            def process_builder_arg(option, opt_str, value, parser, method, **kwargs):
+                method(value)
+            parser.add_option("-I", "--include-module", help="include MODULE", metavar="MODULE",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_modules,))
+            parser.add_option("-X", "--exclude-module", help="exclude MODULE", metavar="MODULE",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.exclude_modules,))
+            parser.add_option("-i", "--include", help="include FUNCTION", metavar="FUNCTION",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include,))
+            parser.add_option("-x", "--exclude", help="exclude FUNCTION", metavar="FUNCTION",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.exclude,))
+            parser.add_option("-a", "--add", help="add MODULE!OFFSET", metavar="MODULE!OFFSET",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_relative_address,))
+            parser.add_option("-T", "--include-imports", help="include program's imports",
+                    action='callback', callback=process_builder_arg, callback_args=(pb.include_imports,))
+            parser.add_option("-t", "--include-module-imports", help="include MODULE imports", metavar="MODULE",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_imports,))
+            parser.add_option("-m", "--include-objc-method", help="include OBJC_METHOD", metavar="OBJC_METHOD",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_objc_method,))
+            parser.add_option("-s", "--include-debug-symbol", help="include DEBUG_SYMBOL", metavar="DEBUG_SYMBOL",
+                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_debug_symbol,))
+            self._profile_builder = pb
+
+        def _usage(self):
+            return "usage: %prog [options] target"
+
+        def _initialize(self, parser, options, args):
+            self._tracer = None
+            self._targets = None
+            self._profile = self._profile_builder.build()
+
+        def _needs_target(self):
+            return True
+
+        def _start(self):
+            self._tracer = Tracer(self._reactor, FileRepository(self._reactor), self._profile, log_handler=self._log)
+            try:
+                self._targets = self._tracer.start_trace(self._session, self)
+            except Exception as e:
+                self._update_status("Failed to start tracing: {error}".format(error=e))
+                self._exit(1)
+
+        def _stop(self):
+            self._tracer.stop()
+            self._tracer = None
+
+        def _await_ctrl_c(self, reactor):
+            while reactor.is_running():
+                try:
+                    input_with_timeout(0.5)
+                except KeyboardInterrupt:
+                    break
+
+        def on_trace_progress(self, operation):
+            if operation == 'resolve':
+                self._update_status("Resolving functions...")
+            elif operation == 'instrument':
+                self._update_status("Instrumenting functions...")
+            elif operation == 'ready':
+                if len(self._targets) == 1:
+                    plural = ""
+                else:
+                    plural = "s"
+                self._update_status("Started tracing %d function%s. Press Ctrl+C to stop." % (len(self._targets), plural))
+                self._resume()
+
+        def on_trace_error(self, error):
+            self._print(Fore.RED + Style.BRIGHT + "Error" + Style.RESET_ALL + ": " + error['message'])
+
+        def on_trace_events(self, events):
+            no_attributes = Style.RESET_ALL
+            for timestamp, thread_id, depth, target_address, message in events:
+                indent = depth * "   | "
+                attributes = self._get_attributes(thread_id)
+                if thread_id != self._last_event_tid:
+                    self._print("%s           /* TID 0x%x */%s" % (attributes, thread_id, Style.RESET_ALL))
+                    self._last_event_tid = thread_id
+                self._print("%6d ms  %s%s%s%s" % (timestamp, attributes, indent, message, no_attributes))
+
+        def on_trace_handler_create(self, function, handler, source):
+            self._print("%s: Auto-generated handler at \"%s\"" % (function, source.replace("\\", "\\\\")))
+
+        def on_trace_handler_load(self, function, handler, source):
+            self._print("%s: Loaded handler at \"%s\"" % (function, source.replace("\\", "\\\\")))
+
+        def _get_attributes(self, thread_id):
+            attributes = self._attributes_by_thread_id.get(thread_id, None)
+            if attributes is None:
+                color = self._next_color
+                self._next_color += 1
+                attributes = self._palette[color % len(self._palette)]
+                if (1 + int(color / len(self._palette))) % 2 == 0:
+                    attributes += Style.BRIGHT
+                self._attributes_by_thread_id[thread_id] = attributes
+            return attributes
+
+    app = TracerApplication()
+    app.run()
 
 
 class TracerProfileBuilder(object):
@@ -69,6 +182,7 @@ class TracerProfileBuilder(object):
     def build(self):
         return TracerProfile(self._spec)
 
+
 class TracerProfile(object):
     _BLACKLIST = set([
         "libSystem.B.dylib!dyld_stub_binder"
@@ -91,7 +205,7 @@ class TracerProfile(object):
 
         modules = {}
         for module_id, m in data['modules'].items():
-            module = Module(m['name'], int(m['base'], 16), m['size'], m['path'], session)
+            module = Module(m['name'], int(m['base'], 16), m['size'], m['path'])
             modules[int(module_id)] = module
 
         working_set = []
@@ -336,6 +450,7 @@ function debugSymbolFromAddress(address) {
 }
 """
 
+
 class Tracer(object):
     def __init__(self, reactor, repository, profile, log_handler=None):
         self._reactor = reactor
@@ -517,6 +632,7 @@ function parseHandler(target) {
         if not handled:
             print(message)
 
+
 class Repository(object):
     def __init__(self):
         self._on_create_callback = None
@@ -670,6 +786,7 @@ class Repository(object):
 }
 """ % {"display_name": display_name, "log_str": log_str}
 
+
 class MemoryRepository(Repository):
     def __init__(self):
         super(MemoryRepository, self).__init__()
@@ -684,6 +801,7 @@ class MemoryRepository(Repository):
         else:
             self._notify_load(function, handler, "memory")
         return handler
+
 
 class FileRepository(Repository):
     def __init__(self, reactor):
@@ -774,6 +892,7 @@ class FileRepository(Repository):
                 self._handler_by_file[handler_file] = entry
                 self._notify_update(function, new_handler, handler_file)
 
+
 class UI(object):
     def on_trace_progress(self, operation):
         pass
@@ -791,117 +910,78 @@ class UI(object):
         pass
 
 
-def main():
-    from colorama import Fore, Style
-    from frida.application import ConsoleApplication, input_with_timeout
+class Module(object):
+    def __init__(self, name, base_address, size, path):
+        self.name = name
+        self.base_address = base_address
+        self.size = size
+        self.path = path
 
-    class TracerApplication(ConsoleApplication, UI):
-        def __init__(self):
-            super(TracerApplication, self).__init__(self._await_ctrl_c)
-            self._palette = [Fore.CYAN, Fore.MAGENTA, Fore.YELLOW, Fore.GREEN, Fore.RED, Fore.BLUE]
-            self._next_color = 0
-            self._attributes_by_thread_id = {}
-            self._last_event_tid = -1
+    def __repr__(self):
+        return "Module(name=\"%s\", base_address=0x%x, size=%d, path=\"%s\")" % (self.name, self.base_address, self.size, self.path)
 
-        def _add_options(self, parser):
-            pb = TracerProfileBuilder()
-            def process_builder_arg(option, opt_str, value, parser, method, **kwargs):
-                method(value)
-            parser.add_option("-I", "--include-module", help="include MODULE", metavar="MODULE",
-                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_modules,))
-            parser.add_option("-X", "--exclude-module", help="exclude MODULE", metavar="MODULE",
-                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.exclude_modules,))
-            parser.add_option("-i", "--include", help="include FUNCTION", metavar="FUNCTION",
-                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include,))
-            parser.add_option("-x", "--exclude", help="exclude FUNCTION", metavar="FUNCTION",
-                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.exclude,))
-            parser.add_option("-a", "--add", help="add MODULE!OFFSET", metavar="MODULE!OFFSET",
-                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_relative_address,))
-            parser.add_option("-T", "--include-imports", help="include program's imports",
-                    action='callback', callback=process_builder_arg, callback_args=(pb.include_imports,))
-            parser.add_option("-t", "--include-module-imports", help="include MODULE imports", metavar="MODULE",
-                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_imports,))
-            parser.add_option("-m", "--include-objc-method", help="include OBJC_METHOD", metavar="OBJC_METHOD",
-                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_objc_method,))
-            parser.add_option("-s", "--include-debug-symbol", help="include DEBUG_SYMBOL", metavar="DEBUG_SYMBOL",
-                    type='string', action='callback', callback=process_builder_arg, callback_args=(pb.include_debug_symbol,))
-            self._profile_builder = pb
+    def __hash__(self):
+        return self.base_address.__hash__()
 
-        def _usage(self):
-            return "usage: %prog [options] target"
+    def __cmp__(self, other):
+        return self.base_address.__cmp__(other.base_address)
 
-        def _initialize(self, parser, options, args):
-            self._tracer = None
-            self._targets = None
-            self._profile = self._profile_builder.build()
+    def __eq__(self, other):
+        return self.base_address == other.base_address
 
-        def _needs_target(self):
-            return True
+    def __ne__(self, other):
+        return self.base_address != other.base_address
 
-        def _start(self):
-            self._tracer = Tracer(self._reactor, FileRepository(self._reactor), self._profile, log_handler=self._log)
-            try:
-                self._targets = self._tracer.start_trace(self._session, self)
-            except Exception as e:
-                self._update_status("Failed to start tracing: {error}".format(error=e))
-                self._exit(1)
 
-        def _stop(self):
-            self._tracer.stop()
-            self._tracer = None
+class Function(object):
+    def __init__(self, name, absolute_address):
+        self.name = name
+        self.absolute_address = absolute_address
 
-        def _await_ctrl_c(self, reactor):
-            while reactor.is_running():
-                try:
-                    input_with_timeout(0.5)
-                except KeyboardInterrupt:
-                    break
+    def __str__(self):
+        return self.name
 
-        def on_trace_progress(self, operation):
-            if operation == 'resolve':
-                self._update_status("Resolving functions...")
-            elif operation == 'instrument':
-                self._update_status("Instrumenting functions...")
-            elif operation == 'ready':
-                if len(self._targets) == 1:
-                    plural = ""
-                else:
-                    plural = "s"
-                self._update_status("Started tracing %d function%s. Press Ctrl+C to stop." % (len(self._targets), plural))
-                self._resume()
+    def __repr__(self):
+        return "Function(name=\"%s\", absolute_address=0x%x)" % (self.name, self.absolute_address)
 
-        def on_trace_error(self, error):
-            self._print(Fore.RED + Style.BRIGHT + "Error" + Style.RESET_ALL + ": " + error['message'])
+    def __hash__(self):
+        return self.absolute_address.__hash__()
 
-        def on_trace_events(self, events):
-            no_attributes = Style.RESET_ALL
-            for timestamp, thread_id, depth, target_address, message in events:
-                indent = depth * "   | "
-                attributes = self._get_attributes(thread_id)
-                if thread_id != self._last_event_tid:
-                    self._print("%s           /* TID 0x%x */%s" % (attributes, thread_id, Style.RESET_ALL))
-                    self._last_event_tid = thread_id
-                self._print("%6d ms  %s%s%s%s" % (timestamp, attributes, indent, message, no_attributes))
+    def __cmp__(self, other):
+        return self.absolute_address.__cmp__(other.absolute_address)
 
-        def on_trace_handler_create(self, function, handler, source):
-            self._print("%s: Auto-generated handler at \"%s\"" % (function, source.replace("\\", "\\\\")))
+    def __eq__(self, other):
+        return self.absolute_address == other.absolute_address
 
-        def on_trace_handler_load(self, function, handler, source):
-            self._print("%s: Loaded handler at \"%s\"" % (function, source.replace("\\", "\\\\")))
+    def __ne__(self, other):
+        return self.absolute_address != other.absolute_address
 
-        def _get_attributes(self, thread_id):
-            attributes = self._attributes_by_thread_id.get(thread_id, None)
-            if attributes is None:
-                color = self._next_color
-                self._next_color += 1
-                attributes = self._palette[color % len(self._palette)]
-                if (1 + int(color / len(self._palette))) % 2 == 0:
-                    attributes += Style.BRIGHT
-                self._attributes_by_thread_id[thread_id] = attributes
-            return attributes
 
-    app = TracerApplication()
-    app.run()
+class ModuleFunction(Function):
+    def __init__(self, module, name, relative_address, exported):
+        super(ModuleFunction, self).__init__(name, module.base_address + relative_address)
+        self.module = module
+        self.relative_address = relative_address
+        self.exported = exported
+
+    def __repr__(self):
+        return "ModuleFunction(module=\"%s\", name=\"%s\", relative_address=0x%x)" % (self.module.name, self.name, self.relative_address)
+
+
+class ObjCMethod(Function):
+    def __init__(self, mtype, cls, method, address):
+        self.mtype = mtype
+        self.cls = cls
+        self.method = method
+        self.address = address
+        super(ObjCMethod, self).__init__(self.display_name(), address)
+
+    def display_name(self):
+        return '{mtype}[{cls} {method}]'.format(mtype=self.mtype, cls=self.cls, method=self.method)
+
+    def __repr__(self):
+        return "ObjCMethod(mtype=\"%s\", cls=\"%s\", method=\"%s\", address=0x%x)" % (self.mtype, self.cls, self.method, self.address)
+
 
 def to_filename(name):
     result = ""
@@ -912,12 +992,14 @@ def to_filename(name):
             result += "_"
     return result
 
+
 def to_handler_filename(name):
     full_filename = to_filename(name)
     if len(full_filename) <= 41:
         return full_filename + ".js"
     crc = binascii.crc32(full_filename.encode())
     return full_filename[0:32] + "_%08x.js" % crc
+
 
 if __name__ == '__main__':
     main()

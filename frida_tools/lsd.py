@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals, print_function
 
+
 def main():
     import frida
-    from .application import ConsoleApplication
+    from frida_tools.application import ConsoleApplication
 
     class LSDApplication(ConsoleApplication):
         def _usage(self):

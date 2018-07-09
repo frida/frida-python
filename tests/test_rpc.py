@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from .data import target_program
 import platform
 import subprocess
 import sys
@@ -12,6 +11,8 @@ except:
     import unittest
 
 import frida
+
+from .data import target_program
 
 
 class TestCore(unittest.TestCase):
@@ -115,6 +116,7 @@ rpc.exports = {
     def assertRaisesScriptDestroyed(self, operation):
         m = self.assertRaisesRegex if sys.version_info[0] >= 3 else self.assertRaisesRegexp
         m(frida.InvalidOperationError, "script is destroyed", operation)
+
 
 if sys.version_info[0] >= 3:
     iterbytes = lambda x: iter(x)

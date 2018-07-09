@@ -1,29 +1,33 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals, print_function
+
 import signal
 import threading
 
+
 def main():
     import codecs
-    from colorama import Fore, Style
-    import frida
-    from frida.application import ConsoleApplication
     import hashlib
     import json
     import os
     import platform
-    from prompt_toolkit.shortcuts import create_prompt_application, create_output, create_eventloop
-    from prompt_toolkit.history import FileHistory
-    from prompt_toolkit.completion import Completion, Completer
-    from prompt_toolkit.interface import CommandLineInterface
-    from pygments.lexers import JavascriptLexer
-    from pygments.token import Token
     import re
     import sys
     try:
         from urllib.request import build_opener
     except:
         from urllib2 import build_opener
+
+    from colorama import Fore, Style
+    import frida
+    from prompt_toolkit.shortcuts import create_prompt_application, create_output, create_eventloop
+    from prompt_toolkit.history import FileHistory
+    from prompt_toolkit.completion import Completion, Completer
+    from prompt_toolkit.interface import CommandLineInterface
+    from pygments.lexers import JavascriptLexer
+    from pygments.token import Token
+
+    from frida_tools.application import ConsoleApplication
 
     class REPLApplication(ConsoleApplication):
         def __init__(self):
@@ -688,11 +692,13 @@ URL: {url}
     app = REPLApplication()
     app.run()
 
+
 class JavaScriptError(Exception):
     def __init__(self, error):
         super(JavaScriptError, self).__init__(error['message'])
 
         self.error = error
+
 
 class DumbStdinReader(object):
     def __init__(self, valid_until):
@@ -751,6 +757,7 @@ class DumbStdinReader(object):
             self._prompt = None
             self._result = (None, KeyboardInterrupt())
             self._cond.notify()
+
 
 try:
     input_impl = raw_input

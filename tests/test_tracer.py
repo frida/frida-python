@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from .data import target_program
 import platform
 import subprocess
 import threading
@@ -10,8 +9,10 @@ except:
     import unittest
 
 import frida
-from frida.application import Reactor
-from frida.tracer import Tracer, TracerProfileBuilder, MemoryRepository, UI
+from frida_tools.application import Reactor
+from frida_tools.tracer import Tracer, TracerProfileBuilder, MemoryRepository, UI
+
+from .data import target_program
 
 
 class TestTracer(unittest.TestCase):

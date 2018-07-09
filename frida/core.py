@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals, print_function
 
-import _frida
 import fnmatch
 import json
 import numbers
 import sys
 import threading
 import traceback
+
+import _frida
 
 
 class DeviceManager(object):
@@ -40,6 +41,7 @@ class DeviceManager(object):
 
     def off(self, signal, callback):
         self._impl.off(signal, callback)
+
 
 class Device(object):
     def __init__(self, device):
@@ -125,6 +127,7 @@ class Device(object):
         else:
             return self.get_process(target).pid
 
+
 class Session(object):
     def __init__(self, impl):
         self._impl = impl
@@ -164,6 +167,7 @@ class Session(object):
 
     def off(self, signal, callback):
         self._impl.off(signal, callback)
+
 
 class Script(object):
     def __init__(self, impl):
@@ -298,9 +302,11 @@ class Script(object):
         else:
             print(text, file=sys.stderr)
 
+
 class RPCException(Exception):
     def __str__(self):
         return self.args[2] if len(self.args) >= 3 else self.args[0]
+
 
 class ScriptExports(object):
     def __init__(self, script):
@@ -313,8 +319,10 @@ class ScriptExports(object):
             return script._rpc_request('call', js_name, args)
         return method
 
+
 class Error(Exception):
     pass
+
 
 def _to_camel_case(name):
     result = ""
@@ -329,10 +337,8 @@ def _to_camel_case(name):
             result += c.lower()
     return result
 
+
 if sys.version_info[0] >= 3:
     string_types = str,
-    iterbytes = lambda x: iter(x)
 else:
     string_types = basestring,
-    def iterbytes(data):
-        return (ord(char) for char in data)
