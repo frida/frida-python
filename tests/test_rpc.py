@@ -27,6 +27,7 @@ class TestCore(unittest.TestCase):
         cls.session.detach()
         cls.target.terminate()
         cls.target.stdin.close()
+        cls.target.wait()
 
     def test_basics(self):
         script = self.session.create_script(name="test-rpc", source="""\

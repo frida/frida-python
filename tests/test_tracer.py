@@ -27,6 +27,7 @@ class TestTracer(unittest.TestCase):
         cls.session.detach()
         cls.target.terminate()
         cls.target.stdin.close()
+        cls.target.wait()
 
     def test_basics(self):
         done = threading.Event()
