@@ -1,5 +1,3 @@
-subdir('frida')
-
 extra_link_args = []
 if host_os_family == 'darwin'
   extra_link_args += ['-Wl,-exported_symbol,_' + python_plugin_export_name]
