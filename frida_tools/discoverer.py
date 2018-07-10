@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals, print_function
 
+from frida_tools.model import Module, Function, ModuleFunction
+
 
 def main():
     import threading
@@ -64,6 +66,7 @@ def main():
 class Discoverer(object):
     def __init__(self, reactor):
         self._reactor = reactor
+        self._ui = None
         self._script = None
 
     def dispose(self):
@@ -76,118 +79,144 @@ class Discoverer(object):
 
     def start(self, session, ui):
         def on_message(message, data):
-            self._reactor.schedule(lambda: self._process_message(message, data, session, ui))
+            print(message, data)
         session.enable_jit()
         self._script = session.create_script(name="discoverer", source=self._create_discover_script())
         self._script.on('message', on_message)
         self._script.load()
 
+        params = self._script.exports.start()
+        ui.on_sample_start(params['total'])
+
+        self._ui = ui
+
     def stop(self):
-        self._script.post({
-            'to': "/sampler",
-            'name': '+stop',
-            'payload': {}
-        })
+        result = self._script.exports.stop()
+
+        modules = dict((int(module_id), Module(m['name'], int(m['base'], 16), m['size'], m['path']))
+            for module_id, m in result['modules'].items())
+
+        module_functions = {}
+        dynamic_functions = []
+        for module_id, name, visibility, raw_address, count in result['targets']:
+            address = int(raw_address, 16)
+
+            if module_id != 0:
+                module = modules[module_id]
+                exported = visibility == 'e'
+                function = ModuleFunction(module, name, address - module.base_address, exported)
+
+                functions = module_functions.get(module, [])
+                if len(functions) == 0:
+                    module_functions[module] = functions
+                functions.append((function, count))
+            else:
+                function = Function(name, address)
+
+                dynamic_functions.append((function, count))
+
+        self._ui.on_sample_result(module_functions, dynamic_functions)
 
     def _create_discover_script(self):
-        return """"use strict";\
+        return """'use strict';
 
-function Sampler() {
-    var threadIds = [];
-    var result = {};
+var threadIds = [];
+var result = {};
 
-    function onStanza(stanza) {
-        if (stanza.to === "/sampler") {
-            if (stanza.name === '+stop')
-                stop();
-        }
-
-        recv(onStanza);
-    }
-
-    this.start = function () {
-        threadIds = [];
-        Process.enumerateThreads({
-            onMatch: function (thread) {
-                threadIds.push(thread.id);
-            },
-            onComplete: function () {
-                threadIds.forEach(function (threadId) {
-                    Stalker.follow(threadId, {
-                        events: { call: true },
-                        onCallSummary: function (summary) {
-                            for (var address in summary) {
-                                if (summary.hasOwnProperty(address)) {
-                                    var count = result[address] || 0;
-                                    result[address] = count + summary[address];
-                                }
-                            }
+rpc.exports = {
+    start: function () {
+        threadIds = Process.enumerateThreadsSync().map(function (thread) { return thread.id; });
+        threadIds.forEach(function (threadId) {
+            Stalker.follow(threadId, {
+                events: { call: true },
+                onCallSummary: function (summary) {
+                    for (var address in summary) {
+                        if (summary.hasOwnProperty(address)) {
+                            var count = result[address] || 0;
+                            result[address] = count + summary[address];
                         }
-                    });
-                });
-
-                send({
-                    from: "/sampler",
-                    name: '+started',
-                    payload: {
-                        total: threadIds.length
                     }
-                });
-            }
+                }
+            });
         });
-    };
 
-    function stop() {
+        return {
+            total: threadIds.length
+        };
+    },
+    stop: function () {
         threadIds.forEach(function (threadId) {
             Stalker.unfollow(threadId);
         });
         threadIds = [];
 
-        send({
-            from: "/sampler",
-            name: '+stopped',
-            payload: {
-                result: result
-            }
-        });
+        var res = result;
         result = {};
+
+        var map = new ModuleMap();
+
+        var allModules = map.values()
+            .reduce(function (result, module) {
+                result[module.path] = module;
+                return result;
+            }, {});
+        var seenModules = {};
+
+        var moduleDetails = {};
+        var nextModuleId = 1;
+
+        var targets = Object.keys(res)
+            .map(function (address) {
+                var moduleId = 0;
+                var name;
+                var visibility = 'i';
+                var addressPtr = ptr(address);
+                var count = res[address];
+
+                var path = map.findPath(addressPtr);
+                if (path !== null) {
+                    var module = allModules[path];
+
+                    var details = moduleDetails[path];
+                    if (details !== undefined) {
+                        moduleId = details.id;
+                    } else {
+                        moduleId = nextModuleId++;
+
+                        details = {
+                            id: moduleId,
+                            exports: Module.enumerateExportsSync(path)
+                                .reduce(function (result, e) {
+                                    result[e.address.toString()] = e.name;
+                                    return result;
+                                }, {})
+                        };
+                        moduleDetails[path] = details;
+
+                        seenModules[moduleId] = module;
+                    }
+
+                    var exportName = details.exports[address];
+                    if (exportName !== undefined) {
+                        name = exportName;
+                        visibility = 'e';
+                    } else {
+                        name = 'sub_' + addressPtr.sub(module.base).toString(16);
+                    }
+                } else {
+                    name = 'dsub_' + addressPtr.toString(16);
+                }
+
+                return [moduleId, name, visibility, address, count];
+            });
+
+        return {
+            targets: targets,
+            modules: seenModules
+        };
     }
-
-    recv(onStanza);
 };
-
-var sampler = new Sampler();
-setTimeout(function () { sampler.start(); }, 0);
 """
-
-    def _process_message(self, message, data, session, ui):
-        if message['type'] == 'send':
-            stanza = message['payload']
-            name = stanza['name']
-            payload = stanza['payload']
-            if stanza['from'] == "/sampler":
-                if name == '+started':
-                    ui.on_sample_start(payload['total'])
-                elif name == '+stopped':
-                    module_functions = {}
-                    dynamic_functions = []
-                    for address, count in payload['result'].items():
-                        address = int(address, 16)
-                        function = session.ensure_function(address)
-                        if isinstance(function, ModuleFunction):
-                            functions = module_functions.get(function.module, [])
-                            if len(functions) == 0:
-                                module_functions[function.module] = functions
-                            functions.append((function, count))
-                        else:
-                            dynamic_functions.append((function, count))
-                    ui.on_sample_result(module_functions, dynamic_functions)
-                else:
-                    print(message, data)
-            else:
-                print(message, data)
-        else:
-            print(message, data)
 
 
 class UI(object):
