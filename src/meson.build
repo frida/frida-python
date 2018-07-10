@@ -1,5 +1,4 @@
 subdir('frida')
-subdir('scripts')
 
 extra_link_args = []
 if host_os_family == 'darwin'

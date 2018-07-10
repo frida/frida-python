@@ -75,3 +75,4 @@ configure_file(input: 'config.h.in',
   configuration: cdata)
 
 subdir('src')
+subdir('frida')

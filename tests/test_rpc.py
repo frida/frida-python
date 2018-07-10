@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from .data import target_program
 import platform
 import subprocess
 import sys
@@ -13,8 +12,10 @@ except:
 
 import frida
 
+from .data import target_program
 
-class TestCore(unittest.TestCase):
+
+class TestRpc(unittest.TestCase):
     @classmethod
     def setUp(cls):
         system = platform.system()
@@ -26,6 +27,7 @@ class TestCore(unittest.TestCase):
         cls.session.detach()
         cls.target.terminate()
         cls.target.stdin.close()
+        cls.target.wait()
 
     def test_basics(self):
         script = self.session.create_script(name="test-rpc", source="""\
@@ -115,6 +117,7 @@ rpc.exports = {
     def assertRaisesScriptDestroyed(self, operation):
         m = self.assertRaisesRegex if sys.version_info[0] >= 3 else self.assertRaisesRegexp
         m(frida.InvalidOperationError, "script is destroyed", operation)
+
 
 if sys.version_info[0] >= 3:
     iterbytes = lambda x: iter(x)

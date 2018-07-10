@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import frida
-from frida.application import Reactor
+
 import threading
+
+import frida
+from frida_tools.application import Reactor
+
 
 class Application(object):
     def __init__(self):

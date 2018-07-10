@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+
 import frida
+
 
 session = frida.attach("Twitter")
 script = session.create_script("""\
