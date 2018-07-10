@@ -7,8 +7,11 @@
 #
 
 from __future__ import unicode_literals, print_function
-import frida
+
 import sys
+
+import frida
+
 
 def on_uninjected(id):
     print("on_uninjected id=%u" % id)

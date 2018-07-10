@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import frida
+
 import sys
+
+import frida
+
 
 def on_detached():
     print("on_detached")
