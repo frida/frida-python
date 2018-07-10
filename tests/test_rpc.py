@@ -15,7 +15,7 @@ import frida
 from .data import target_program
 
 
-class TestCore(unittest.TestCase):
+class TestRpc(unittest.TestCase):
     @classmethod
     def setUp(cls):
         system = platform.system()

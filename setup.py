@@ -137,15 +137,18 @@ class FridaPrebuiltExt(build_ext):
             shutil.copyfile(frida_extension, target)
 
 
-common_params = dict(
+setup(
+    name="frida",
     version=frida_version,
+    description="Dynamic instrumentation toolkit for developers, reverse-engineers, and security researchers",
+    long_description=long_description,
     long_description_content_type="text/markdown",
     author="Frida Developers",
     author_email="oleavr@frida.re",
     url="https://www.frida.re",
     license="wxWindows Library Licence, Version 3.1",
     zip_safe=True,
-    keywords="frida debugger inject javascript windows macos linux ios iphone ipad android",
+    keywords="frida debugger dynamic instrumentation inject javascript windows macos linux ios iphone ipad android qnx",
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Environment :: Console",
@@ -169,39 +172,9 @@ common_params = dict(
         "Topic :: Software Development :: Debuggers",
         "Topic :: Software Development :: Libraries :: Python Modules"
     ],
-)
-
-setup(
-    name="frida",
-    description="Inject JavaScript to explore native apps on Windows, macOS, Linux, iOS, Android, and QNX",
-    long_description=long_description,
     packages=['frida'],
     ext_modules=[Extension('_frida', [])],
     cmdclass={
         'build_ext': FridaPrebuiltExt
-    },
-    **common_params
-)
-
-setup(
-    name="frida-tools",
-    description="Frida CLI tools",
-    long_description="CLI tools for [Frida](http://www.frida.re).",
-    install_requires=[
-        "colorama >= 0.2.7, < 1.0.0",
-        "frida >= {}, < {}.0.0".format(frida_version, frida_major_version + 1),
-        "prompt-toolkit >= 0.57, < 2.0.0",
-        "pygments >= 2.0.2, < 3.0.0"
-    ],
-    packages=['frida_tools'],
-    entry_points={
-        'console_scripts': [
-            "frida = frida_tools.repl:main",
-            "frida-ls-devices = frida_tools.lsd:main",
-            "frida-ps = frida_tools.ps:main",
-            "frida-kill = frida_tools.kill:main",
-            "frida-trace = frida_tools.tracer:main"
-        ]
-    },
-    **common_params
+    }
 )

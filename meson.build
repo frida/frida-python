@@ -76,4 +76,3 @@ configure_file(input: 'config.h.in',
 
 subdir('src')
 subdir('frida')
-subdir('frida_tools')
