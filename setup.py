@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+import codecs
 try:
     from io import BytesIO
 except:
@@ -31,14 +32,14 @@ package_dir = os.path.dirname(os.path.realpath(__file__))
 pkg_info = os.path.join(package_dir, "PKG-INFO")
 in_source_package = os.path.isfile(pkg_info)
 if in_source_package:
-    with open(pkg_info, "r") as f:
+    with codecs.open(pkg_info, "r", 'utf-8') as f:
         version_line = [line.rstrip("\r") for line in f.read().split("\n") if line.startswith("Version: ")][0]
         frida_version = version_line[9:]
     long_description = None
 else:
     root_dir = os.path.dirname(package_dir)
     frida_version = os.environ['FRIDA_VERSION']
-    long_description = open(os.path.join(root_dir, "README.md")).read()
+    long_description = codecs.open(os.path.join(root_dir, "README.md"), "r", 'utf-8').read()
     frida_extension = os.environ['FRIDA_EXTENSION']
 frida_major_version = int(frida_version.split(".")[0])
 
