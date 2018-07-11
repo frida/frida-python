@@ -37,9 +37,8 @@ if in_source_package:
         frida_version = version_line[9:]
     long_description = None
 else:
-    root_dir = os.path.dirname(package_dir)
     frida_version = os.environ['FRIDA_VERSION']
-    long_description = codecs.open(os.path.join(root_dir, "README.md"), "r", 'utf-8').read()
+    long_description = codecs.open(os.path.join(package_dir, "README.md"), "r", 'utf-8').read()
     frida_extension = os.environ['FRIDA_EXTENSION']
 frida_major_version = int(frida_version.split(".")[0])
 
