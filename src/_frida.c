@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2017 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+ * Copyright (C) 2013-2018 Ole André Vadla Ravnås <oleavr@nowsecure.com>
  *
  * Licence: wxWindows Library Licence, Version 3.1
  */
@@ -2025,6 +2025,18 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
         raw_value = g_variant_new_boolean (value == Py_True);
       }
 #if PY_MAJOR_VERSION < 3
+      else if (PyUnicode_Check (value))
+      {
+        PyObject * value_utf8;
+
+        value_utf8 = PyUnicode_AsUTF8String (value);
+        if (value_utf8 == NULL)
+          goto invalid_dict_value;
+
+        raw_value = g_variant_new_string (PyBytes_AsString (value_utf8));
+
+        Py_DECREF (value_utf8);
+      }
       else if (PyInt_Check (value))
       {
         raw_value = g_variant_new_int64 (PyInt_AS_LONG (value));
@@ -2036,7 +2048,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
 
         l = PyLong_AsLongLong (value);
         if (l == -1 && PyErr_Occurred ())
-          goto invalid_long_value;
+          goto invalid_dict_value;
 
         raw_value = g_variant_new_int64 (l);
       }
@@ -2062,7 +2074,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
 
 invalid_argument:
 invalid_dict_key:
-invalid_long_value:
+invalid_dict_value:
   {
     g_object_unref (options);
 
