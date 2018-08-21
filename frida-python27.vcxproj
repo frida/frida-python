@@ -93,7 +93,7 @@
     </Link>
     <ClCompile>
       <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files (x86)\Python 2.7\include;$(SolutionDir)python\2.7\x86\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(FridaComponentDefines);%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -103,6 +103,7 @@
     </Link>
     <ClCompile>
       <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files\Python 2.7\include;$(SolutionDir)python\2.7\x64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(FridaComponentDefines);%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -112,6 +113,7 @@
     </Link>
     <ClCompile>
       <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files (x86)\Python 2.7\include;$(SolutionDir)python\2.7\x86\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(FridaComponentDefines);%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -121,6 +123,7 @@
     </Link>
     <ClCompile>
       <AdditionalIncludeDirectories>$(IntDir)..\frida-core;C:\Program Files\Python 2.7\include;$(SolutionDir)python\2.7\x64\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(FridaComponentDefines);%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <Import Project="frida-python-common.props" />
