@@ -319,6 +319,7 @@ static PyObject * PySession_enable_jit (PySession * self);
 static PyObject * PyScript_new_take_handle (FridaScript * handle);
 static PyObject * PyScript_load (PyScript * self);
 static PyObject * PyScript_unload (PyScript * self);
+static PyObject * PyScript_eternalize (PyScript * self);
 static PyObject * PyScript_post (PyScript * self, PyObject * args, PyObject * kw);
 
 static int PyFileMonitor_init (PyFileMonitor * self, PyObject * args, PyObject * kw);
@@ -455,6 +456,7 @@ static PyMethodDef PyScript_methods[] =
 {
   { "load", (PyCFunction) PyScript_load, METH_NOARGS, "Load the script." },
   { "unload", (PyCFunction) PyScript_unload, METH_NOARGS, "Unload the script." },
+  { "eternalize", (PyCFunction) PyScript_eternalize, METH_NOARGS, "Eternalize the script." },
   { "post", (PyCFunction) PyScript_post, METH_VARARGS | METH_KEYWORDS, "Post a JSON-encoded message to the script." },
   { NULL }
 };
@@ -2821,6 +2823,20 @@ PyScript_unload (PyScript * self)
 
   Py_BEGIN_ALLOW_THREADS
   frida_script_unload_sync (PY_GOBJECT_HANDLE (self), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyScript_eternalize (PyScript * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_script_eternalize_sync (PY_GOBJECT_HANDLE (self), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);

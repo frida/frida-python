@@ -194,6 +194,9 @@ class Script(object):
     def unload(self):
         self._impl.unload()
 
+    def eternalize(self):
+        self._impl.eternalize()
+
     def post(self, message, **kwargs):
         raw_message = json.dumps(message)
         self._impl.post(raw_message, **kwargs)
