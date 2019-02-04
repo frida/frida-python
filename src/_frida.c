@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2018 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+ * Copyright (C) 2013-2019 Ole André Vadla Ravnås <oleavr@nowsecure.com>
  *
  * Licence: wxWindows Library Licence, Version 3.1
  */
@@ -191,6 +191,7 @@ struct _PyCrash
   PyGObject parent;
   guint pid;
   PyObject * process_name;
+  PyObject * summary;
   PyObject * report;
   PyObject * parameters;
 };
@@ -443,6 +444,7 @@ static PyMemberDef PyCrash_members[] =
 {
   { "pid", T_UINT, G_STRUCT_OFFSET (PyCrash, pid), READONLY, "Process ID." },
   { "process_name", T_OBJECT_EX, G_STRUCT_OFFSET (PyCrash, process_name), READONLY, "Process name." },
+  { "summary", T_OBJECT_EX, G_STRUCT_OFFSET (PyCrash, summary), READONLY, "Human-readable crash summary." },
   { "report", T_OBJECT_EX, G_STRUCT_OFFSET (PyCrash, report), READONLY, "Human-readable crash report." },
   { "parameters", T_OBJECT_EX, G_STRUCT_OFFSET (PyCrash, parameters), READONLY, "Parameters." },
   { NULL }
@@ -2661,6 +2663,7 @@ PyCrash_init (PyCrash * self, PyObject * args, PyObject * kw)
 
   self->pid = 0;
   self->process_name = NULL;
+  self->summary = NULL;
   self->report = NULL;
   self->parameters = NULL;
 
@@ -2675,6 +2678,7 @@ PyCrash_init_from_handle (PyCrash * self, FridaCrash * handle)
 
   self->pid = frida_crash_get_pid (handle);
   self->process_name = PyGObject_marshal_string (frida_crash_get_process_name (handle));
+  self->summary = PyGObject_marshal_string (frida_crash_get_summary (handle));
   self->report = PyGObject_marshal_string (frida_crash_get_report (handle));
 
   parameters_dict = frida_crash_load_parameters (handle);
@@ -2688,6 +2692,7 @@ static void
 PyCrash_dealloc (PyCrash * self)
 {
   Py_XDECREF (self->process_name);
+  Py_XDECREF (self->summary);
   Py_XDECREF (self->report);
   Py_XDECREF (self->parameters);
 
@@ -2706,11 +2711,11 @@ PyCrash_repr (PyCrash * self)
 
   repr = g_string_new ("Crash(");
 
-  g_string_append_printf (repr, "pid=%u, process_name=\"%s\"", self->pid, frida_crash_get_process_name (handle));
-
-  str = PyFrida_repr (self->report);
-  g_string_append_printf (repr, ", report=%s", str);
-  g_free (str);
+  g_string_append_printf (repr, "pid=%u, process_name=\"%s\", summary=\"%s\", report=<%u bytes>",
+      self->pid,
+      frida_crash_get_process_name (handle),
+      frida_crash_get_summary (handle),
+      (guint) strlen (frida_crash_get_report (handle)));
 
   str = PyFrida_repr (self->parameters);
   g_string_append_printf (repr, ", parameters=%s", str);
