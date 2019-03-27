@@ -72,46 +72,51 @@ def enumerate_devices():
 
 
 def get_local_device():
-    return _get_device(lambda device: device.type == 'local', timeout=0)
+    return get_device_matching(lambda device: device.type == 'local', timeout=0)
 
 
 def get_remote_device():
-    return _get_device(lambda device: device.type == 'remote', timeout=0)
+    return get_device_matching(lambda device: device.type == 'remote', timeout=0)
 
 
 def get_usb_device(timeout = 0):
-    return _get_device(lambda device: device.type == 'usb', timeout)
+    return get_device_matching(lambda device: device.type == 'usb', timeout)
 
 
 def get_device(id, timeout = 0):
-    return _get_device(lambda device: device.id == id, timeout)
+    return get_device_matching(lambda device: device.id == id, timeout)
 
 
-def _get_device(predicate, timeout):
-    mgr = get_device_manager()
-    def find_matching_device():
-        usb_devices = [device for device in mgr.enumerate_devices() if predicate(device)]
-        if len(usb_devices) > 0:
-            return usb_devices[0]
-        else:
-            return None
-    device = find_matching_device()
-    if device is None:
-        result = [None]
-        event = threading.Event()
-        def on_devices_changed():
-            result[0] = find_matching_device()
-            if result[0] is not None:
-                event.set()
-        mgr.on('changed', on_devices_changed)
-        device = find_matching_device()
-        if device is None:
-            event.wait(timeout)
-            device = result[0]
-        mgr.off('changed', on_devices_changed)
-        if device is None:
-            raise TimedOutError("timed out while waiting for device to appear")
-    return device
+def get_device_matching(predicate, timeout = 0):
+    matches = []
+    lock = threading.Lock()
+    done = threading.Event()
+
+    def on_device_added(device):
+        if predicate(device):
+            with lock:
+                matches.append(device)
+            done.set()
+
+    manager = get_device_manager()
+    manager.on('added', on_device_added)
+    try:
+        initial_matches = [device for device in manager.enumerate_devices() if predicate(device)]
+        if len(initial_matches) > 0:
+            return initial_matches[0]
+
+        done.wait(timeout)
+
+        with lock:
+            if len(matches) == 0:
+                if timeout == 0:
+                    raise InvalidArgumentError("device not found")
+                else:
+                    raise TimedOutError("timed out while waiting for device to appear")
+
+            return matches[0]
+    finally:
+        manager.off('added', on_device_added)
 
 
 def shutdown():
