@@ -1083,7 +1083,7 @@ PyGObject_steal_handle (PyGObject * self)
     guint num_matches;
 
     num_matches = g_signal_handlers_disconnect_matched (handle, G_SIGNAL_MATCH_CLOSURE, closure->signal_id, 0, &closure->parent, NULL, NULL);
-    g_assert_cmpuint (num_matches, ==, 1);
+    g_assert (num_matches == 1);
   }
   g_clear_pointer (&self->signal_closures, g_slist_free);
 
@@ -1155,7 +1155,7 @@ PyGObject_off (PyGObject * self, PyObject * args)
   self->signal_closures = g_slist_delete_link (self->signal_closures, entry);
 
   num_matches = g_signal_handlers_disconnect_matched (self->handle, G_SIGNAL_MATCH_CLOSURE, signal_id, 0, closure, NULL, NULL);
-  g_assert_cmpuint (num_matches, ==, 1);
+  g_assert (num_matches == 1);
 
   Py_RETURN_NONE;
 
