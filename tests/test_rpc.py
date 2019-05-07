@@ -20,6 +20,8 @@ class TestRpc(unittest.TestCase):
     def setUp(cls):
         system = platform.system()
         cls.target = subprocess.Popen([target_program], stdin=subprocess.PIPE)
+        # TODO: improve injectors to handle injection into a process that hasn't yet finished initializing
+        time.sleep(0.05)
         cls.session = frida.attach(cls.target.pid)
 
     @classmethod
