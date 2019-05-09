@@ -39,7 +39,7 @@ if cc.has_header('android/api-level.h')
   host_os = 'android'
 endif
 
-python = get_option('with-python')
+python = get_option('python')
 if python == ''
   python = find_program('python3', required: false)
   if not python.found()
