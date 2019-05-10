@@ -45,7 +45,7 @@ class Application(object):
         session.enable_child_gating()
         print("✔ create_script()")
         script = session.create_script("""\
-Interceptor.attach(Module.findExportByName(null, 'open'), {
+Interceptor.attach(Module.getExportByName(null, 'open'), {
   onEnter: function (args) {
     send({
       type: 'open',

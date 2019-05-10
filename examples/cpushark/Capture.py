@@ -423,7 +423,7 @@ var sendModules = function sendModules(callback) {
 
 var stalkedThreadId = null;
 var interceptReadFunction = function interceptReadFunction(functionName) {
-    Interceptor.attach(Module.findExportByName('libSystem.B.dylib', functionName), {
+    Interceptor.attach(Module.getExportByName('libSystem.B.dylib', functionName), {
         onEnter: function(args) {
             this.fd = args[0].toInt32();
         },
