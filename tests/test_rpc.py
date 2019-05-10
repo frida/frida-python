@@ -33,8 +33,6 @@ class TestRpc(unittest.TestCase):
 
     def test_basics(self):
         script = self.session.create_script(name="test-rpc", source="""\
-"use strict";
-
 rpc.exports = {
     add: function (a, b) {
         var result = a + b;
@@ -60,8 +58,6 @@ rpc.exports = {
 
     def test_post_failure(self):
         script = self.session.create_script(name="test-rpc", source="""\
-"use strict";
-
 rpc.exports = {
     init: function () {
     },
@@ -76,8 +72,6 @@ rpc.exports = {
 
     def test_unload_mid_request(self):
         script = self.session.create_script(name="test-rpc", source="""\
-"use strict";
-
 rpc.exports = {
     waitForever: function () {
         return new Promise(function () {});
@@ -97,8 +91,6 @@ rpc.exports = {
 
     def test_detach_mid_request(self):
         script = self.session.create_script(name="test-rpc", source="""\
-"use strict";
-
 rpc.exports = {
     waitForever: function () {
         return new Promise(function () {});

@@ -6,8 +6,6 @@ import frida
 
 session = frida.attach("Twitter")
 script = session.create_script("""\
-'use strict';
-
 rpc.exports = {
   hello: function () {
     return 'Hello';
