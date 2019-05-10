@@ -329,6 +329,7 @@ static PyObject * PySession_disable_child_gating (PySession * self);
 static PyObject * PySession_create_script (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_create_script_from_bytes (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_compile_script (PySession * self, PyObject * args, PyObject * kw);
+static FridaScriptOptions * PySession_parse_script_options (const gchar * name, const gchar * runtime_value);
 static PyObject * PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_disable_debugger (PySession * self);
 static PyObject * PySession_enable_jit (PySession * self);
@@ -2852,87 +2853,157 @@ PySession_disable_child_gating (PySession * self)
 static PyObject *
 PySession_create_script (PySession * self, PyObject * args, PyObject * kw)
 {
-  static char * keywords[] = { "source", "name", NULL };
-  char * source, * name = NULL;
+  PyObject * result = NULL;
+  static char * keywords[] = { "source", "name", "runtime", NULL };
+  char * source;
+  char * name = NULL;
+  const char * runtime_value = NULL;
+  FridaScriptOptions * options;
   GError * error = NULL;
   FridaScript * handle;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|es", keywords, "utf-8", &source, "utf-8", &name))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|esz", keywords, "utf-8", &source, "utf-8", &name, &runtime_value))
     return NULL;
 
+  options = PySession_parse_script_options (name, runtime_value);
+  if (options == NULL)
+    goto beach;
+
   Py_BEGIN_ALLOW_THREADS
-  handle = frida_session_create_script_sync (PY_GOBJECT_HANDLE (self), name, source, &error);
+  handle = frida_session_create_script_sync (PY_GOBJECT_HANDLE (self), source, options, &error);
   Py_END_ALLOW_THREADS
 
-  PyMem_Free (source);
+  result = (error == NULL)
+      ? PyScript_new_take_handle (handle)
+      : PyFrida_raise (error);
+
+beach:
+  g_clear_object (&options);
+
   PyMem_Free (name);
+  PyMem_Free (source);
 
-  if (error != NULL)
-    return PyFrida_raise (error);
-
-  return PyScript_new_take_handle (handle);
+  return result;
 }
 
 static PyObject *
 PySession_create_script_from_bytes (PySession * self, PyObject * args, PyObject * kw)
 {
-  static char * keywords[] = { "data", NULL };
+  PyObject * result = NULL;
+  static char * keywords[] = { "data", "name", "runtime", NULL };
   guint8 * data;
   int size;
+  char * name = NULL;
+  const char * runtime_value = NULL;
   GBytes * bytes;
+  FridaScriptOptions * options;
   GError * error = NULL;
   FridaScript * handle;
 
  #if PY_MAJOR_VERSION >= 3
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "y#", keywords, &data, &size))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "y#|esz", keywords, &data, &size, "utf-8", &name, &runtime_value))
  #else
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "s#", keywords, &data, &size))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s#|esz", keywords, &data, &size, "utf-8", &name, &runtime_value))
  #endif
     return NULL;
 
   bytes = g_bytes_new (data, size);
 
+  options = PySession_parse_script_options (name, runtime_value);
+  if (options == NULL)
+    goto beach;
+
   Py_BEGIN_ALLOW_THREADS
-  handle = frida_session_create_script_from_bytes_sync (PY_GOBJECT_HANDLE (self), bytes, &error);
+  handle = frida_session_create_script_from_bytes_sync (PY_GOBJECT_HANDLE (self), bytes, options, &error);
   Py_END_ALLOW_THREADS
 
+  result = (error == NULL)
+      ? PyScript_new_take_handle (handle)
+      : PyFrida_raise (error);
+
+beach:
+  g_clear_object (&options);
   g_bytes_unref (bytes);
 
-  if (error != NULL)
-    return PyFrida_raise (error);
+  PyMem_Free (name);
 
-  return PyScript_new_take_handle (handle);
+  return result;
 }
 
 static PyObject *
 PySession_compile_script (PySession * self, PyObject * args, PyObject * kw)
 {
-  static char * keywords[] = { "source", "name", NULL };
-  char * source, * name = NULL;
+  PyObject * result = NULL;
+  static char * keywords[] = { "source", "name", "runtime", NULL };
+  char * source;
+  char * name = NULL;
+  const char * runtime_value = NULL;
+  FridaScriptOptions * options;
   GError * error = NULL;
   GBytes * bytes;
-  gconstpointer data;
-  gsize size;
-  PyObject * result;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|es", keywords, "utf-8", &source, "utf-8", &name))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|esz", keywords, "utf-8", &source, "utf-8", &name, &runtime_value))
     return NULL;
 
+  options = PySession_parse_script_options (name, runtime_value);
+  if (options == NULL)
+    goto beach;
+
   Py_BEGIN_ALLOW_THREADS
-  bytes = frida_session_compile_script_sync (PY_GOBJECT_HANDLE (self), name, source, &error);
+  bytes = frida_session_compile_script_sync (PY_GOBJECT_HANDLE (self), source, options, &error);
   Py_END_ALLOW_THREADS
 
-  PyMem_Free (source);
+  if (error == NULL)
+  {
+    gconstpointer data;
+    gsize size;
+
+    data = g_bytes_get_data (bytes, &size);
+    result = PyBytes_FromStringAndSize (data, size);
+    g_bytes_unref (bytes);
+  }
+  else
+  {
+    result = PyFrida_raise (error);
+  }
+
+beach:
+  g_clear_object (&options);
+
   PyMem_Free (name);
-
-  if (error != NULL)
-    return PyFrida_raise (error);
-
-  data = g_bytes_get_data (bytes, &size);
-  result = PyBytes_FromStringAndSize (data, size);
-  g_bytes_unref (bytes);
+  PyMem_Free (source);
 
   return result;
+}
+
+static FridaScriptOptions *
+PySession_parse_script_options (const gchar * name, const gchar * runtime_value)
+{
+  FridaScriptOptions * options;
+
+  options = frida_script_options_new ();
+
+  if (name != NULL)
+    frida_script_options_set_name (options, name);
+
+  if (runtime_value != NULL)
+  {
+    FridaScriptRuntime runtime;
+
+    if (!PyGObject_unmarshal_enum (runtime_value, FRIDA_TYPE_SCRIPT_RUNTIME, &runtime))
+      goto invalid_argument;
+
+    frida_script_options_set_runtime (options, runtime);
+  }
+
+  return options;
+
+invalid_argument:
+  {
+    g_object_unref (options);
+
+    return NULL;
+  }
 }
 
 static PyObject *
