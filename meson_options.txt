@@ -3,3 +3,9 @@ option('python',
   value: '',
   description: 'Python interpreter to build for'
 )
+
+option('python_incdir',
+  type: 'string',
+  value: '',
+  description: 'Python headers directory to build against'
+)
