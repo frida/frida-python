@@ -39,37 +39,50 @@ if cc.has_header('android/api-level.h')
   host_os = 'android'
 endif
 
-python = get_option('python')
-if python == ''
-  python = find_program('python3', required: false)
-  if not python.found()
-    python = find_program('python')
+python_incdir = get_option('python_incdir')
+if python_incdir == ''
+  python = get_option('python')
+  if python == ''
+    python = find_program('python3', required: false)
+    if not python.found()
+      python = find_program('python')
+    endif
   endif
+
+  result = run_command(python, '-c',
+    'import sys; sys.stdout.write("%d.%d" % (sys.version_info[0], sys.version_info[1]))')
+  if result.returncode() != 0
+    error('Unable to detect Python version: ' + result.stdout() + result.stderr())
+  endif
+  python_version = result.stdout()
+  python_name = 'python' + python_version
+
+  result = run_command(python, '-c',
+    'from distutils import sysconfig; import sys; sys.stdout.write(sysconfig.get_python_inc())')
+  if result.returncode() != 0
+    error('Unable to detect Python include directory: ' + result.stdout() + result.stderr())
+  endif
+  python_incdir = result.stdout()
+else
+  py_major_v = cc.get_define('PY_MAJOR_VERSION', 
+    prefix: '#include <patchlevel.h>',
+    args: ['-I' + python_incdir])
+  
+  py_minor_v = cc.get_define('PY_MINOR_VERSION',
+    prefix: '#include <patchlevel.h>',
+    args: ['-I' + python_incdir])
+
+  python_version = py_major_v + '.' + py_minor_v
+  python_name = 'python' + python_version
 endif
 
-result = run_command(python, '-c',
-  'import sys; sys.stdout.write("%d.%d" % (sys.version_info[0], sys.version_info[1]))')
-if result.returncode() != 0
-  error('Unable to detect Python version: ' + result.stdout() + result.stderr())
-endif
-python_version = result.stdout()
-
-python_name = 'python' + python_version
 python_site_packages = join_paths(get_option('libdir'), python_name, 'site-packages')
 
-result = run_command(python, '-c',
-  'from distutils import sysconfig; import sys; sys.stdout.write(sysconfig.get_python_inc())')
-if result.returncode() != 0
-  error('Unable to detect Python include directory: ' + result.stdout() + result.stderr())
+if python_version.version_compare('>3')
+  python_plugin_export_name = 'PyInit__frida'
+else
+  python_plugin_export_name = 'init_frida'
 endif
-python_incdir = result.stdout()
-
-result = run_command(python, '-c', 'import sys;\n' +
-  'sys.stdout.write("PyInit__frida" if sys.version_info[0] >= 3 else "init_frida")')
-if result.returncode() != 0
-  error('Unable to detect Python plugin export name: ' + result.stdout() + result.stderr())
-endif
-python_plugin_export_name = result.stdout()
 
 cdata = configuration_data()
 
