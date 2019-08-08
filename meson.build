@@ -64,10 +64,10 @@ if python_incdir == ''
   endif
   python_incdir = result.stdout()
 else
-  py_major_v = cc.get_define('PY_MAJOR_VERSION', 
+  py_major_v = cc.get_define('PY_MAJOR_VERSION',
     prefix: '#include <patchlevel.h>',
     args: ['-I' + python_incdir])
-  
+
   py_minor_v = cc.get_define('PY_MINOR_VERSION',
     prefix: '#include <patchlevel.h>',
     args: ['-I' + python_incdir])
