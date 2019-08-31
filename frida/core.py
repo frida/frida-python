@@ -2,6 +2,7 @@
 from __future__ import unicode_literals, print_function
 
 import fnmatch
+from functools import wraps
 import json
 import numbers
 import sys
@@ -11,6 +12,30 @@ import traceback
 import _frida
 
 
+Cancellable = _frida.Cancellable
+
+
+def cancellable(f):
+    @wraps(f)
+    def wrapper(*args, cancellable=None, **kwargs):
+        if cancellable is None:
+            last_arg = args[-1]
+            if isinstance(last_arg, Cancellable):
+                cancellable = last_arg
+                args = args[:-1]
+
+        if cancellable is None:
+            return f(*args, **kwargs)
+
+        cancellable.push_current()
+        try:
+            return f(*args, **kwargs)
+        finally:
+            cancellable.pop_current()
+
+    return wrapper
+
+
 class DeviceManager(object):
     def __init__(self, impl):
         self._impl = impl
@@ -18,15 +43,19 @@ class DeviceManager(object):
     def __repr__(self):
         return repr(self._impl)
 
+    @cancellable
     def enumerate_devices(self):
         return [Device(device) for device in self._impl.enumerate_devices()]
 
+    @cancellable
     def add_remote_device(self, host):
         return Device(self._impl.add_remote_device(host))
 
+    @cancellable
     def remove_remote_device(self, host):
         self._impl.remove_remote_device(host)
 
+    @cancellable
     def get_device(self, device_id):
         devices = self._impl.enumerate_devices()
         if device_id is None:
@@ -55,15 +84,19 @@ class Device(object):
     def __repr__(self):
         return repr(self._impl)
 
+    @cancellable
     def get_frontmost_application(self):
         return self._impl.get_frontmost_application()
 
+    @cancellable
     def enumerate_applications(self):
         return self._impl.enumerate_applications()
 
+    @cancellable
     def enumerate_processes(self):
         return self._impl.enumerate_processes()
 
+    @cancellable
     def get_process(self, process_name):
         process_name_lc = process_name.lower()
         matching = [process for process in self._impl.enumerate_processes() if fnmatch.fnmatchcase(process.name.lower(), process_name_lc)]
@@ -74,18 +107,23 @@ class Device(object):
         else:
             raise _frida.ProcessNotFoundError("unable to find process with name '%s'" % process_name)
 
+    @cancellable
     def enable_spawn_gating(self):
         return self._impl.enable_spawn_gating()
 
+    @cancellable
     def disable_spawn_gating(self):
         return self._impl.disable_spawn_gating()
 
+    @cancellable
     def enumerate_pending_spawn(self):
         return self._impl.enumerate_pending_spawn()
 
+    @cancellable
     def enumerate_pending_children(self):
         return self._impl.enumerate_pending_children()
 
+    @cancellable
     def spawn(self, program, argv=None, envp=None, env=None, cwd=None, stdio=None, **kwargs):
         if not isinstance(program, string_types):
             argv = program
@@ -97,21 +135,27 @@ class Device(object):
 
         return self._impl.spawn(program, argv, envp, env, cwd, stdio, aux_options)
 
+    @cancellable
     def input(self, target, data):
         self._impl.input(self._pid_of(target), data)
 
+    @cancellable
     def resume(self, target):
         self._impl.resume(self._pid_of(target))
 
+    @cancellable
     def kill(self, target):
         self._impl.kill(self._pid_of(target))
 
+    @cancellable
     def attach(self, target):
         return Session(self._impl.attach(self._pid_of(target)))
 
+    @cancellable
     def inject_library_file(self, target, path, entrypoint, data):
         return self._impl.inject_library_file(self._pid_of(target), path, entrypoint, data)
 
+    @cancellable
     def inject_library_blob(self, target, blob, entrypoint, data):
         return self._impl.inject_library_blob(self._pid_of(target), blob, entrypoint, data)
 
@@ -135,30 +179,39 @@ class Session(object):
     def __repr__(self):
         return repr(self._impl)
 
+    @cancellable
     def detach(self):
         self._impl.detach()
 
+    @cancellable
     def enable_child_gating(self):
         self._impl.enable_child_gating()
 
+    @cancellable
     def disable_child_gating(self):
         self._impl.disable_child_gating()
 
+    @cancellable
     def create_script(self, *args, **kwargs):
         return Script(self._impl.create_script(*args, **kwargs))
 
+    @cancellable
     def create_script_from_bytes(self, *args, **kwargs):
         return Script(self._impl.create_script_from_bytes(*args, **kwargs))
 
+    @cancellable
     def compile_script(self, *args, **kwargs):
         return self._impl.compile_script(*args, **kwargs)
 
+    @cancellable
     def enable_debugger(self, *args, **kwargs):
         self._impl.enable_debugger(*args, **kwargs)
 
+    @cancellable
     def disable_debugger(self):
         self._impl.disable_debugger()
 
+    @cancellable
     def enable_jit(self):
         self._impl.enable_jit()
 
@@ -188,15 +241,19 @@ class Script(object):
     def __repr__(self):
         return repr(self._impl)
 
+    @cancellable
     def load(self):
         self._impl.load()
 
+    @cancellable
     def unload(self):
         self._impl.unload()
 
+    @cancellable
     def eternalize(self):
         self._impl.eternalize()
 
+    @cancellable
     def post(self, message, **kwargs):
         raw_message = json.dumps(message)
         self._impl.post(raw_message, **kwargs)
@@ -320,11 +377,7 @@ class ScriptExports(object):
         js_name = _to_camel_case(name)
         def method(*args):
             return script._rpc_request('call', js_name, args)
-        return method
-
-
-class Error(Exception):
-    pass
+        return cancellable(method)
 
 
 def _to_camel_case(name):

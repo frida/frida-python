@@ -95,7 +95,8 @@ static PyObject * inspect_getargspec;
 static PyObject * inspect_ismethod;
 
 static GHashTable * pygobject_type_spec_by_type;
-static GHashTable * exception_by_error_code;
+static GHashTable * frida_exception_by_error_code;
+static PyObject * cancelled_exception;
 
 typedef struct _PyGObject                      PyGObject;
 typedef struct _PyGObjectTypeSpec              PyGObjectTypeSpec;
@@ -111,6 +112,7 @@ typedef struct _PyIcon                         PyIcon;
 typedef struct _PySession                      PySession;
 typedef struct _PyScript                       PyScript;
 typedef struct _PyFileMonitor                  PyFileMonitor;
+typedef struct _PyCancellable                  PyCancellable;
 
 typedef void (* PyGObjectInitFromHandleFunc) (PyObject * self, gpointer handle);
 
@@ -222,6 +224,12 @@ struct _PyFileMonitor
   GFile * file;
   GFileMonitor * monitor;
   GList * on_change;
+};
+
+struct _PyCancellable
+{
+  PyGObject parent;
+  GCancellable * cancellable;
 };
 
 static PyObject * PyGObject_new_take_handle (gpointer handle, const PyGObjectTypeSpec * spec);
@@ -343,6 +351,11 @@ static PyObject * PyScript_post (PyScript * self, PyObject * args, PyObject * kw
 static int PyFileMonitor_init (PyFileMonitor * self, PyObject * args, PyObject * kw);
 static PyObject * PyFileMonitor_enable (PyFileMonitor * self);
 static PyObject * PyFileMonitor_disable (PyFileMonitor * self);
+
+static int PyCancellable_init (PyCancellable * self, PyObject * args, PyObject * kw);
+static PyObject * PyCancellable_push_current (PyCancellable * self);
+static PyObject * PyCancellable_pop_current (PyCancellable * self);
+static PyObject * PyCancellable_cancel (PyCancellable * self);
 
 static PyObject * PyFrida_raise (GError * error);
 static gboolean PyFrida_is_string (PyObject * obj);
@@ -493,6 +506,14 @@ static PyMethodDef PyFileMonitor_methods[] =
 {
   { "enable", (PyCFunction) PyFileMonitor_enable, METH_NOARGS, "Enables the file monitor." },
   { "disable", (PyCFunction) PyFileMonitor_disable, METH_NOARGS, "Disables the file monitor." },
+  { NULL }
+};
+
+static PyMethodDef PyCancellable_methods[] =
+{
+  { "push_current", (PyCFunction) PyCancellable_push_current, METH_NOARGS, "Pushes cancellable onto the cancellable stack." },
+  { "pop_current", (PyCFunction) PyCancellable_pop_current, METH_NOARGS, "Pops cancellable off the cancellable stack." },
+  { "cancel", (PyCFunction) PyCancellable_cancel, METH_NOARGS, "Sets cancellable to cancelled." },
   { NULL }
 };
 
@@ -999,6 +1020,48 @@ static PyTypeObject PyFileMonitorType =
 };
 
 PYFRIDA_DEFINE_TYPE (FileMonitor, NULL, frida_unref);
+
+static PyTypeObject PyCancellableType =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "_frida.Cancellable",                         /* tp_name           */
+  sizeof (PyCancellable),                       /* tp_basicsize      */
+  0,                                            /* tp_itemsize       */
+  NULL,                                         /* tp_dealloc        */
+  NULL,                                         /* tp_print          */
+  NULL,                                         /* tp_getattr        */
+  NULL,                                         /* tp_setattr        */
+  NULL,                                         /* tp_compare        */
+  NULL,                                         /* tp_repr           */
+  NULL,                                         /* tp_as_number      */
+  NULL,                                         /* tp_as_sequence    */
+  NULL,                                         /* tp_as_mapping     */
+  NULL,                                         /* tp_hash           */
+  NULL,                                         /* tp_call           */
+  NULL,                                         /* tp_str            */
+  NULL,                                         /* tp_getattro       */
+  NULL,                                         /* tp_setattro       */
+  NULL,                                         /* tp_as_buffer      */
+  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
+  "Frida Cancellable",                          /* tp_doc            */
+  NULL,                                         /* tp_traverse       */
+  NULL,                                         /* tp_clear          */
+  NULL,                                         /* tp_richcompare    */
+  0,                                            /* tp_weaklistoffset */
+  NULL,                                         /* tp_iter           */
+  NULL,                                         /* tp_iternext       */
+  PyCancellable_methods,                        /* tp_methods        */
+  NULL,                                         /* tp_members        */
+  NULL,                                         /* tp_getset         */
+  &PyGObjectType,                               /* tp_base           */
+  NULL,                                         /* tp_dict           */
+  NULL,                                         /* tp_descr_get      */
+  NULL,                                         /* tp_descr_set      */
+  0,                                            /* tp_dictoffset     */
+  (initproc) PyCancellable_init,                /* tp_init           */
+};
+
+PYFRIDA_DEFINE_TYPE (Cancellable, NULL, g_object_unref);
 
 
 static PyObject *
@@ -1739,7 +1802,7 @@ PyDeviceManager_dealloc (PyDeviceManager * self)
   if (handle != NULL)
   {
     Py_BEGIN_ALLOW_THREADS
-    frida_device_manager_close_sync (handle);
+    frida_device_manager_close_sync (handle, NULL, NULL);
     frida_unref (handle);
     Py_END_ALLOW_THREADS
   }
@@ -1751,7 +1814,7 @@ static PyObject *
 PyDeviceManager_close (PyDeviceManager * self)
 {
   Py_BEGIN_ALLOW_THREADS
-  frida_device_manager_close_sync (PY_GOBJECT_HANDLE (self));
+  frida_device_manager_close_sync (PY_GOBJECT_HANDLE (self), NULL, NULL);
   Py_END_ALLOW_THREADS
 
   Py_RETURN_NONE;
@@ -1766,7 +1829,7 @@ PyDeviceManager_enumerate_devices (PyDeviceManager * self)
   PyObject * devices;
 
   Py_BEGIN_ALLOW_THREADS
-  result = frida_device_manager_enumerate_devices_sync (PY_GOBJECT_HANDLE (self), &error);
+  result = frida_device_manager_enumerate_devices_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -1793,7 +1856,7 @@ PyDeviceManager_add_remote_device (PyDeviceManager * self, PyObject * args)
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  result = frida_device_manager_add_remote_device_sync (PY_GOBJECT_HANDLE (self), host, &error);
+  result = frida_device_manager_add_remote_device_sync (PY_GOBJECT_HANDLE (self), host, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -1811,7 +1874,7 @@ PyDeviceManager_remove_remote_device (PyDeviceManager * self, PyObject * args)
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_device_manager_remove_remote_device_sync (PY_GOBJECT_HANDLE (self), host, &error);
+  frida_device_manager_remove_remote_device_sync (PY_GOBJECT_HANDLE (self), host, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -1888,7 +1951,7 @@ PyDevice_get_frontmost_application (PyDevice * self)
   FridaApplication * result;
 
   Py_BEGIN_ALLOW_THREADS
-  result = frida_device_get_frontmost_application_sync (PY_GOBJECT_HANDLE (self), &error);
+  result = frida_device_get_frontmost_application_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -1908,7 +1971,7 @@ PyDevice_enumerate_applications (PyDevice * self)
   PyObject * applications;
 
   Py_BEGIN_ALLOW_THREADS
-  result = frida_device_enumerate_applications_sync (PY_GOBJECT_HANDLE (self), &error);
+  result = frida_device_enumerate_applications_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -1933,7 +1996,7 @@ PyDevice_enumerate_processes (PyDevice * self)
   PyObject * processes;
 
   Py_BEGIN_ALLOW_THREADS
-  result = frida_device_enumerate_processes_sync (PY_GOBJECT_HANDLE (self), &error);
+  result = frida_device_enumerate_processes_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -1955,7 +2018,7 @@ PyDevice_enable_spawn_gating (PyDevice * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_device_enable_spawn_gating_sync (PY_GOBJECT_HANDLE (self), &error);
+  frida_device_enable_spawn_gating_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -1969,7 +2032,7 @@ PyDevice_disable_spawn_gating (PyDevice * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_device_disable_spawn_gating_sync (PY_GOBJECT_HANDLE (self), &error);
+  frida_device_disable_spawn_gating_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -1986,7 +2049,7 @@ PyDevice_enumerate_pending_spawn (PyDevice * self)
   PyObject * spawn;
 
   Py_BEGIN_ALLOW_THREADS
-  result = frida_device_enumerate_pending_spawn_sync (PY_GOBJECT_HANDLE (self), &error);
+  result = frida_device_enumerate_pending_spawn_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -2011,7 +2074,7 @@ PyDevice_enumerate_pending_children (PyDevice * self)
   PyObject * children;
 
   Py_BEGIN_ALLOW_THREADS
-  result = frida_device_enumerate_pending_children_sync (PY_GOBJECT_HANDLE (self), &error);
+  result = frida_device_enumerate_pending_children_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -2176,7 +2239,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
   }
 
   Py_BEGIN_ALLOW_THREADS
-  pid = frida_device_spawn_sync (PY_GOBJECT_HANDLE (self), program, options, &error);
+  pid = frida_device_spawn_sync (PY_GOBJECT_HANDLE (self), program, options, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
 
   g_object_unref (options);
@@ -2223,7 +2286,7 @@ PyDevice_input (PyDevice * self, PyObject * args)
   data = g_bytes_new (data_buffer, data_size);
 
   Py_BEGIN_ALLOW_THREADS
-  frida_device_input_sync (PY_GOBJECT_HANDLE (self), (guint) pid, data, &error);
+  frida_device_input_sync (PY_GOBJECT_HANDLE (self), (guint) pid, data, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
 
   g_bytes_unref (data);
@@ -2244,7 +2307,7 @@ PyDevice_resume (PyDevice * self, PyObject * args)
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_device_resume_sync (PY_GOBJECT_HANDLE (self), (guint) pid, &error);
+  frida_device_resume_sync (PY_GOBJECT_HANDLE (self), (guint) pid, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -2262,7 +2325,7 @@ PyDevice_kill (PyDevice * self, PyObject * args)
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_device_kill_sync (PY_GOBJECT_HANDLE (self), (guint) pid, &error);
+  frida_device_kill_sync (PY_GOBJECT_HANDLE (self), (guint) pid, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -2281,7 +2344,7 @@ PyDevice_attach (PyDevice * self, PyObject * args)
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  handle = frida_device_attach_sync (PY_GOBJECT_HANDLE (self), (guint) pid, &error);
+  handle = frida_device_attach_sync (PY_GOBJECT_HANDLE (self), (guint) pid, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -2301,7 +2364,7 @@ PyDevice_inject_library_file (PyDevice * self, PyObject * args)
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  id = frida_device_inject_library_file_sync (PY_GOBJECT_HANDLE (self), (guint) pid, path, entrypoint, data, &error);
+  id = frida_device_inject_library_file_sync (PY_GOBJECT_HANDLE (self), (guint) pid, path, entrypoint, data, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -2330,7 +2393,7 @@ PyDevice_inject_library_blob (PyDevice * self, PyObject * args)
   blob = g_bytes_new (blob_buffer, blob_size);
 
   Py_BEGIN_ALLOW_THREADS
-  id = frida_device_inject_library_blob_sync (PY_GOBJECT_HANDLE (self), (guint) pid, blob, entrypoint, data, &error);
+  id = frida_device_inject_library_blob_sync (PY_GOBJECT_HANDLE (self), (guint) pid, blob, entrypoint, data, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
 
   g_bytes_unref (blob);
@@ -2815,9 +2878,13 @@ PySession_repr (PySession * self)
 static PyObject *
 PySession_detach (PySession * self)
 {
+  GError * error = NULL;
+
   Py_BEGIN_ALLOW_THREADS
-  frida_session_detach_sync (PY_GOBJECT_HANDLE (self));
+  frida_session_detach_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
@@ -2828,7 +2895,7 @@ PySession_enable_child_gating (PySession * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_session_enable_child_gating_sync (PY_GOBJECT_HANDLE (self), &error);
+  frida_session_enable_child_gating_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -2842,7 +2909,7 @@ PySession_disable_child_gating (PySession * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_session_disable_child_gating_sync (PY_GOBJECT_HANDLE (self), &error);
+  frida_session_disable_child_gating_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -2870,7 +2937,7 @@ PySession_create_script (PySession * self, PyObject * args, PyObject * kw)
     goto beach;
 
   Py_BEGIN_ALLOW_THREADS
-  handle = frida_session_create_script_sync (PY_GOBJECT_HANDLE (self), source, options, &error);
+  handle = frida_session_create_script_sync (PY_GOBJECT_HANDLE (self), source, options, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
 
   result = (error == NULL)
@@ -2914,7 +2981,7 @@ PySession_create_script_from_bytes (PySession * self, PyObject * args, PyObject 
     goto beach;
 
   Py_BEGIN_ALLOW_THREADS
-  handle = frida_session_create_script_from_bytes_sync (PY_GOBJECT_HANDLE (self), bytes, options, &error);
+  handle = frida_session_create_script_from_bytes_sync (PY_GOBJECT_HANDLE (self), bytes, options, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
 
   result = (error == NULL)
@@ -2950,7 +3017,7 @@ PySession_compile_script (PySession * self, PyObject * args, PyObject * kw)
     goto beach;
 
   Py_BEGIN_ALLOW_THREADS
-  bytes = frida_session_compile_script_sync (PY_GOBJECT_HANDLE (self), source, options, &error);
+  bytes = frida_session_compile_script_sync (PY_GOBJECT_HANDLE (self), source, options, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
 
   if (error == NULL)
@@ -3017,7 +3084,7 @@ PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw)
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_session_enable_debugger_sync (PY_GOBJECT_HANDLE (self), port, &error);
+  frida_session_enable_debugger_sync (PY_GOBJECT_HANDLE (self), port, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -3031,7 +3098,7 @@ PySession_disable_debugger (PySession * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_session_disable_debugger_sync (PY_GOBJECT_HANDLE (self), &error);
+  frida_session_disable_debugger_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -3045,7 +3112,7 @@ PySession_enable_jit (PySession * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_session_enable_jit_sync (PY_GOBJECT_HANDLE (self), &error);
+  frida_session_enable_jit_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -3066,7 +3133,7 @@ PyScript_load (PyScript * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_script_load_sync (PY_GOBJECT_HANDLE (self), &error);
+  frida_script_load_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -3080,7 +3147,7 @@ PyScript_unload (PyScript * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_script_unload_sync (PY_GOBJECT_HANDLE (self), &error);
+  frida_script_unload_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -3094,7 +3161,7 @@ PyScript_eternalize (PyScript * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_script_eternalize_sync (PY_GOBJECT_HANDLE (self), &error);
+  frida_script_eternalize_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -3117,7 +3184,7 @@ PyScript_post (PyScript * self, PyObject * args, PyObject * kw)
   data = (data_buffer != NULL) ? g_bytes_new (data_buffer, data_size) : NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_script_post_sync (PY_GOBJECT_HANDLE (self), message, data, &error);
+  frida_script_post_sync (PY_GOBJECT_HANDLE (self), message, data, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
 
   g_bytes_unref (data);
@@ -3152,7 +3219,7 @@ PyFileMonitor_enable (PyFileMonitor * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_file_monitor_enable_sync (PY_GOBJECT_HANDLE (self), NULL, &error);
+  frida_file_monitor_enable_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -3166,10 +3233,64 @@ PyFileMonitor_disable (PyFileMonitor * self)
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_file_monitor_disable_sync (PY_GOBJECT_HANDLE (self), &error);
+  frida_file_monitor_disable_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+
+static int
+PyCancellable_init (PyCancellable * self, PyObject * args, PyObject * kw)
+{
+  if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
+    return -1;
+
+  PyGObject_take_handle (&self->parent, g_cancellable_new (), &PYFRIDA_TYPE_SPEC (Cancellable));
+
+  return 0;
+}
+
+static PyObject *
+PyCancellable_push_current (PyCancellable * self)
+{
+  GCancellable * handle = PY_GOBJECT_HANDLE (self);
+
+  g_cancellable_push_current (g_object_ref (handle));
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyCancellable_pop_current (PyCancellable * self)
+{
+  GCancellable * handle = PY_GOBJECT_HANDLE (self);
+
+  if (g_cancellable_get_current () != handle)
+    goto invalid_operation;
+
+  g_cancellable_pop_current (handle);
+  g_object_unref (handle);
+
+  Py_RETURN_NONE;
+
+invalid_operation:
+  {
+    return PyFrida_raise (g_error_new (
+          FRIDA_ERROR,
+          FRIDA_ERROR_INVALID_OPERATION,
+          "Cancellable is not on top of the stack"));
+  }
+}
+
+static PyObject *
+PyCancellable_cancel (PyCancellable * self)
+{
+  Py_BEGIN_ALLOW_THREADS
+  g_cancellable_cancel (PY_GOBJECT_HANDLE (self));
+  Py_END_ALLOW_THREADS
 
   Py_RETURN_NONE;
 }
@@ -3188,9 +3309,18 @@ PyFrida_raise (GError * error)
   PyObject * exception;
   GString * message;
 
-  g_assert (error->domain == FRIDA_ERROR);
-  exception = g_hash_table_lookup (exception_by_error_code, GINT_TO_POINTER (error->code));
-  g_assert (exception != NULL);
+  if (error->domain == FRIDA_ERROR)
+  {
+    exception = g_hash_table_lookup (frida_exception_by_error_code, GINT_TO_POINTER (error->code));
+    g_assert (exception != NULL);
+  }
+  else
+  {
+    g_assert (error->domain == G_IO_ERROR);
+    g_assert (error->code == G_IO_ERROR_CANCELLED);
+    exception = cancelled_exception;
+  }
+
   message = g_string_new ("");
   g_string_append_unichar (message, g_unichar_tolower (g_utf8_get_char (error->message)));
   g_string_append (message, g_utf8_offset_to_pointer (error->message, 1));
@@ -3300,13 +3430,14 @@ MOD_INIT (_frida)
   PYFRIDA_REGISTER_TYPE (Session, FRIDA_TYPE_SESSION);
   PYFRIDA_REGISTER_TYPE (Script, FRIDA_TYPE_SCRIPT);
   PYFRIDA_REGISTER_TYPE (FileMonitor, FRIDA_TYPE_FILE_MONITOR);
+  PYFRIDA_REGISTER_TYPE (Cancellable, G_TYPE_CANCELLABLE);
 
-  exception_by_error_code = g_hash_table_new_full (NULL, NULL, NULL, PyFrida_object_decref);
+  frida_exception_by_error_code = g_hash_table_new_full (NULL, NULL, NULL, PyFrida_object_decref);
 #define PYFRIDA_DECLARE_EXCEPTION(code, name) \
     do \
     { \
       PyObject * exception = PyErr_NewException ("frida." name "Error", NULL, NULL); \
-      g_hash_table_insert (exception_by_error_code, GINT_TO_POINTER (G_PASTE (FRIDA_ERROR_, code)), exception); \
+      g_hash_table_insert (frida_exception_by_error_code, GINT_TO_POINTER (G_PASTE (FRIDA_ERROR_, code)), exception); \
       Py_INCREF (exception); \
       PyModule_AddObject (module, name "Error", exception); \
     } while (FALSE)
@@ -3323,6 +3454,10 @@ MOD_INIT (_frida)
   PYFRIDA_DECLARE_EXCEPTION (NOT_SUPPORTED, "NotSupported");
   PYFRIDA_DECLARE_EXCEPTION (PROTOCOL, "Protocol");
   PYFRIDA_DECLARE_EXCEPTION (TRANSPORT, "Transport");
+
+  cancelled_exception = PyErr_NewException ("frida.OperationCancelledError", NULL, NULL);
+  Py_INCREF (cancelled_exception);
+  PyModule_AddObject (module, "OperationCancelledError", cancelled_exception);
 
   return MOD_SUCCESS_VAL (module);
 }

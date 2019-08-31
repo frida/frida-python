@@ -27,6 +27,7 @@ except Exception as ex:
 __version__ = _frida.__version__
 
 FileMonitor = _frida.FileMonitor
+Cancellable = _frida.Cancellable
 
 ServerNotRunningError = _frida.ServerNotRunningError
 ExecutableNotFoundError = _frida.ExecutableNotFoundError
@@ -41,6 +42,7 @@ TimedOutError = _frida.TimedOutError
 NotSupportedError = _frida.NotSupportedError
 ProtocolError = _frida.ProtocolError
 TransportError = _frida.TransportError
+OperationCancelledError = _frida.OperationCancelledError
 
 
 def spawn(*args, **kwargs):
