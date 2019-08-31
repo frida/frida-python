@@ -19,12 +19,6 @@ def cancellable(f):
     @wraps(f)
     def wrapper(*args, cancellable=None, **kwargs):
         if cancellable is None:
-            last_arg = args[-1]
-            if isinstance(last_arg, Cancellable):
-                cancellable = last_arg
-                args = args[:-1]
-
-        if cancellable is None:
             return f(*args, **kwargs)
 
         cancellable.push_current()
