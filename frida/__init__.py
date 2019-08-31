@@ -49,47 +49,47 @@ def spawn(*args, **kwargs):
     return get_local_device().spawn(*args, **kwargs)
 
 
-def resume(target):
-    get_local_device().resume(target)
+def resume(target, **kwargs):
+    get_local_device().resume(target, **kwargs)
 
 
-def kill(target):
-    get_local_device().kill(target)
+def kill(target, **kwargs):
+    get_local_device().kill(target, **kwargs)
 
 
-def attach(target):
-    return get_local_device().attach(target)
+def attach(target, **kwargs):
+    return get_local_device().attach(target, **kwargs)
 
 
-def inject_library_file(target, path, entrypoint, data):
-    return get_local_device().inject_library_file(target, path, entrypoint, data)
+def inject_library_file(target, path, entrypoint, data, **kwargs):
+    return get_local_device().inject_library_file(target, path, entrypoint, data, **kwargs)
 
 
-def inject_library_blob(target, blob, entrypoint, data):
-    return get_local_device().inject_library_blob(target, blob, entrypoint, data)
+def inject_library_blob(target, blob, entrypoint, data, **kwargs):
+    return get_local_device().inject_library_blob(target, blob, entrypoint, data, **kwargs)
 
 
-def enumerate_devices():
-    return get_device_manager().enumerate_devices()
+def enumerate_devices(**kwargs):
+    return get_device_manager().enumerate_devices(**kwargs)
 
 
-def get_local_device():
-    return get_device_matching(lambda device: device.type == 'local', timeout=0)
+def get_local_device(**kwargs):
+    return get_device_matching(lambda device: device.type == 'local', timeout=0, **kwargs)
 
 
-def get_remote_device():
-    return get_device_matching(lambda device: device.type == 'remote', timeout=0)
+def get_remote_device(**kwargs):
+    return get_device_matching(lambda device: device.type == 'remote', timeout=0, **kwargs)
 
 
-def get_usb_device(timeout = 0):
-    return get_device_matching(lambda device: device.type == 'usb', timeout)
+def get_usb_device(timeout=0, **kwargs):
+    return get_device_matching(lambda device: device.type == 'usb', timeout, **kwargs)
 
 
-def get_device(id, timeout = 0):
-    return get_device_matching(lambda device: device.id == id, timeout)
+def get_device(id, timeout=0, **kwargs):
+    return get_device_matching(lambda device: device.id == id, timeout, **kwargs)
 
 
-def get_device_matching(predicate, timeout = 0):
+def get_device_matching(predicate, timeout=0, **kwargs):
     matches = []
     lock = threading.Lock()
     done = threading.Event()
@@ -103,7 +103,7 @@ def get_device_matching(predicate, timeout = 0):
     manager = get_device_manager()
     manager.on('added', on_device_added)
     try:
-        initial_matches = [device for device in manager.enumerate_devices() if predicate(device)]
+        initial_matches = [device for device in manager.enumerate_devices(**kwargs) if predicate(device)]
         if len(initial_matches) > 0:
             return initial_matches[0]
 
@@ -121,8 +121,8 @@ def get_device_matching(predicate, timeout = 0):
         manager.off('added', on_device_added)
 
 
-def shutdown():
-    get_device_manager()._impl.close()
+def shutdown(**kwargs):
+    get_device_manager()._impl.close(**kwargs)
 
 
 global _device_manager
