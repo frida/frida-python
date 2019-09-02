@@ -3320,7 +3320,7 @@ PyCancellable_raise_if_cancelled (PyCancellable * self)
 
   g_cancellable_set_error_if_cancelled (PY_GOBJECT_HANDLE (self), &error);
   if (error != NULL)
-    PyFrida_raise (error);
+    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
