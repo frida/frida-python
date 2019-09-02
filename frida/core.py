@@ -267,6 +267,7 @@ class Script(object):
         else:
             self._log_handler = self._on_log
 
+    @cancellable
     def _rpc_request(self, *args):
         result = [False, None, None]
 
@@ -290,9 +291,16 @@ class Script(object):
             del self._pending[request_id]
             raise
 
-        with self._cond:
-            while not result[0]:
-                self._cond.wait()
+        cancellable = Cancellable.get_current()
+        cancel_handler = cancellable.connect(lambda: on_complete(None, None))
+        try:
+            with self._cond:
+                while not result[0]:
+                    self._cond.wait()
+        finally:
+            cancellable.disconnect(cancel_handler)
+
+        cancellable.raise_if_cancelled()
 
         if result[2] is not None:
             raise result[2]
@@ -366,9 +374,9 @@ class ScriptExports(object):
     def __getattr__(self, name):
         script = self._script
         js_name = _to_camel_case(name)
-        def method(*args):
-            return script._rpc_request('call', js_name, args)
-        return cancellable(method)
+        def method(*args, **kwargs):
+            return script._rpc_request('call', js_name, args, **kwargs)
+        return method
 
 
 class Cancellable(object):
