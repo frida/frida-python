@@ -278,6 +278,10 @@ class Script(object):
                 result[2] = error
                 self._cond.notify_all()
 
+        def on_cancelled():
+            self._pending.pop(request_id, None)
+            on_complete(None, None)
+
         with self._cond:
             request_id = self._next_request_id
             self._next_request_id += 1
@@ -288,11 +292,11 @@ class Script(object):
         try:
             self.post(message)
         except Exception as e:
-            del self._pending[request_id]
+            self._pending.pop(request_id, None)
             raise
 
         cancellable = Cancellable.get_current()
-        cancel_handler = cancellable.connect(lambda: on_complete(None, None))
+        cancel_handler = cancellable.connect(on_cancelled)
         try:
             with self._cond:
                 while not result[0]:
@@ -309,7 +313,9 @@ class Script(object):
 
     def _on_rpc_message(self, request_id, operation, params, data):
         if operation in ('ok', 'error'):
-            callback = self._pending.pop(request_id)
+            callback = self._pending.pop(request_id, None)
+            if callback is None:
+                return
 
             value = None
             error = None
