@@ -12,20 +12,17 @@ import traceback
 import _frida
 
 
-Cancellable = _frida.Cancellable
+_Cancellable = _frida.Cancellable
 
 
 def cancellable(f):
     @wraps(f)
     def wrapper(*args, cancellable=None, **kwargs):
-        if cancellable is None:
-            return f(*args, **kwargs)
+        if cancellable is not None:
+            with cancellable:
+                return f(*args, **kwargs)
 
-        cancellable.push_current()
-        try:
-            return f(*args, **kwargs)
-        finally:
-            cancellable.pop_current()
+        return f(*args, **kwargs)
 
     return wrapper
 
@@ -372,6 +369,40 @@ class ScriptExports(object):
         def method(*args):
             return script._rpc_request('call', js_name, args)
         return cancellable(method)
+
+
+class Cancellable(object):
+    def __init__(self):
+        self._impl = _Cancellable()
+
+    def __repr__(self):
+        return repr(self._impl)
+
+    @property
+    def is_cancelled(self):
+        return self._impl.is_cancelled()
+
+    def raise_if_cancelled(self):
+        self._impl.raise_if_cancelled()
+
+    @classmethod
+    def get_current(cls):
+        return _Cancellable.get_current()
+
+    def __enter__(self):
+        self._impl.push_current()
+
+    def __exit__(self, *args):
+        self._impl.pop_current()
+
+    def connect(self, callback):
+        return self._impl.connect(callback)
+
+    def disconnect(self, handler_id):
+        self._impl.disconnect(handler_id)
+
+    def cancel(self):
+        self._impl.cancel()
 
 
 def _to_camel_case(name):

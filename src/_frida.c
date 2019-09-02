@@ -221,15 +221,11 @@ struct _PyScript
 struct _PyFileMonitor
 {
   PyGObject parent;
-  GFile * file;
-  GFileMonitor * monitor;
-  GList * on_change;
 };
 
 struct _PyCancellable
 {
   PyGObject parent;
-  GCancellable * cancellable;
 };
 
 static PyObject * PyGObject_new_take_handle (gpointer handle, const PyGObjectTypeSpec * spec);
@@ -353,8 +349,16 @@ static PyObject * PyFileMonitor_enable (PyFileMonitor * self);
 static PyObject * PyFileMonitor_disable (PyFileMonitor * self);
 
 static int PyCancellable_init (PyCancellable * self, PyObject * args, PyObject * kw);
+static PyObject * PyCancellable_repr (PyCancellable * self);
+static PyObject * PyCancellable_is_cancelled (PyCancellable * self);
+static PyObject * PyCancellable_raise_if_cancelled (PyCancellable * self);
+static PyObject * PyCancellable_get_current (PyCancellable * self);
 static PyObject * PyCancellable_push_current (PyCancellable * self);
 static PyObject * PyCancellable_pop_current (PyCancellable * self);
+static PyObject * PyCancellable_connect (PyCancellable * self, PyObject * args);
+static PyObject * PyCancellable_disconnect (PyCancellable * self, PyObject * args);
+static void PyCancellable_on_cancelled (GCancellable * cancellable, PyObject * callback);
+static void PyCancellable_destroy_callback (PyObject * callback);
 static PyObject * PyCancellable_cancel (PyCancellable * self);
 
 static PyObject * PyFrida_raise (GError * error);
@@ -511,8 +515,13 @@ static PyMethodDef PyFileMonitor_methods[] =
 
 static PyMethodDef PyCancellable_methods[] =
 {
+  { "is_cancelled", (PyCFunction) PyCancellable_is_cancelled, METH_NOARGS, "Queries whether cancellable has been cancelled." },
+  { "raise_if_cancelled", (PyCFunction) PyCancellable_raise_if_cancelled, METH_NOARGS, "Raises an exception if cancelled." },
+  { "get_current", (PyCFunction) PyCancellable_get_current, METH_CLASS | METH_NOARGS, "Gets the top cancellable from the stack." },
   { "push_current", (PyCFunction) PyCancellable_push_current, METH_NOARGS, "Pushes cancellable onto the cancellable stack." },
   { "pop_current", (PyCFunction) PyCancellable_pop_current, METH_NOARGS, "Pops cancellable off the cancellable stack." },
+  { "connect", (PyCFunction) PyCancellable_connect, METH_VARARGS, "Registers notification callback." },
+  { "disconnect", (PyCFunction) PyCancellable_disconnect, METH_VARARGS, "Unregisters notification callback." },
   { "cancel", (PyCFunction) PyCancellable_cancel, METH_NOARGS, "Sets cancellable to cancelled." },
   { NULL }
 };
@@ -1032,7 +1041,7 @@ static PyTypeObject PyCancellableType =
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
-  NULL,                                         /* tp_repr           */
+  (reprfunc) PyCancellable_repr,                /* tp_repr           */
   NULL,                                         /* tp_as_number      */
   NULL,                                         /* tp_as_sequence    */
   NULL,                                         /* tp_as_mapping     */
@@ -1129,7 +1138,8 @@ PyGObject_take_handle (PyGObject * self, gpointer handle, const PyGObjectTypeSpe
   self->handle = handle;
   self->spec = spec;
 
-  g_object_set_data (G_OBJECT (handle), "pyobject", self);
+  if (handle != NULL)
+    g_object_set_data (G_OBJECT (handle), "pyobject", self);
 }
 
 static gpointer
@@ -1382,10 +1392,10 @@ PyGObjectSignalClosure_marshal (GClosure * closure, GValue * return_gvalue, guin
   }
 
   result = PyObject_CallObject (callback, args);
-  if (result == NULL)
-    PyErr_Print ();
-  else
+  if (result != NULL)
     Py_DECREF (result);
+  else
+    PyErr_Print ();
 
   Py_DECREF (args);
 
@@ -3242,23 +3252,96 @@ PyFileMonitor_disable (PyFileMonitor * self)
 }
 
 
+static PyObject *
+PyCancellable_new_take_handle (GCancellable * handle)
+{
+  PyObject * object;
+
+  object = (handle != NULL) ? PyGObject_try_get_from_handle (handle) : NULL;
+  if (object == NULL)
+  {
+    const PyGObjectTypeSpec * spec = &PYFRIDA_TYPE_SPEC (Cancellable);
+
+    object = PyObject_CallFunction ((PyObject *) spec->type, "z#", (char *) &handle, (int) sizeof (handle));
+  }
+  else
+  {
+    g_object_unref (handle);
+    Py_INCREF (object);
+  }
+
+  return object;
+}
+
 static int
 PyCancellable_init (PyCancellable * self, PyObject * args, PyObject * kw)
 {
+  static char * keywords[] = { "handle", NULL };
+  GCancellable ** handle_buffer = NULL;
+  int handle_size = 0;
+  GCancellable * handle;
+
   if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
     return -1;
 
-  PyGObject_take_handle (&self->parent, g_cancellable_new (), &PYFRIDA_TYPE_SPEC (Cancellable));
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "|z#", keywords, &handle_buffer, &handle_size))
+    return -1;
+
+  if (handle_size == sizeof (gpointer))
+    handle = *handle_buffer;
+  else
+    handle = g_cancellable_new ();
+
+  PyGObject_take_handle (&self->parent, handle, &PYFRIDA_TYPE_SPEC (Cancellable));
 
   return 0;
 }
 
 static PyObject *
-PyCancellable_push_current (PyCancellable * self)
+PyCancellable_repr (PyCancellable * self)
 {
   GCancellable * handle = PY_GOBJECT_HANDLE (self);
 
-  g_cancellable_push_current (g_object_ref (handle));
+  return PyRepr_FromFormat ("Cancellable(handle=%p, is_cancelled=%s)",
+      handle,
+      g_cancellable_is_cancelled (handle) ? "TRUE" : "FALSE");
+}
+
+static PyObject *
+PyCancellable_is_cancelled (PyCancellable * self)
+{
+  return PyBool_FromLong (g_cancellable_is_cancelled (PY_GOBJECT_HANDLE (self)));
+}
+
+static PyObject *
+PyCancellable_raise_if_cancelled (PyCancellable * self)
+{
+  GError * error = NULL;
+
+  g_cancellable_set_error_if_cancelled (PY_GOBJECT_HANDLE (self), &error);
+  if (error != NULL)
+    PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyCancellable_get_current (PyCancellable * self)
+{
+  GCancellable * handle;
+
+  handle = g_cancellable_get_current ();
+
+  if (handle != NULL)
+    g_object_ref (handle);
+
+  return PyCancellable_new_take_handle (handle);
+}
+
+static PyObject *
+PyCancellable_push_current (PyCancellable * self)
+{
+  g_cancellable_push_current (PY_GOBJECT_HANDLE (self));
 
   Py_RETURN_NONE;
 }
@@ -3272,7 +3355,6 @@ PyCancellable_pop_current (PyCancellable * self)
     goto invalid_operation;
 
   g_cancellable_pop_current (handle);
-  g_object_unref (handle);
 
   Py_RETURN_NONE;
 
@@ -3283,6 +3365,84 @@ invalid_operation:
           FRIDA_ERROR_INVALID_OPERATION,
           "Cancellable is not on top of the stack"));
   }
+}
+
+static PyObject *
+PyCancellable_connect (PyCancellable * self, PyObject * args)
+{
+  GCancellable * handle = PY_GOBJECT_HANDLE (self);
+  gulong handler_id;
+  PyObject * callback;
+
+  if (!PyArg_ParseTuple (args, "O", &callback))
+    return NULL;
+
+  if (!PyCallable_Check (callback))
+    goto not_callable;
+
+  if (handle != NULL)
+  {
+    Py_IncRef (callback);
+
+    Py_BEGIN_ALLOW_THREADS
+    handler_id = g_cancellable_connect (handle, G_CALLBACK (PyCancellable_on_cancelled), callback,
+        (GDestroyNotify) PyCancellable_destroy_callback);
+    Py_END_ALLOW_THREADS
+  }
+  else
+  {
+    handler_id = 0;
+  }
+
+  return PyLong_FromUnsignedLong (handler_id);
+
+not_callable:
+  {
+    PyErr_SetString (PyExc_TypeError, "object must be callable");
+    return NULL;
+  }
+}
+
+static PyObject *
+PyCancellable_disconnect (PyCancellable * self, PyObject * args)
+{
+  gulong handler_id;
+
+  if (!PyArg_ParseTuple (args, "k", &handler_id))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  g_cancellable_disconnect (PY_GOBJECT_HANDLE (self), handler_id);
+  Py_END_ALLOW_THREADS
+
+  Py_RETURN_NONE;
+}
+
+static void
+PyCancellable_on_cancelled (GCancellable * cancellable, PyObject * callback)
+{
+  PyGILState_STATE gstate;
+  PyObject * result;
+
+  gstate = PyGILState_Ensure ();
+
+  result = PyObject_CallObject (callback, NULL);
+  if (result != NULL)
+    Py_DECREF (result);
+  else
+    PyErr_Print ();
+
+  PyGILState_Release (gstate);
+}
+
+static void
+PyCancellable_destroy_callback (PyObject * callback)
+{
+  PyGILState_STATE gstate;
+
+  gstate = PyGILState_Ensure ();
+  Py_DecRef (callback);
+  PyGILState_Release (gstate);
 }
 
 static PyObject *

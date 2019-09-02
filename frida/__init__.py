@@ -22,12 +22,13 @@ except Exception as ex:
     print("***")
     print("")
     raise ex
+from . import core
 
 
 __version__ = _frida.__version__
 
 FileMonitor = _frida.FileMonitor
-Cancellable = _frida.Cancellable
+Cancellable = core.Cancellable
 
 ServerNotRunningError = _frida.ServerNotRunningError
 ExecutableNotFoundError = _frida.ExecutableNotFoundError
@@ -130,6 +131,5 @@ _device_manager = None
 def get_device_manager():
     global _device_manager
     if _device_manager is None:
-        from . import core
         _device_manager = core.DeviceManager(_frida.DeviceManager())
     return _device_manager
