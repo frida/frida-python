@@ -17,7 +17,8 @@ _Cancellable = _frida.Cancellable
 
 def cancellable(f):
     @wraps(f)
-    def wrapper(*args, cancellable=None, **kwargs):
+    def wrapper(*args, **kwargs):
+        cancellable = kwargs.pop('cancellable', None)
         if cancellable is not None:
             with cancellable:
                 return f(*args, **kwargs)
