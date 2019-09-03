@@ -260,6 +260,8 @@ static PyObject * PyGObject_marshal_object (gpointer handle, GType type);
 static int PyDeviceManager_init (PyDeviceManager * self, PyObject * args, PyObject * kwds);
 static void PyDeviceManager_dealloc (PyDeviceManager * self);
 static PyObject * PyDeviceManager_close (PyDeviceManager * self);
+static PyObject * PyDeviceManager_get_device_matching (PyDeviceManager * self, PyObject * args);
+static gboolean PyDeviceManager_is_matching_device (FridaDevice * device, PyObject * predicate);
 static PyObject * PyDeviceManager_enumerate_devices (PyDeviceManager * self);
 static PyObject * PyDeviceManager_add_remote_device (PyDeviceManager * self, PyObject * args);
 static PyObject * PyDeviceManager_remove_remote_device (PyDeviceManager * self, PyObject * args);
@@ -376,6 +378,7 @@ static PyMethodDef PyGObject_methods[] =
 static PyMethodDef PyDeviceManager_methods[] =
 {
   { "close", (PyCFunction) PyDeviceManager_close, METH_NOARGS, "Close the device manager." },
+  { "get_device_matching", (PyCFunction) PyDeviceManager_get_device_matching, METH_VARARGS, "Get device matching predicate." },
   { "enumerate_devices", (PyCFunction) PyDeviceManager_enumerate_devices, METH_NOARGS, "Enumerate devices." },
   { "add_remote_device", (PyCFunction) PyDeviceManager_add_remote_device, METH_VARARGS, "Add a remote device." },
   { "remove_remote_device", (PyCFunction) PyDeviceManager_remove_remote_device, METH_VARARGS, "Remove a remote device." },
@@ -1828,6 +1831,66 @@ PyDeviceManager_close (PyDeviceManager * self)
   Py_END_ALLOW_THREADS
 
   Py_RETURN_NONE;
+}
+
+static PyObject *
+PyDeviceManager_get_device_matching (PyDeviceManager * self, PyObject * args)
+{
+  PyObject * predicate;
+  gint timeout;
+  GError * error = NULL;
+  FridaDevice * result;
+
+  if (!PyArg_ParseTuple (args, "Oi", &predicate, &timeout))
+    return NULL;
+
+  if (!PyCallable_Check (predicate))
+    goto not_callable;
+
+  Py_BEGIN_ALLOW_THREADS
+  result = frida_device_manager_get_device_sync (PY_GOBJECT_HANDLE (self), (FridaDeviceManagerPredicate) PyDeviceManager_is_matching_device,
+      predicate, timeout, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  return PyDevice_new_take_handle (result);
+
+not_callable:
+  {
+    PyErr_SetString (PyExc_TypeError, "object must be callable");
+    return NULL;
+  }
+}
+
+static gboolean
+PyDeviceManager_is_matching_device (FridaDevice * device, PyObject * predicate)
+{
+  gboolean is_matching = FALSE;
+  PyGILState_STATE gstate;
+  PyObject * device_object, * result;
+
+  gstate = PyGILState_Ensure ();
+
+  device_object = PyDevice_new_take_handle (g_object_ref (device));
+
+  result = PyObject_CallFunction (predicate, "O", device_object);
+  if (result != NULL)
+  {
+    is_matching = result == Py_True;
+
+    Py_DECREF (result);
+  }
+  else
+  {
+    PyErr_Print ();
+  }
+
+  Py_DECREF (device_object);
+
+  PyGILState_Release (gstate);
+
+  return is_matching;
 }
 
 static PyObject *

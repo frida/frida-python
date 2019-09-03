@@ -34,6 +34,28 @@ class DeviceManager(object):
     def __repr__(self):
         return repr(self._impl)
 
+    def get_local_device(self, **kwargs):
+        return self.get_device_matching(lambda d: d.type == 'local', timeout=0, **kwargs)
+
+    def get_remote_device(self, **kwargs):
+        return self.get_device_matching(lambda d: d.type == 'remote', timeout=0, **kwargs)
+
+    def get_usb_device(self, timeout=0, **kwargs):
+        return self.get_device_matching(lambda d: d.type == 'usb', timeout, **kwargs)
+
+    def get_device(self, id, timeout=0, **kwargs):
+        return self.get_device_matching(lambda d: d.id == id, timeout, **kwargs)
+
+    @cancellable
+    def get_device_matching(self, predicate, timeout=0):
+        if timeout < 0:
+            raw_timeout = -1
+        elif timeout == 0:
+            raw_timeout = 0
+        else:
+            raw_timeout = int(timeout * 1000.0)
+        return Device(self._impl.get_device_matching(lambda d: predicate(Device(d)), raw_timeout))
+
     @cancellable
     def enumerate_devices(self):
         return [Device(device) for device in self._impl.enumerate_devices()]
@@ -45,16 +67,6 @@ class DeviceManager(object):
     @cancellable
     def remove_remote_device(self, host):
         self._impl.remove_remote_device(host)
-
-    @cancellable
-    def get_device(self, device_id):
-        devices = self._impl.enumerate_devices()
-        if device_id is None:
-            return Device(devices[0])
-        for device in devices:
-            if device.id == device_id:
-                return Device(device)
-        raise _frida.InvalidArgumentError("unable to find device with id %s" % device_id)
 
     def on(self, signal, callback):
         self._impl.on(signal, callback)

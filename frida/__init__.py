@@ -70,56 +70,28 @@ def inject_library_blob(target, blob, entrypoint, data, **kwargs):
     return get_local_device().inject_library_blob(target, blob, entrypoint, data, **kwargs)
 
 
-def enumerate_devices(**kwargs):
-    return get_device_manager().enumerate_devices(**kwargs)
-
-
 def get_local_device(**kwargs):
-    return get_device_matching(lambda device: device.type == 'local', timeout=0, **kwargs)
+    return get_device_matching(lambda d: d.type == 'local', timeout=0, **kwargs)
 
 
 def get_remote_device(**kwargs):
-    return get_device_matching(lambda device: device.type == 'remote', timeout=0, **kwargs)
+    return get_device_matching(lambda d: d.type == 'remote', timeout=0, **kwargs)
 
 
 def get_usb_device(timeout=0, **kwargs):
-    return get_device_matching(lambda device: device.type == 'usb', timeout, **kwargs)
+    return get_device_matching(lambda d: d.type == 'usb', timeout, **kwargs)
 
 
 def get_device(id, timeout=0, **kwargs):
-    return get_device_matching(lambda device: device.id == id, timeout, **kwargs)
+    return get_device_manager().get_device(id, timeout, **kwargs)
 
 
 def get_device_matching(predicate, timeout=0, **kwargs):
-    matches = []
-    lock = threading.Lock()
-    done = threading.Event()
+    return get_device_manager().get_device_matching(predicate, timeout, **kwargs)
 
-    def on_device_added(device):
-        if predicate(device):
-            with lock:
-                matches.append(device)
-            done.set()
 
-    manager = get_device_manager()
-    manager.on('added', on_device_added)
-    try:
-        initial_matches = [device for device in manager.enumerate_devices(**kwargs) if predicate(device)]
-        if len(initial_matches) > 0:
-            return initial_matches[0]
-
-        done.wait(timeout)
-
-        with lock:
-            if len(matches) == 0:
-                if timeout == 0:
-                    raise InvalidArgumentError("device not found")
-                else:
-                    raise TimedOutError("timed out while waiting for device to appear")
-
-            return matches[0]
-    finally:
-        manager.off('added', on_device_added)
+def enumerate_devices(**kwargs):
+    return get_device_manager().enumerate_devices(**kwargs)
 
 
 def shutdown(**kwargs):
