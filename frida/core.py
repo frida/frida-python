@@ -361,7 +361,7 @@ class Script(object):
             level = message['level']
             text = payload
             self._log_handler(level, text)
-        elif mtype == 'send' and isinstance(payload, list) and payload[0] == 'frida:rpc':
+        elif mtype == 'send' and isinstance(payload, list) and len(payload) > 0 and payload[0] == 'frida:rpc':
             request_id = payload[1]
             operation = payload[2]
             params = payload[3:]
