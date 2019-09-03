@@ -108,9 +108,43 @@ rpc.exports = {
         self.assertRaisesScriptDestroyed(lambda: agent.wait_forever())
         self.assertEqual(script._pending, {})
 
+    def test_cancellation_mid_request(self):
+        script = self.session.create_script(name="test-rpc", source="""\
+rpc.exports = {
+    waitForever: function () {
+        return new Promise(function () {});
+    },
+};
+""")
+        script.load()
+        agent = script.exports
+
+        def cancel_after_100ms():
+            time.sleep(0.1)
+            cancellable.cancel()
+
+        cancellable = frida.Cancellable()
+        threading.Thread(target=cancel_after_100ms).start()
+        self.assertRaisesOperationCancelled(lambda: agent.wait_forever(cancellable=cancellable))
+        self.assertEqual(script._pending, {})
+
+        def call_wait_forever_with_cancellable():
+            with cancellable:
+                agent.wait_forever()
+        cancellable = frida.Cancellable()
+        threading.Thread(target=cancel_after_100ms).start()
+        self.assertRaisesOperationCancelled(call_wait_forever_with_cancellable)
+        self.assertEqual(script._pending, {})
+
     def assertRaisesScriptDestroyed(self, operation):
+        self.assertRaisesMatching(frida.InvalidOperationError, "script is destroyed", operation)
+
+    def assertRaisesOperationCancelled(self, operation):
+        self.assertRaisesMatching(frida.OperationCancelledError, "operation was cancelled", operation)
+
+    def assertRaisesMatching(self, exception, regex, operation):
         m = self.assertRaisesRegex if sys.version_info[0] >= 3 else self.assertRaisesRegexp
-        m(frida.InvalidOperationError, "script is destroyed", operation)
+        m(exception, regex, operation)
 
 
 if sys.version_info[0] >= 3:
