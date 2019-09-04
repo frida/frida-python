@@ -94,8 +94,9 @@ def enumerate_devices(**kwargs):
     return get_device_manager().enumerate_devices(**kwargs)
 
 
-def shutdown(**kwargs):
-    get_device_manager()._impl.close(**kwargs)
+@core.cancellable
+def shutdown():
+    get_device_manager()._impl.close()
 
 
 global _device_manager

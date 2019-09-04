@@ -1826,9 +1826,13 @@ PyDeviceManager_dealloc (PyDeviceManager * self)
 static PyObject *
 PyDeviceManager_close (PyDeviceManager * self)
 {
+  GError * error = NULL;
+
   Py_BEGIN_ALLOW_THREADS
-  frida_device_manager_close_sync (PY_GOBJECT_HANDLE (self), NULL, NULL);
+  frida_device_manager_close_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
