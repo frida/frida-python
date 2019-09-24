@@ -163,6 +163,10 @@ class Device(object):
     def inject_library_blob(self, target, blob, entrypoint, data):
         return self._impl.inject_library_blob(self._pid_of(target), blob, entrypoint, data)
 
+    @cancellable
+    def open_channel(self, address):
+        return IOStream(self._impl.open_channel(address))
+
     def on(self, signal, callback):
         self._impl.on(signal, callback)
 
@@ -396,6 +400,38 @@ class ScriptExports(object):
         def method(*args, **kwargs):
             return script._rpc_request('call', js_name, args, **kwargs)
         return method
+
+
+class IOStream(object):
+    def __init__(self, impl):
+        self._impl = impl
+
+    def __repr__(self):
+        return repr(self._impl)
+
+    @property
+    def is_closed(self):
+        return self._impl.is_closed()
+
+    @cancellable
+    def close(self):
+        self._impl.close()
+
+    @cancellable
+    def read(self, count):
+        return self._impl.read(count)
+
+    @cancellable
+    def read_all(self, count):
+        return self._impl.read_all(count)
+
+    @cancellable
+    def write(self, data):
+        return self._impl.write(data)
+
+    @cancellable
+    def write_all(self, data):
+        self._impl.write_all(data)
 
 
 class Cancellable(object):

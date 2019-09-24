@@ -112,6 +112,7 @@ typedef struct _PyIcon                         PyIcon;
 typedef struct _PySession                      PySession;
 typedef struct _PyScript                       PyScript;
 typedef struct _PyFileMonitor                  PyFileMonitor;
+typedef struct _PyIOStream                     PyIOStream;
 typedef struct _PyCancellable                  PyCancellable;
 
 typedef void (* PyGObjectInitFromHandleFunc) (PyObject * self, gpointer handle);
@@ -223,6 +224,13 @@ struct _PyFileMonitor
   PyGObject parent;
 };
 
+struct _PyIOStream
+{
+  PyGObject parent;
+  GInputStream * input;
+  GOutputStream * output;
+};
+
 struct _PyCancellable
 {
   PyGObject parent;
@@ -286,6 +294,7 @@ static PyObject * PyDevice_kill (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_attach (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_inject_library_file (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_inject_library_blob (PyDevice * self, PyObject * args);
+static PyObject * PyDevice_open_channel (PyDevice * self, PyObject * args);
 
 static PyObject * PyApplication_new_take_handle (FridaApplication * handle);
 static int PyApplication_init (PyApplication * self, PyObject * args, PyObject * kw);
@@ -351,6 +360,17 @@ static int PyFileMonitor_init (PyFileMonitor * self, PyObject * args, PyObject *
 static PyObject * PyFileMonitor_enable (PyFileMonitor * self);
 static PyObject * PyFileMonitor_disable (PyFileMonitor * self);
 
+static PyObject * PyIOStream_new_take_handle (GIOStream * handle);
+static int PyIOStream_init (PyIOStream * self, PyObject * args, PyObject * kw);
+static void PyIOStream_init_from_handle (PyIOStream * self, GIOStream * handle);
+static PyObject * PyIOStream_repr (PyIOStream * self);
+static PyObject * PyIOStream_is_closed (PyIOStream * self);
+static PyObject * PyIOStream_close (PyIOStream * self);
+static PyObject * PyIOStream_read (PyIOStream * self, PyObject * args);
+static PyObject * PyIOStream_read_all (PyIOStream * self, PyObject * args);
+static PyObject * PyIOStream_write (PyIOStream * self, PyObject * args);
+static PyObject * PyIOStream_write_all (PyIOStream * self, PyObject * args);
+
 static int PyCancellable_init (PyCancellable * self, PyObject * args, PyObject * kw);
 static PyObject * PyCancellable_repr (PyCancellable * self);
 static PyObject * PyCancellable_is_cancelled (PyCancellable * self);
@@ -402,6 +422,7 @@ static PyMethodDef PyDevice_methods[] =
   { "attach", (PyCFunction) PyDevice_attach, METH_VARARGS, "Attach to a PID." },
   { "inject_library_file", (PyCFunction) PyDevice_inject_library_file, METH_VARARGS, "Inject a library file to a PID." },
   { "inject_library_blob", (PyCFunction) PyDevice_inject_library_blob, METH_VARARGS, "Inject a library blob to a PID." },
+  { "open_channel", (PyCFunction) PyDevice_open_channel, METH_VARARGS, "Open a device-specific communication channel." },
   { NULL }
 };
 
@@ -514,6 +535,17 @@ static PyMethodDef PyFileMonitor_methods[] =
 {
   { "enable", (PyCFunction) PyFileMonitor_enable, METH_NOARGS, "Enable the file monitor." },
   { "disable", (PyCFunction) PyFileMonitor_disable, METH_NOARGS, "Disable the file monitor." },
+  { NULL }
+};
+
+static PyMethodDef PyIOStream_methods[] =
+{
+  { "is_closed", (PyCFunction) PyIOStream_is_closed, METH_NOARGS, "Query whether the stream is closed." },
+  { "close", (PyCFunction) PyIOStream_close, METH_NOARGS, "Close the stream." },
+  { "read", (PyCFunction) PyIOStream_read, METH_VARARGS, "Read up to the specified number of bytes from the stream." },
+  { "read_all", (PyCFunction) PyIOStream_read_all, METH_VARARGS, "Read exactly the specified number of bytes from the stream." },
+  { "write", (PyCFunction) PyIOStream_write, METH_VARARGS, "Write as much as possible of the provided data to the stream." },
+  { "write_all", (PyCFunction) PyIOStream_write_all, METH_VARARGS, "Write all of the provided data to the stream." },
   { NULL }
 };
 
@@ -1033,6 +1065,48 @@ static PyTypeObject PyFileMonitorType =
 };
 
 PYFRIDA_DEFINE_TYPE (FileMonitor, NULL, frida_unref);
+
+static PyTypeObject PyIOStreamType =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "_frida.IOStream",                            /* tp_name           */
+  sizeof (PyIOStream),                          /* tp_basicsize      */
+  0,                                            /* tp_itemsize       */
+  NULL,                                         /* tp_dealloc        */
+  NULL,                                         /* tp_print          */
+  NULL,                                         /* tp_getattr        */
+  NULL,                                         /* tp_setattr        */
+  NULL,                                         /* tp_compare        */
+  (reprfunc) PyIOStream_repr,                   /* tp_repr           */
+  NULL,                                         /* tp_as_number      */
+  NULL,                                         /* tp_as_sequence    */
+  NULL,                                         /* tp_as_mapping     */
+  NULL,                                         /* tp_hash           */
+  NULL,                                         /* tp_call           */
+  NULL,                                         /* tp_str            */
+  NULL,                                         /* tp_getattro       */
+  NULL,                                         /* tp_setattro       */
+  NULL,                                         /* tp_as_buffer      */
+  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
+  "Frida IOStream",                             /* tp_doc            */
+  NULL,                                         /* tp_traverse       */
+  NULL,                                         /* tp_clear          */
+  NULL,                                         /* tp_richcompare    */
+  0,                                            /* tp_weaklistoffset */
+  NULL,                                         /* tp_iter           */
+  NULL,                                         /* tp_iternext       */
+  PyIOStream_methods,                           /* tp_methods        */
+  NULL,                                         /* tp_members        */
+  NULL,                                         /* tp_getset         */
+  &PyGObjectType,                               /* tp_base           */
+  NULL,                                         /* tp_dict           */
+  NULL,                                         /* tp_descr_get      */
+  NULL,                                         /* tp_descr_set      */
+  0,                                            /* tp_dictoffset     */
+  (initproc) PyIOStream_init,                   /* tp_init           */
+};
+
+PYFRIDA_DEFINE_TYPE (IOStream, PyIOStream_init_from_handle, g_object_unref);
 
 static PyTypeObject PyCancellableType =
 {
@@ -2488,6 +2562,25 @@ PyDevice_inject_library_blob (PyDevice * self, PyObject * args)
   return PyLong_FromUnsignedLong (id);
 }
 
+static PyObject *
+PyDevice_open_channel (PyDevice * self, PyObject * args)
+{
+  const char * address;
+  GError * error = NULL;
+  GIOStream * stream;
+
+  if (!PyArg_ParseTuple (args, "s", &address))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  stream = frida_device_open_channel_sync (PY_GOBJECT_HANDLE (self), address, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  return PyIOStream_new_take_handle (stream);
+}
+
 
 static PyObject *
 PyApplication_new_take_handle (FridaApplication * handle)
@@ -3324,6 +3417,212 @@ PyFileMonitor_disable (PyFileMonitor * self)
 
 
 static PyObject *
+PyIOStream_new_take_handle (GIOStream * handle)
+{
+  return PyGObject_new_take_handle (handle, &PYFRIDA_TYPE_SPEC (IOStream));
+}
+
+static int
+PyIOStream_init (PyIOStream * self, PyObject * args, PyObject * kw)
+{
+  if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
+    return -1;
+
+  self->input = NULL;
+  self->output = NULL;
+
+  return 0;
+}
+
+static void
+PyIOStream_init_from_handle (PyIOStream * self, GIOStream * handle)
+{
+  self->input = g_io_stream_get_input_stream (handle);
+  self->output = g_io_stream_get_output_stream (handle);
+}
+
+static PyObject *
+PyIOStream_repr (PyIOStream * self)
+{
+  GIOStream * handle = PY_GOBJECT_HANDLE (self);
+
+  return PyRepr_FromFormat ("IOStream(handle=%p, is_closed=%s)",
+      handle,
+      g_io_stream_is_closed (handle) ? "TRUE" : "FALSE");
+}
+
+static PyObject *
+PyIOStream_is_closed (PyIOStream * self)
+{
+  return PyBool_FromLong (g_io_stream_is_closed (PY_GOBJECT_HANDLE (self)));
+}
+
+static PyObject *
+PyIOStream_close (PyIOStream * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  g_io_stream_close (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyIOStream_read (PyIOStream * self, PyObject * args)
+{
+  PyObject * result;
+  unsigned long count;
+  PyObject * buffer;
+  GError * error = NULL;
+  gssize bytes_read;
+
+  if (!PyArg_ParseTuple (args, "k", &count))
+    return NULL;
+
+  buffer = PyBytes_FromStringAndSize (NULL, count);
+  if (buffer == NULL)
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  bytes_read = g_input_stream_read (self->input, PyBytes_AS_STRING (buffer), count, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  if (error == NULL)
+  {
+    if (_PyBytes_Resize (&buffer, bytes_read) == 0)
+      result = buffer;
+    else
+      result = NULL;
+  }
+  else
+  {
+    result = PyFrida_raise (error);
+
+    Py_DECREF (buffer);
+  }
+
+  return result;
+}
+
+static PyObject *
+PyIOStream_read_all (PyIOStream * self, PyObject * args)
+{
+  PyObject * result;
+  unsigned long count;
+  PyObject * buffer;
+  gsize bytes_read;
+  GError * error = NULL;
+
+  if (!PyArg_ParseTuple (args, "k", &count))
+    return NULL;
+
+  buffer = PyBytes_FromStringAndSize (NULL, count);
+  if (buffer == NULL)
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  g_input_stream_read_all (self->input, PyBytes_AS_STRING (buffer), count, &bytes_read, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  if (error == NULL)
+  {
+    result = buffer;
+  }
+  else
+  {
+    result = PyFrida_raise (error);
+
+    Py_DECREF (buffer);
+  }
+
+  return result;
+}
+
+static PyObject *
+PyIOStream_write (PyIOStream * self, PyObject * args)
+{
+  Py_buffer data;
+  GError * error = NULL;
+  gssize bytes_written;
+
+#if PY_MAJOR_VERSION >= 3
+  if (!PyArg_ParseTuple (args, "y*", &data))
+    return NULL;
+
+  if (!PyBuffer_IsContiguous (&data, 'C'))
+  {
+    PyErr_SetString (PyExc_TypeError, "expected a contiguous buffer");
+    return NULL;
+  }
+#else
+  PyObject * data_obj;
+
+  if (!PyArg_ParseTuple (args, "O", &data_obj))
+    return NULL;
+
+  if (PyObject_GetBuffer (data_obj, &data, PyBUF_SIMPLE) != 0)
+    return NULL;
+#endif
+
+  Py_BEGIN_ALLOW_THREADS
+  bytes_written = g_output_stream_write (self->output, data.buf, data.len, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+#if PY_MAJOR_VERSION < 3
+  PyBuffer_Release (&data);
+#endif
+
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  return PyLong_FromSsize_t (bytes_written);
+}
+
+static PyObject *
+PyIOStream_write_all (PyIOStream * self, PyObject * args)
+{
+  Py_buffer data;
+  GError * error = NULL;
+
+#if PY_MAJOR_VERSION >= 3
+  if (!PyArg_ParseTuple (args, "y*", &data))
+    return NULL;
+
+  if (!PyBuffer_IsContiguous (&data, 'C'))
+  {
+    PyErr_SetString (PyExc_TypeError, "expected a contiguous buffer");
+    return NULL;
+  }
+#else
+  PyObject * data_obj;
+
+  if (!PyArg_ParseTuple (args, "O", &data_obj))
+    return NULL;
+
+  if (PyObject_GetBuffer (data_obj, &data, PyBUF_SIMPLE) != 0)
+    return NULL;
+#endif
+
+  Py_BEGIN_ALLOW_THREADS
+  g_output_stream_write_all (self->output, data.buf, data.len, NULL, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+#if PY_MAJOR_VERSION < 3
+  PyBuffer_Release (&data);
+#endif
+
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+
+static PyObject *
 PyCancellable_new_take_handle (GCancellable * handle)
 {
   PyObject * object;
@@ -3661,6 +3960,7 @@ MOD_INIT (_frida)
   PYFRIDA_REGISTER_TYPE (Session, FRIDA_TYPE_SESSION);
   PYFRIDA_REGISTER_TYPE (Script, FRIDA_TYPE_SCRIPT);
   PYFRIDA_REGISTER_TYPE (FileMonitor, FRIDA_TYPE_FILE_MONITOR);
+  PYFRIDA_REGISTER_TYPE (IOStream, G_TYPE_IO_STREAM);
   PYFRIDA_REGISTER_TYPE (Cancellable, G_TYPE_CANCELLABLE);
 
   frida_exception_by_error_code = g_hash_table_new_full (NULL, NULL, NULL, PyFrida_object_decref);
