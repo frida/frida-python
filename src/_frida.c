@@ -254,6 +254,7 @@ static gboolean PyGObject_unmarshal_envp (PyObject * value, gchar *** envp, gint
 static PyObject * PyGObject_marshal_enum (gint value, GType type);
 static gboolean PyGObject_unmarshal_enum (const gchar * str, GType type, gpointer value);
 static PyObject * PyGObject_marshal_bytes (GBytes * bytes);
+static PyObject * PyGObject_marshal_bytes_non_nullable (GBytes * bytes);
 static PyObject * PyGObject_marshal_variant_dict (GVariant * dict);
 static PyObject * PyGObject_marshal_object (gpointer handle, GType type);
 
@@ -1722,11 +1723,17 @@ invalid_value:
 static PyObject *
 PyGObject_marshal_bytes (GBytes * bytes)
 {
-  gconstpointer data;
-  gsize size;
-
   if (bytes == NULL)
     Py_RETURN_NONE;
+
+  return PyGObject_marshal_bytes_non_nullable (bytes);
+}
+
+static PyObject *
+PyGObject_marshal_bytes_non_nullable (GBytes * bytes)
+{
+  gconstpointer data;
+  gsize size;
 
   data = g_bytes_get_data (bytes, &size);
 
@@ -3099,11 +3106,8 @@ PySession_compile_script (PySession * self, PyObject * args, PyObject * kw)
 
   if (error == NULL)
   {
-    gconstpointer data;
-    gsize size;
+    result = PyGObject_marshal_bytes_non_nullable (bytes);
 
-    data = g_bytes_get_data (bytes, &size);
-    result = PyBytes_FromStringAndSize (data, size);
     g_bytes_unref (bytes);
   }
   else
