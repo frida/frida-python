@@ -511,21 +511,21 @@ static PyMethodDef PyScript_methods[] =
 
 static PyMethodDef PyFileMonitor_methods[] =
 {
-  { "enable", (PyCFunction) PyFileMonitor_enable, METH_NOARGS, "Enables the file monitor." },
-  { "disable", (PyCFunction) PyFileMonitor_disable, METH_NOARGS, "Disables the file monitor." },
+  { "enable", (PyCFunction) PyFileMonitor_enable, METH_NOARGS, "Enable the file monitor." },
+  { "disable", (PyCFunction) PyFileMonitor_disable, METH_NOARGS, "Disable the file monitor." },
   { NULL }
 };
 
 static PyMethodDef PyCancellable_methods[] =
 {
-  { "is_cancelled", (PyCFunction) PyCancellable_is_cancelled, METH_NOARGS, "Queries whether cancellable has been cancelled." },
-  { "raise_if_cancelled", (PyCFunction) PyCancellable_raise_if_cancelled, METH_NOARGS, "Raises an exception if cancelled." },
-  { "get_current", (PyCFunction) PyCancellable_get_current, METH_CLASS | METH_NOARGS, "Gets the top cancellable from the stack." },
-  { "push_current", (PyCFunction) PyCancellable_push_current, METH_NOARGS, "Pushes cancellable onto the cancellable stack." },
-  { "pop_current", (PyCFunction) PyCancellable_pop_current, METH_NOARGS, "Pops cancellable off the cancellable stack." },
-  { "connect", (PyCFunction) PyCancellable_connect, METH_VARARGS, "Registers notification callback." },
-  { "disconnect", (PyCFunction) PyCancellable_disconnect, METH_VARARGS, "Unregisters notification callback." },
-  { "cancel", (PyCFunction) PyCancellable_cancel, METH_NOARGS, "Sets cancellable to cancelled." },
+  { "is_cancelled", (PyCFunction) PyCancellable_is_cancelled, METH_NOARGS, "Query whether cancellable has been cancelled." },
+  { "raise_if_cancelled", (PyCFunction) PyCancellable_raise_if_cancelled, METH_NOARGS, "Raise an exception if cancelled." },
+  { "get_current", (PyCFunction) PyCancellable_get_current, METH_CLASS | METH_NOARGS, "Get the top cancellable from the stack." },
+  { "push_current", (PyCFunction) PyCancellable_push_current, METH_NOARGS, "Push cancellable onto the cancellable stack." },
+  { "pop_current", (PyCFunction) PyCancellable_pop_current, METH_NOARGS, "Pop cancellable off the cancellable stack." },
+  { "connect", (PyCFunction) PyCancellable_connect, METH_VARARGS, "Register notification callback." },
+  { "disconnect", (PyCFunction) PyCancellable_disconnect, METH_VARARGS, "Unregister notification callback." },
+  { "cancel", (PyCFunction) PyCancellable_cancel, METH_NOARGS, "Set cancellable to cancelled." },
   { NULL }
 };
 
