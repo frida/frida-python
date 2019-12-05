@@ -237,7 +237,7 @@ class Script(object):
         self._impl = impl
 
         self._on_message_callbacks = []
-        self._log_handler = self._on_log
+        self._log_handler = self.default_log_handler
 
         self._pending = {}
         self._next_request_id = 1
@@ -278,11 +278,17 @@ class Script(object):
         else:
             self._impl.off(signal, callback)
 
+    def get_log_handler(self):
+        return self._log_handler
+
     def set_log_handler(self, handler):
-        if handler is not None:
-            self._log_handler = handler
+        self._log_handler = handler
+
+    def default_log_handler(self, level, text):
+        if level == 'info':
+            print(text, file=sys.stdout)
         else:
-            self._log_handler = self._on_log
+            print(text, file=sys.stderr)
 
     @cancellable
     def _rpc_request(self, *args):
@@ -377,12 +383,6 @@ class Script(object):
                     callback(message, data)
                 except:
                     traceback.print_exc()
-
-    def _on_log(self, level, text):
-        if level == 'info':
-            print(text, file=sys.stdout)
-        else:
-            print(text, file=sys.stderr)
 
 
 class RPCException(Exception):
