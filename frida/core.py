@@ -284,6 +284,12 @@ class Script(object):
     def set_log_handler(self, handler):
         self._log_handler = handler
 
+    def default_log_handler(self, level, text):
+        if level == 'info':
+            print(text, file=sys.stdout)
+        else:
+            print(text, file=sys.stderr)
+
     @cancellable
     def _rpc_request(self, *args):
         result = [False, None, None]
@@ -377,12 +383,6 @@ class Script(object):
                     callback(message, data)
                 except:
                     traceback.print_exc()
-
-    def default_log_handler(self, level, text):
-        if level == 'info':
-            print(text, file=sys.stdout)
-        else:
-            print(text, file=sys.stderr)
 
 
 class RPCException(Exception):
