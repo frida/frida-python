@@ -278,11 +278,11 @@ class Script(object):
         else:
             self._impl.off(signal, callback)
 
-    def set_log_handler(self, handler):
-        self._log_handler = handler
-
     def get_log_handler(self):
         return self._log_handler
+
+    def set_log_handler(self, handler):
+        self._log_handler = handler
 
     @cancellable
     def _rpc_request(self, *args):
