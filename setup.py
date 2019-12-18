@@ -11,6 +11,7 @@ except:
         from StringIO import StringIO as BytesIO
 import os
 import platform
+import re
 from setuptools import setup
 from setuptools.command.build_ext import build_ext
 from setuptools.extension import Extension
@@ -135,6 +136,8 @@ class FridaPrebuiltExt(build_ext):
             egg_zip = zipfile.ZipFile(egg_file)
             extension_member = [info for info in egg_zip.infolist() if info.filename.endswith(target_extension)][0]
             extension_data = egg_zip.read(extension_member)
+            if system == 'Windows' and python_major_version >= 3:
+                extension_data = re.sub(b"python[3-9][0-9].dll", "python{0}{1}.dll".format(*python_version).encode('utf-8'), extension_data)
             with open(target, 'wb') as f:
                 f.write(extension_data)
         else:
