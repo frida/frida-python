@@ -3855,7 +3855,17 @@ PyFrida_raise (GError * error)
   g_string_append_unichar (message, g_unichar_tolower (g_utf8_get_char (error->message)));
   g_string_append (message, g_utf8_offset_to_pointer (error->message, 1));
 
+#if PY_MAJOR_VERSION >= 3
   PyErr_SetString (exception, message->str);
+#else
+  {
+    PyObject * value;
+
+    value = PyUnicode_FromUTF8String (message->str);
+    PyErr_SetObject (exception, value);
+    Py_DECREF (value);
+  }
+#endif
 
   g_string_free (message, TRUE);
   g_error_free (error);
