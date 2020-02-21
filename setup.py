@@ -111,7 +111,8 @@ class FridaPrebuiltExt(build_ext):
                 egg_url = url['url']
 
                 print("downloading prebuilt extension from", egg_url)
-                egg_data = urlopen(egg_url).read()
+                timeout = 120  # We'll assume the user has at least 200 kB/s transfer speed.
+                egg_data = urlopen(egg_url, timeout=timeout).read()
             except Exception as e:
                 network_error = e
 
