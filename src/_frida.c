@@ -375,6 +375,8 @@ static int PyCancellable_init (PyCancellable * self, PyObject * args, PyObject *
 static PyObject * PyCancellable_repr (PyCancellable * self);
 static PyObject * PyCancellable_is_cancelled (PyCancellable * self);
 static PyObject * PyCancellable_raise_if_cancelled (PyCancellable * self);
+static PyObject * PyCancellable_get_fd (PyCancellable * self);
+static PyObject * PyCancellable_release_fd (PyCancellable * self);
 static PyObject * PyCancellable_get_current (PyCancellable * self);
 static PyObject * PyCancellable_push_current (PyCancellable * self);
 static PyObject * PyCancellable_pop_current (PyCancellable * self);
@@ -553,6 +555,8 @@ static PyMethodDef PyCancellable_methods[] =
 {
   { "is_cancelled", (PyCFunction) PyCancellable_is_cancelled, METH_NOARGS, "Query whether cancellable has been cancelled." },
   { "raise_if_cancelled", (PyCFunction) PyCancellable_raise_if_cancelled, METH_NOARGS, "Raise an exception if cancelled." },
+  { "get_fd", (PyCFunction) PyCancellable_get_fd, METH_NOARGS, "Get file descriptor for integrating with an event loop." },
+  { "release_fd", (PyCFunction) PyCancellable_release_fd, METH_NOARGS, "Release a resource previously allocated by get_fd()." },
   { "get_current", (PyCFunction) PyCancellable_get_current, METH_CLASS | METH_NOARGS, "Get the top cancellable from the stack." },
   { "push_current", (PyCFunction) PyCancellable_push_current, METH_NOARGS, "Push cancellable onto the cancellable stack." },
   { "pop_current", (PyCFunction) PyCancellable_pop_current, METH_NOARGS, "Pop cancellable off the cancellable stack." },
@@ -3691,6 +3695,20 @@ PyCancellable_raise_if_cancelled (PyCancellable * self)
   g_cancellable_set_error_if_cancelled (PY_GOBJECT_HANDLE (self), &error);
   if (error != NULL)
     return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyCancellable_get_fd (PyCancellable * self)
+{
+  return PyLong_FromLong (g_cancellable_get_fd (PY_GOBJECT_HANDLE (self)));
+}
+
+static PyObject *
+PyCancellable_release_fd (PyCancellable * self)
+{
+  g_cancellable_release_fd (PY_GOBJECT_HANDLE (self));
 
   Py_RETURN_NONE;
 }

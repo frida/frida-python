@@ -448,6 +448,9 @@ class Cancellable(object):
     def raise_if_cancelled(self):
         self._impl.raise_if_cancelled()
 
+    def get_pollfd(self):
+        return CancellablePollFD(self._impl)
+
     @classmethod
     def get_current(cls):
         return _Cancellable.get_current()
@@ -466,6 +469,30 @@ class Cancellable(object):
 
     def cancel(self):
         self._impl.cancel()
+
+
+class CancellablePollFD(object):
+    def __init__(self, cancellable):
+        self.handle = cancellable.get_fd()
+        self._cancellable = cancellable
+
+    def __del__(self):
+        self.release()
+
+    def release(self):
+        if self._cancellable is not None:
+            self._cancellable.release_fd()
+            self._cancellable = None
+            self.handle = -1
+
+    def __repr__(self):
+        return repr(self.handle)
+
+    def __enter__(self):
+        return self.handle
+
+    def __exit__(self, *args):
+        self.release()
 
 
 def _to_camel_case(name):
