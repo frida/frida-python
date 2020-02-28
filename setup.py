@@ -93,7 +93,7 @@ class FridaPrebuiltExt(build_ext):
                 with open(egg_path, "rb") as cache:
                     egg_data = cache.read()
             except IOError as e:
-                print("prebuild extension not found in home directory, will try downloading it")
+                print("prebuilt extension not found in home directory, will try downloading it")
 
                 print("querying pypi for available prebuilds")
                 client = xmlrpclib.ServerProxy("https://pypi.python.org/pypi", transport=UrllibTransport())
