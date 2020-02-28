@@ -66,6 +66,7 @@ class FridaPrebuiltExt(build_ext):
             os.makedirs(target_dir)
         except:
             pass
+
         if in_source_package:
             python_version = sys.version_info[0:2]
             python_major_version = python_version[0]
@@ -81,18 +82,24 @@ class FridaPrebuiltExt(build_ext):
                     os_version = "linux-x86_64" if arch == 64 else "linux-i686"
                 else:
                     os_version = "linux-" + machine
+            else:
+                raise NotImplementedError("unsupported OS")
 
-            network_error = None
+            egg_path = os.path.expanduser(
+                "~/frida-{}-py{}.{}-{}.egg".format(frida_version, python_version[0], python_version[1], os_version))
+            print("looking for prebuilt extension in home directory, i.e.", egg_path)
 
             try:
+                with open(egg_path, "rb") as cache:
+                    egg_data = cache.read()
+            except IOError as e:
+                print("prebuild extension not found in home directory, will try downloading it")
+
                 print("querying pypi for available prebuilds")
                 client = xmlrpclib.ServerProxy("https://pypi.python.org/pypi", transport=UrllibTransport())
                 urls = client.release_urls("frida", frida_version)
 
                 urls = [url for url in urls if url['python_version'] != 'source']
-
-                def parse_version(version):
-                    return tuple(map(int, version.split(".")))
 
                 if python_major_version >= 3:
                     urls = [url for url in urls if parse_version(url['python_version'])[0] == python_major_version]
@@ -103,32 +110,20 @@ class FridaPrebuiltExt(build_ext):
                 urls = [url for url in urls if url['filename'].endswith(os_suffix)]
 
                 if len(urls) == 0:
-                    raise Exception("Could not find prebuilt Frida extension. "
-                                    "Prebuilds only provided for Python 2.7 and 3.4+.")
+                    raise NotImplementedError("could not find prebuilt Frida extension; "
+                                              "prebuilds only provided for Python 2.7 and 3.4+")
 
                 url = urls[0]
-                egg_filename = url['filename']
                 egg_url = url['url']
 
-                print("downloading prebuilt extension from", egg_url)
-                egg_data = urlopen(egg_url).read()
-            except Exception as e:
-                network_error = e
-
-            if network_error is not None:
-                print("network query failed")
-
-                egg_path = os.path.expanduser("~/frida-{}-py{}.{}-{}.egg".format(frida_version, python_version[0], python_version[1], os_version))
-                print("looking for prebuilt extension in home directory, i.e.", egg_path)
                 try:
-                    with open(egg_path, "rb") as f:
-                        egg_data = f.read()
-                except:
-                    print("no prebuilt extension found in home directory")
-                    egg_data = None
-
-                if egg_data is None:
-                    raise network_error
+                    print("downloading prebuilt extension from", egg_url)
+                    timeout = 120  # We'll assume the user has at least 200 kB/s transfer speed.
+                    egg_data = urlopen(egg_url, timeout=timeout).read()
+                except Exception as e:
+                    message = "unable to download it within 120 seconds; please download it manually to {}"
+                    print(message.format(egg_path))
+                    raise e
 
             egg_file = BytesIO(egg_data)
 
@@ -137,11 +132,16 @@ class FridaPrebuiltExt(build_ext):
             extension_member = [info for info in egg_zip.infolist() if info.filename.endswith(target_extension)][0]
             extension_data = egg_zip.read(extension_member)
             if system == 'Windows' and python_major_version >= 3:
-                extension_data = re.sub(b"python[3-9][0-9].dll", "python{0}{1}.dll".format(*python_version).encode('utf-8'), extension_data)
+                extension_data = re.sub(b"python[3-9][0-9].dll",
+                                        "python{0}{1}.dll".format(*python_version).encode('utf-8'), extension_data)
             with open(target, 'wb') as f:
                 f.write(extension_data)
         else:
             shutil.copyfile(frida_extension, target)
+
+
+def parse_version(version):
+    return tuple(map(int, version.split(".")))
 
 
 setup(
