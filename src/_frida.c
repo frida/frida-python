@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2019 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+ * Copyright (C) 2013-2020 Ole André Vadla Ravnås <oleavr@nowsecure.com>
  *
  * Licence: wxWindows Library Licence, Version 3.1
  */
@@ -62,6 +62,12 @@
 # define PyRepr_FromString PyString_FromString
 # define PyRepr_FromFormat PyString_FromFormat
 # define PYFRIDA_GETARGSPEC_FUNCTION "getargspec"
+#endif
+
+#if PY_VERSION_HEX >= 0x03080000
+# define PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET 0
+#else
+# define PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET NULL
 #endif
 
 #define PYFRIDA_TYPE(name) \
@@ -573,7 +579,7 @@ static PyTypeObject PyGObjectType =
   sizeof (PyGObject),                           /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   (destructor) PyGObject_dealloc,               /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
@@ -615,7 +621,7 @@ static PyTypeObject PyDeviceManagerType =
   sizeof (PyDeviceManager),                     /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   (destructor) PyDeviceManager_dealloc,         /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
@@ -657,7 +663,7 @@ static PyTypeObject PyDeviceType =
   sizeof (PyDevice),                            /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   (destructor) PyDevice_dealloc,                /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
@@ -699,7 +705,7 @@ static PyTypeObject PyApplicationType =
   sizeof (PyApplication),                       /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   (destructor) PyApplication_dealloc,           /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
@@ -741,7 +747,7 @@ static PyTypeObject PyProcessType =
   sizeof (PyProcess),                           /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   (destructor) PyProcess_dealloc,               /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
@@ -783,7 +789,7 @@ static PyTypeObject PySpawnType =
   sizeof (PySpawn),                             /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   (destructor) PySpawn_dealloc,                 /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
@@ -825,7 +831,7 @@ static PyTypeObject PyChildType =
   sizeof (PyChild),                             /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   (destructor) PyChild_dealloc,                 /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
@@ -867,7 +873,7 @@ static PyTypeObject PyCrashType =
   sizeof (PyCrash),                             /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   (destructor) PyCrash_dealloc,                 /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
@@ -909,7 +915,7 @@ static PyTypeObject PyIconType =
   sizeof (PyIcon),                              /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   (destructor) PyIcon_dealloc,                  /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
@@ -951,7 +957,7 @@ static PyTypeObject PySessionType =
   sizeof (PySession),                           /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   NULL,                                         /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
@@ -993,7 +999,7 @@ static PyTypeObject PyScriptType =
   sizeof (PyScript),                            /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   NULL,                                         /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
@@ -1035,7 +1041,7 @@ static PyTypeObject PyFileMonitorType =
   sizeof (PyFileMonitor),                       /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   NULL,                                         /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
@@ -1077,7 +1083,7 @@ static PyTypeObject PyIOStreamType =
   sizeof (PyIOStream),                          /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   NULL,                                         /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
@@ -1119,7 +1125,7 @@ static PyTypeObject PyCancellableType =
   sizeof (PyCancellable),                       /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
   NULL,                                         /* tp_dealloc        */
-  NULL,                                         /* tp_print          */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
