@@ -15,6 +15,8 @@
 # undef _POSIX_C_SOURCE
 #endif
 
+#define PY_SSIZE_T_CLEAN
+
 /*
  * Don't propogate _DEBUG state to pyconfig as it incorrectly attempts to load
  * debug libraries that don't normally ship with Python (e.g. 2.x). Debuggers
@@ -2440,7 +2442,7 @@ PyDevice_input (PyDevice * self, PyObject * args)
 {
   long pid;
   gconstpointer data_buffer;
-  int data_size;
+  Py_ssize_t data_size;
   GBytes * data;
   GError * error = NULL;
 
@@ -2546,7 +2548,7 @@ PyDevice_inject_library_blob (PyDevice * self, PyObject * args)
   long pid;
   GBytes * blob;
   gconstpointer blob_buffer;
-  int blob_size;
+  Py_ssize_t blob_size;
   const char * entrypoint, * data;
   GError * error = NULL;
   guint id;
@@ -3146,7 +3148,7 @@ PySession_create_script_from_bytes (PySession * self, PyObject * args, PyObject 
   PyObject * result = NULL;
   static char * keywords[] = { "data", "name", "runtime", NULL };
   guint8 * data;
-  int size;
+  Py_ssize_t size;
   char * name = NULL;
   const char * runtime_value = NULL;
   GBytes * bytes;
@@ -3359,7 +3361,7 @@ PyScript_post (PyScript * self, PyObject * args, PyObject * kw)
   static char * keywords[] = { "message", "data", NULL };
   char * message;
   gconstpointer data_buffer = NULL;
-  int data_size = 0;
+  Py_ssize_t data_size = 0;
   GBytes * data;
   GError * error = NULL;
 
@@ -3642,7 +3644,7 @@ PyCancellable_new_take_handle (GCancellable * handle)
   {
     const PyGObjectTypeSpec * spec = &PYFRIDA_TYPE_SPEC (Cancellable);
 
-    object = PyObject_CallFunction ((PyObject *) spec->type, "z#", (char *) &handle, (int) sizeof (handle));
+    object = PyObject_CallFunction ((PyObject *) spec->type, "z#", (char *) &handle, (Py_ssize_t) sizeof (handle));
   }
   else
   {
@@ -3658,7 +3660,7 @@ PyCancellable_init (PyCancellable * self, PyObject * args, PyObject * kw)
 {
   static char * keywords[] = { "handle", NULL };
   GCancellable ** handle_buffer = NULL;
-  int handle_size = 0;
+  Py_ssize_t handle_size = 0;
   GCancellable * handle;
 
   if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
