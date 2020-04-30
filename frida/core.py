@@ -62,12 +62,12 @@ class DeviceManager(object):
         return [Device(device) for device in self._impl.enumerate_devices()]
 
     @cancellable
-    def add_remote_device(self, host):
-        return Device(self._impl.add_remote_device(host))
+    def add_remote_device(self, location):
+        return Device(self._impl.add_remote_device(location))
 
     @cancellable
-    def remove_remote_device(self, host):
-        self._impl.remove_remote_device(host)
+    def remove_remote_device(self, location):
+        self._impl.remove_remote_device(location)
 
     def on(self, signal, callback):
         self._impl.on(signal, callback)

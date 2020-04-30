@@ -2018,15 +2018,15 @@ PyDeviceManager_enumerate_devices (PyDeviceManager * self)
 static PyObject *
 PyDeviceManager_add_remote_device (PyDeviceManager * self, PyObject * args)
 {
-  const char * host;
+  const char * location;
   GError * error = NULL;
   FridaDevice * result;
 
-  if (!PyArg_ParseTuple (args, "s", &host))
+  if (!PyArg_ParseTuple (args, "s", &location))
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  result = frida_device_manager_add_remote_device_sync (PY_GOBJECT_HANDLE (self), host, g_cancellable_get_current (), &error);
+  result = frida_device_manager_add_remote_device_sync (PY_GOBJECT_HANDLE (self), location, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
@@ -2037,14 +2037,14 @@ PyDeviceManager_add_remote_device (PyDeviceManager * self, PyObject * args)
 static PyObject *
 PyDeviceManager_remove_remote_device (PyDeviceManager * self, PyObject * args)
 {
-  const char * host;
+  const char * location;
   GError * error = NULL;
 
-  if (!PyArg_ParseTuple (args, "s", &host))
+  if (!PyArg_ParseTuple (args, "s", &location))
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_device_manager_remove_remote_device_sync (PY_GOBJECT_HANDLE (self), host, g_cancellable_get_current (), &error);
+  frida_device_manager_remove_remote_device_sync (PY_GOBJECT_HANDLE (self), location, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
