@@ -75,7 +75,12 @@ class FridaPrebuiltExt(build_ext):
             if system == 'Windows':
                 os_version = "win-amd64" if arch == 64 else "win32"
             elif system == 'Darwin':
-                os_version = "macosx-10.9-x86_64" if python_major_version == 3 else "macosx-10.9-intel"
+                if platform.machine() == 'x86_64':
+                    os_version = "macosx-10.9-x86_64"
+                elif python_major_version == 2:
+                    os_version = "macosx-11.0-fat64"
+                else:
+                    os_version = "macosx-11.0-arm64"
             elif system == 'Linux':
                 machine = platform.machine()
                 if machine == "" or "86" in machine:
