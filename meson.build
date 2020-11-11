@@ -1,7 +1,11 @@
 project('frida-python', 'c', version: '1.0.0')
 
-host_os_family = host_machine.system()
-host_os = host_os_family
+host_os = host_machine.system()
+if host_os == 'android'
+  host_os_family = 'linux'
+else
+  host_os_family = host_os
+endif
 
 cc = meson.get_compiler('c')
 
