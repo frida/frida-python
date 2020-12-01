@@ -481,9 +481,10 @@ class CancellablePollFD(object):
 
     def release(self):
         if self._cancellable is not None:
-            self._cancellable.release_fd()
+            if self.handle != -1:
+                self._cancellable.release_fd()
+                self.handle = -1
             self._cancellable = None
-            self.handle = -1
 
     def __repr__(self):
         return repr(self.handle)
