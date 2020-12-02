@@ -3969,7 +3969,9 @@ MOD_INIT (_frida)
 {
   PyObject * inspect, * module;
 
+#if PY_VERSION_HEX < 0x03070000
   PyEval_InitThreads ();
+#endif
 
   inspect = PyImport_ImportModule ("inspect");
   inspect_getargspec = PyObject_GetAttrString (inspect, PYFRIDA_GETARGSPEC_FUNCTION);
