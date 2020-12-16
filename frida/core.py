@@ -152,8 +152,8 @@ class Device(object):
         self._impl.kill(self._pid_of(target))
 
     @cancellable
-    def attach(self, target):
-        return Session(self._impl.attach(self._pid_of(target)))
+    def attach(self, target, *args, **kwargs):
+        return Session(self._impl.attach(self._pid_of(target), *args, **kwargs))
 
     @cancellable
     def inject_library_file(self, target, path, entrypoint, data):

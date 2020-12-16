@@ -299,7 +299,7 @@ static PyObject * PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * k
 static PyObject * PyDevice_input (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_resume (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_kill (PyDevice * self, PyObject * args);
-static PyObject * PyDevice_attach (PyDevice * self, PyObject * args);
+static PyObject * PyDevice_attach (PyDevice * self, PyObject * args, PyObject * kw);
 static PyObject * PyDevice_inject_library_file (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_inject_library_blob (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_open_channel (PyDevice * self, PyObject * args);
@@ -429,7 +429,7 @@ static PyMethodDef PyDevice_methods[] =
   { "input", (PyCFunction) PyDevice_input, METH_VARARGS, "Input data on stdin of a spawned process." },
   { "resume", (PyCFunction) PyDevice_resume, METH_VARARGS, "Resume a process from the attachable state." },
   { "kill", (PyCFunction) PyDevice_kill, METH_VARARGS, "Kill a PID." },
-  { "attach", (PyCFunction) PyDevice_attach, METH_VARARGS, "Attach to a PID." },
+  { "attach", (PyCFunction) PyDevice_attach, METH_VARARGS | METH_KEYWORDS, "Attach to a PID." },
   { "inject_library_file", (PyCFunction) PyDevice_inject_library_file, METH_VARARGS, "Inject a library file to a PID." },
   { "inject_library_blob", (PyCFunction) PyDevice_inject_library_blob, METH_VARARGS, "Inject a library blob to a PID." },
   { "open_channel", (PyCFunction) PyDevice_open_channel, METH_VARARGS, "Open a device-specific communication channel." },
@@ -2504,17 +2504,26 @@ PyDevice_kill (PyDevice * self, PyObject * args)
 }
 
 static PyObject *
-PyDevice_attach (PyDevice * self, PyObject * args)
+PyDevice_attach (PyDevice * self, PyObject * args, PyObject * kw)
 {
+  static char * keywords[] = { "pid", "realm", NULL };
   long pid;
+  const char * realm_value = NULL;
+  FridaRealm realm = FRIDA_REALM_NATIVE;
   GError * error = NULL;
   FridaSession * handle;
 
-  if (!PyArg_ParseTuple (args, "l", &pid))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "l|z", keywords, &pid, &realm_value))
     return NULL;
 
+  if (realm_value != NULL)
+  {
+    if (!PyGObject_unmarshal_enum (realm_value, FRIDA_TYPE_REALM, &realm))
+      return NULL;
+  }
+
   Py_BEGIN_ALLOW_THREADS
-  handle = frida_device_attach_sync (PY_GOBJECT_HANDLE (self), (guint) pid, g_cancellable_get_current (), &error);
+  handle = frida_device_attach_sync (PY_GOBJECT_HANDLE (self), (guint) pid, realm, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);

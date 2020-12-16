@@ -58,8 +58,8 @@ def kill(target, **kwargs):
     get_local_device().kill(target, **kwargs)
 
 
-def attach(target, **kwargs):
-    return get_local_device().attach(target, **kwargs)
+def attach(target, *args, **kwargs):
+    return get_local_device().attach(target, *args, **kwargs)
 
 
 def inject_library_file(target, path, entrypoint, data, **kwargs):
