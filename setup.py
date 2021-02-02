@@ -17,6 +17,7 @@ from setuptools.command.build_ext import build_ext
 from setuptools.extension import Extension
 import shutil
 import struct
+import subprocess
 import sys
 try:
     from urllib.request import urlopen, Request
@@ -82,11 +83,13 @@ class FridaPrebuiltExt(build_ext):
                 else:
                     os_version = "macosx-11.0-arm64"
             elif system == 'Linux':
+                os_name = 'android' if subprocess.check_output(["uname", "-o"]).decode('utf-8').rstrip() == 'Android' else 'linux'
                 machine = platform.machine()
                 if machine == "" or "86" in machine:
-                    os_version = "linux-x86_64" if arch == 64 else "linux-i686"
+                    arch_name = "x86_64" if arch == 64 else "i686"
                 else:
-                    os_version = "linux-" + machine
+                    arch_name = machine
+                os_version = "{}-{}".format(os_name, arch_name)
             else:
                 raise NotImplementedError("unsupported OS")
 
