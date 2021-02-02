@@ -157,7 +157,7 @@ setup(
     long_description_content_type="text/markdown",
     author="Frida Developers",
     author_email="oleavr@frida.re",
-    url="https://www.frida.re",
+    url="https://frida.re",
     license="wxWindows Library Licence, Version 3.1",
     zip_safe=True,
     keywords="frida debugger dynamic instrumentation inject javascript windows macos linux ios iphone ipad android qnx",
