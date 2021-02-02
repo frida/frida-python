@@ -162,7 +162,6 @@ setup(
     author_email="oleavr@frida.re",
     url="https://frida.re",
     license="wxWindows Library Licence, Version 3.1",
-    zip_safe=True,
     keywords="frida debugger dynamic instrumentation inject javascript windows macos linux ios iphone ipad android qnx",
     classifiers=[
         "Development Status :: 5 - Production/Stable",
@@ -193,5 +192,6 @@ setup(
     ext_modules=[Extension('_frida', [])],
     cmdclass={
         'build_ext': FridaPrebuiltExt
-    }
+    },
+    zip_safe=False
 )
