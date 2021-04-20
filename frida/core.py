@@ -62,12 +62,12 @@ class DeviceManager(object):
         return [Device(device) for device in self._impl.enumerate_devices()]
 
     @cancellable
-    def add_remote_device(self, location):
-        return Device(self._impl.add_remote_device(location))
+    def add_remote_device(self, *args, **kwargs):
+        return Device(self._impl.add_remote_device(*args, **kwargs))
 
     @cancellable
-    def remove_remote_device(self, location):
-        self._impl.remove_remote_device(location)
+    def remove_remote_device(self, *args, **kwargs):
+        self._impl.remove_remote_device(*args, **kwargs)
 
     def on(self, signal, callback):
         self._impl.on(signal, callback)
@@ -167,6 +167,10 @@ class Device(object):
     def open_channel(self, address):
         return IOStream(self._impl.open_channel(address))
 
+    @cancellable
+    def get_bus(self):
+        return Bus(self._impl.get_bus())
+
     def on(self, signal, callback):
         self._impl.on(signal, callback)
 
@@ -178,6 +182,40 @@ class Device(object):
             return target
         else:
             return self.get_process(target).pid
+
+
+class Bus(object):
+    def __init__(self, impl):
+        self._impl = impl
+        self._on_message_callbacks = []
+
+        impl.on('message', self._on_message)
+
+    @cancellable
+    def post(self, message, **kwargs):
+        raw_message = json.dumps(message)
+        self._impl.post(raw_message, **kwargs)
+
+    def on(self, signal, callback):
+        if signal == 'message':
+            self._on_message_callbacks.append(callback)
+        else:
+            self._impl.on(signal, callback)
+
+    def off(self, signal, callback):
+        if signal == 'message':
+            self._on_message_callbacks.remove(callback)
+        else:
+            self._impl.off(signal, callback)
+
+    def _on_message(self, raw_message, data):
+        message = json.loads(raw_message)
+
+        for callback in self._on_message_callbacks[:]:
+            try:
+                callback(message, data)
+            except:
+                traceback.print_exc()
 
 
 class Session(object):
@@ -222,6 +260,14 @@ class Session(object):
     @cancellable
     def enable_jit(self):
         self._impl.enable_jit()
+
+    @cancellable
+    def setup_peer_connection(self, *args, **kwargs):
+        self._impl.setup_peer_connection(*args, **kwargs)
+
+    @cancellable
+    def join_portal(self, *args, **kwargs):
+        return PortalMembership(self._impl.join_portal(*args, **kwargs))
 
     def on(self, signal, callback):
         self._impl.on(signal, callback)
@@ -400,6 +446,93 @@ class ScriptExports(object):
         def method(*args, **kwargs):
             return script._rpc_request('call', js_name, args, **kwargs)
         return method
+
+
+class PortalMembership(object):
+    def __init__(self, impl):
+        self._impl = impl
+
+    @cancellable
+    def terminate(self):
+        self._impl.terminate()
+
+
+class EndpointParameters(object):
+    def __init__(self, address=None, port=None, certificate=None, authentication=None):
+        kw = {}
+
+        if address is not None:
+            kw['address'] = address
+
+        if port is not None:
+            kw['port'] = port
+
+        if certificate is not None:
+            kw['certificate'] = certificate
+
+        if authentication is not None:
+            (auth_scheme, auth_data) = authentication
+            if auth_scheme == 'token':
+                kw['auth_token'] = auth_data
+            elif auth_scheme == 'callback':
+                kw['auth_callback'] = auth_data
+            else:
+                raise ValueError("invalid authentication scheme")
+
+        self._impl = _frida.EndpointParameters(**kw)
+
+
+class PortalService(object):
+    def __init__(self, cluster_params=EndpointParameters(), control_params=None):
+        args = [cluster_params._impl]
+        if control_params is not None:
+            args.append(control_params._impl)
+        impl = _frida.PortalService(*args)
+
+        self.device = impl.device
+        self._impl = impl
+        self._on_message_callbacks = []
+
+        impl.on('message', self._on_message)
+
+    @cancellable
+    def start(self):
+        self._impl.start()
+
+    @cancellable
+    def stop(self):
+        self._impl.stop()
+
+    @cancellable
+    def post(self, connection_id, message, **kwargs):
+        raw_message = json.dumps(message)
+        self._impl.post(connection_id, raw_message, **kwargs)
+
+    @cancellable
+    def broadcast(self, message, **kwargs):
+        raw_message = json.dumps(message)
+        self._impl.broadcast(raw_message, **kwargs)
+
+    def on(self, signal, callback):
+        if signal == 'message':
+            self._on_message_callbacks.append(callback)
+        else:
+            self._impl.on(signal, callback)
+
+    def off(self, signal, callback):
+        if signal == 'message':
+            self._on_message_callbacks.remove(callback)
+        else:
+            self._impl.off(signal, callback)
+
+    def _on_message(self, connection_id, raw_message, data):
+        message = json.loads(raw_message)
+
+        for callback in self._on_message_callbacks[:]:
+            try:
+                callback(connection_id, message, data)
+            except:
+                traceback.print_exc()
 
 
 class IOStream(object):

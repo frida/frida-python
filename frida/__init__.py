@@ -27,6 +27,9 @@ from . import core
 
 __version__ = _frida.__version__
 
+Relay = _frida.Relay
+PortalService = core.PortalService
+EndpointParameters = core.EndpointParameters
 FileMonitor = _frida.FileMonitor
 Cancellable = core.Cancellable
 

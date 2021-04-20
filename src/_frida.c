@@ -1,10 +1,13 @@
 /*
- * Copyright (C) 2013-2020 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+ * Copyright (C) 2013-2021 Ole André Vadla Ravnås <oleavr@nowsecure.com>
  *
  * Licence: wxWindows Library Licence, Version 3.1
  */
 
 #include <frida-core.h>
+#ifdef G_OS_UNIX
+# include <gio/gunixsocketaddress.h>
+#endif
 
 #ifdef _MSC_VER
 # pragma warning (push)
@@ -97,7 +100,7 @@
 
 #define FRIDA_FUNCPTR_TO_POINTER(f) (GSIZE_TO_POINTER (f))
 
-static volatile gint device_managers_alive = 0;
+static volatile gint toplevel_objects_alive = 0;
 
 static PyObject * inspect_getargspec;
 static PyObject * inspect_ismethod;
@@ -117,11 +120,19 @@ typedef struct _PySpawn                        PySpawn;
 typedef struct _PyChild                        PyChild;
 typedef struct _PyCrash                        PyCrash;
 typedef struct _PyIcon                         PyIcon;
+typedef struct _PyBus                          PyBus;
 typedef struct _PySession                      PySession;
 typedef struct _PyScript                       PyScript;
+typedef struct _PyRelay                        PyRelay;
+typedef struct _PyPortalMembership             PyPortalMembership;
+typedef struct _PyPortalService                PyPortalService;
+typedef struct _PyEndpointParameters           PyEndpointParameters;
 typedef struct _PyFileMonitor                  PyFileMonitor;
 typedef struct _PyIOStream                     PyIOStream;
 typedef struct _PyCancellable                  PyCancellable;
+
+#define FRIDA_TYPE_PYTHON_AUTHENTICATION_SERVICE (frida_python_authentication_service_get_type ())
+G_DECLARE_FINAL_TYPE (FridaPythonAuthenticationService, frida_python_authentication_service, FRIDA, PYTHON_AUTHENTICATION_SERVICE, GObject)
 
 typedef void (* PyGObjectInitFromHandleFunc) (PyObject * self, gpointer handle);
 
@@ -216,6 +227,11 @@ struct _PyIcon
   PyObject * pixels;
 };
 
+struct _PyBus
+{
+  PyGObject parent;
+};
+
 struct _PySession
 {
   PyGObject parent;
@@ -225,6 +241,34 @@ struct _PySession
 struct _PyScript
 {
   PyGObject parent;
+};
+
+struct _PyRelay
+{
+  PyGObject parent;
+};
+
+struct _PyPortalMembership
+{
+  PyGObject parent;
+};
+
+struct _PyPortalService
+{
+  PyGObject parent;
+  PyObject * device;
+};
+
+struct _PyEndpointParameters
+{
+  PyGObject parent;
+};
+
+struct _FridaPythonAuthenticationService
+{
+  GObject parent;
+  PyObject * callback;
+  GThreadPool * pool;
 };
 
 struct _PyFileMonitor
@@ -272,6 +316,8 @@ static gboolean PyGObject_unmarshal_enum (const gchar * str, GType type, gpointe
 static PyObject * PyGObject_marshal_bytes (GBytes * bytes);
 static PyObject * PyGObject_marshal_bytes_non_nullable (GBytes * bytes);
 static PyObject * PyGObject_marshal_variant_dict (GVariant * dict);
+static PyObject * PyGObject_marshal_socket_address (GSocketAddress * address);
+static gboolean PyGObject_unmarshal_certificate (const gchar * str, GTlsCertificate ** certificate);
 static PyObject * PyGObject_marshal_object (gpointer handle, GType type);
 
 static int PyDeviceManager_init (PyDeviceManager * self, PyObject * args, PyObject * kwds);
@@ -280,8 +326,9 @@ static PyObject * PyDeviceManager_close (PyDeviceManager * self);
 static PyObject * PyDeviceManager_get_device_matching (PyDeviceManager * self, PyObject * args);
 static gboolean PyDeviceManager_is_matching_device (FridaDevice * device, PyObject * predicate);
 static PyObject * PyDeviceManager_enumerate_devices (PyDeviceManager * self);
-static PyObject * PyDeviceManager_add_remote_device (PyDeviceManager * self, PyObject * args);
-static PyObject * PyDeviceManager_remove_remote_device (PyDeviceManager * self, PyObject * args);
+static PyObject * PyDeviceManager_add_remote_device (PyDeviceManager * self, PyObject * args, PyObject * kw);
+static PyObject * PyDeviceManager_remove_remote_device (PyDeviceManager * self, PyObject * args, PyObject * kw);
+static FridaRemoteDeviceOptions * PyDeviceManager_parse_remote_device_options (const gchar * certificate_value, const gchar * token);
 
 static PyObject * PyDevice_new_take_handle (FridaDevice * handle);
 static int PyDevice_init (PyDevice * self, PyObject * args, PyObject * kw);
@@ -303,6 +350,7 @@ static PyObject * PyDevice_attach (PyDevice * self, PyObject * args, PyObject * 
 static PyObject * PyDevice_inject_library_file (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_inject_library_blob (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_open_channel (PyDevice * self, PyObject * args);
+static PyObject * PyDevice_get_bus (PyDevice * self, PyObject * args);
 
 static PyObject * PyApplication_new_take_handle (FridaApplication * handle);
 static int PyApplication_init (PyApplication * self, PyObject * args, PyObject * kw);
@@ -343,6 +391,9 @@ static void PyIcon_init_from_handle (PyIcon * self, FridaIcon * handle);
 static void PyIcon_dealloc (PyIcon * self);
 static PyObject * PyIcon_repr (PyIcon * self);
 
+static PyObject * PyBus_new_take_handle (FridaBus * handle);
+static PyObject * PyBus_post (PyScript * self, PyObject * args, PyObject * kw);
+
 static PyObject * PySession_new_take_handle (FridaSession * handle);
 static int PySession_init (PySession * self, PyObject * args, PyObject * kw);
 static void PySession_init_from_handle (PySession * self, FridaSession * handle);
@@ -357,12 +408,40 @@ static FridaScriptOptions * PySession_parse_script_options (const gchar * name, 
 static PyObject * PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_disable_debugger (PySession * self);
 static PyObject * PySession_enable_jit (PySession * self);
+static PyObject * PySession_setup_peer_connection (PySession * self, PyObject * args, PyObject * kw);
+static FridaPeerOptions * PySession_parse_peer_options (const gchar * stun_server, PyObject * relays);
+static PyObject * PySession_join_portal (PySession * self, PyObject * args, PyObject * kw);
+static FridaPortalOptions * PySession_parse_portal_options (const gchar * certificate_value, const gchar * token);
 
 static PyObject * PyScript_new_take_handle (FridaScript * handle);
 static PyObject * PyScript_load (PyScript * self);
 static PyObject * PyScript_unload (PyScript * self);
 static PyObject * PyScript_eternalize (PyScript * self);
 static PyObject * PyScript_post (PyScript * self, PyObject * args, PyObject * kw);
+
+static int PyRelay_init (PyRelay * self, PyObject * args, PyObject * kw);
+
+static PyObject * PyPortalMembership_new_take_handle (FridaPortalMembership * handle);
+static PyObject * PyPortalMembership_terminate (PyPortalMembership * self);
+
+static int PyPortalService_init (PyPortalService * self, PyObject * args, PyObject * kw);
+static void PyPortalService_init_from_handle (PyPortalService * self, FridaPortalService * handle);
+static void PyPortalService_dealloc (PyPortalService * self);
+static PyObject * PyPortalService_start (PyPortalService * self);
+static PyObject * PyPortalService_stop (PyPortalService * self);
+static PyObject * PyPortalService_post (PyScript * self, PyObject * args, PyObject * kw);
+static PyObject * PyPortalService_broadcast (PyScript * self, PyObject * args, PyObject * kw);
+
+static int PyEndpointParameters_init (PyEndpointParameters * self, PyObject * args, PyObject * kw);
+
+static FridaPythonAuthenticationService * frida_python_authentication_service_new (PyObject * callback);
+static void frida_python_authentication_service_iface_init (gpointer g_iface, gpointer iface_data);
+static void frida_python_authentication_service_dispose (GObject * object);
+static void frida_python_authentication_service_authenticate (FridaAuthenticationService * service, const gchar * token,
+    GCancellable * cancellable, GAsyncReadyCallback callback, gpointer user_data);
+static void frida_python_authentication_service_authenticate_finish (FridaAuthenticationService * service, GAsyncResult * result,
+    GError ** error);
+static void frida_python_authentication_service_do_authenticate (GTask * task, FridaPythonAuthenticationService * self);
 
 static int PyFileMonitor_init (PyFileMonitor * self, PyObject * args, PyObject * kw);
 static PyObject * PyFileMonitor_enable (PyFileMonitor * self);
@@ -411,8 +490,8 @@ static PyMethodDef PyDeviceManager_methods[] =
   { "close", (PyCFunction) PyDeviceManager_close, METH_NOARGS, "Close the device manager." },
   { "get_device_matching", (PyCFunction) PyDeviceManager_get_device_matching, METH_VARARGS, "Get device matching predicate." },
   { "enumerate_devices", (PyCFunction) PyDeviceManager_enumerate_devices, METH_NOARGS, "Enumerate devices." },
-  { "add_remote_device", (PyCFunction) PyDeviceManager_add_remote_device, METH_VARARGS, "Add a remote device." },
-  { "remove_remote_device", (PyCFunction) PyDeviceManager_remove_remote_device, METH_VARARGS, "Remove a remote device." },
+  { "add_remote_device", (PyCFunction) PyDeviceManager_add_remote_device, METH_VARARGS | METH_KEYWORDS, "Add a remote device." },
+  { "remove_remote_device", (PyCFunction) PyDeviceManager_remove_remote_device, METH_VARARGS | METH_KEYWORDS, "Remove a remote device." },
   { NULL }
 };
 
@@ -433,6 +512,7 @@ static PyMethodDef PyDevice_methods[] =
   { "inject_library_file", (PyCFunction) PyDevice_inject_library_file, METH_VARARGS, "Inject a library file to a PID." },
   { "inject_library_blob", (PyCFunction) PyDevice_inject_library_blob, METH_VARARGS, "Inject a library blob to a PID." },
   { "open_channel", (PyCFunction) PyDevice_open_channel, METH_VARARGS, "Open a device-specific communication channel." },
+  { "get_bus", (PyCFunction) PyDevice_get_bus, METH_VARARGS, "Get message bus, if available." },
   { NULL }
 };
 
@@ -512,6 +592,12 @@ static PyMemberDef PyIcon_members[] =
   { NULL }
 };
 
+static PyMethodDef PyBus_methods[] =
+{
+  { "post", (PyCFunction) PyBus_post, METH_VARARGS | METH_KEYWORDS, "Post a JSON-encoded message to the bus." },
+  { NULL }
+};
+
 static PyMethodDef PySession_methods[] =
 {
   { "detach", (PyCFunction) PySession_detach, METH_NOARGS, "Detach session from the process." },
@@ -523,6 +609,8 @@ static PyMethodDef PySession_methods[] =
   { "enable_debugger", (PyCFunction) PySession_enable_debugger, METH_VARARGS | METH_KEYWORDS, "Enable the Node.js compatible script debugger." },
   { "disable_debugger", (PyCFunction) PySession_disable_debugger, METH_NOARGS, "Disable the Node.js compatible script debugger." },
   { "enable_jit", (PyCFunction) PySession_enable_jit, METH_NOARGS, "Enable JIT." },
+  { "setup_peer_connection", (PyCFunction) PySession_setup_peer_connection, METH_VARARGS | METH_KEYWORDS, "Set up a peer connection with the target process." },
+  { "join_portal", (PyCFunction) PySession_join_portal, METH_VARARGS | METH_KEYWORDS, "Join a portal." },
   { NULL }
 };
 
@@ -538,6 +626,27 @@ static PyMethodDef PyScript_methods[] =
   { "unload", (PyCFunction) PyScript_unload, METH_NOARGS, "Unload the script." },
   { "eternalize", (PyCFunction) PyScript_eternalize, METH_NOARGS, "Eternalize the script." },
   { "post", (PyCFunction) PyScript_post, METH_VARARGS | METH_KEYWORDS, "Post a JSON-encoded message to the script." },
+  { NULL }
+};
+
+static PyMethodDef PyPortalMembership_methods[] =
+{
+  { "terminate", (PyCFunction) PyPortalMembership_terminate, METH_NOARGS, "Terminate the membership." },
+  { NULL }
+};
+
+static PyMethodDef PyPortalService_methods[] =
+{
+  { "start", (PyCFunction) PyPortalService_start, METH_NOARGS, "Start listening for incoming connections." },
+  { "stop", (PyCFunction) PyPortalService_stop, METH_NOARGS, "Stop listening for incoming connections, and kick any connected clients." },
+  { "post", (PyCFunction) PyPortalService_post, METH_VARARGS | METH_KEYWORDS, "Post a message to a specific control channel." },
+  { "broadcast", (PyCFunction) PyPortalService_broadcast, METH_VARARGS | METH_KEYWORDS, "Broadcast a message to all control channels." },
+  { NULL }
+};
+
+static PyMemberDef PyPortalService_members[] =
+{
+  { "device", T_OBJECT_EX, G_STRUCT_OFFSET (PyPortalService, device), READONLY, "Device for in-process control." },
   { NULL }
 };
 
@@ -952,6 +1061,48 @@ static PyTypeObject PyIconType =
 
 PYFRIDA_DEFINE_TYPE (Icon, PyIcon_init_from_handle, g_object_unref);
 
+static PyTypeObject PyBusType =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "_frida.Bus",                                 /* tp_name           */
+  sizeof (PyBus),                               /* tp_basicsize      */
+  0,                                            /* tp_itemsize       */
+  NULL,                                         /* tp_dealloc        */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
+  NULL,                                         /* tp_getattr        */
+  NULL,                                         /* tp_setattr        */
+  NULL,                                         /* tp_compare        */
+  NULL,                                         /* tp_repr           */
+  NULL,                                         /* tp_as_number      */
+  NULL,                                         /* tp_as_sequence    */
+  NULL,                                         /* tp_as_mapping     */
+  NULL,                                         /* tp_hash           */
+  NULL,                                         /* tp_call           */
+  NULL,                                         /* tp_str            */
+  NULL,                                         /* tp_getattro       */
+  NULL,                                         /* tp_setattro       */
+  NULL,                                         /* tp_as_buffer      */
+  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
+  "Frida Message Bus",                          /* tp_doc            */
+  NULL,                                         /* tp_traverse       */
+  NULL,                                         /* tp_clear          */
+  NULL,                                         /* tp_richcompare    */
+  0,                                            /* tp_weaklistoffset */
+  NULL,                                         /* tp_iter           */
+  NULL,                                         /* tp_iternext       */
+  PyBus_methods,                                /* tp_methods        */
+  NULL,                                         /* tp_members        */
+  NULL,                                         /* tp_getset         */
+  &PyGObjectType,                               /* tp_base           */
+  NULL,                                         /* tp_dict           */
+  NULL,                                         /* tp_descr_get      */
+  NULL,                                         /* tp_descr_set      */
+  0,                                            /* tp_dictoffset     */
+  NULL,                                         /* tp_init           */
+};
+
+PYFRIDA_DEFINE_TYPE (Bus, NULL, g_object_unref);
+
 static PyTypeObject PySessionType =
 {
   PyVarObject_HEAD_INIT (NULL, 0)
@@ -1036,6 +1187,174 @@ static PyTypeObject PyScriptType =
 
 PYFRIDA_DEFINE_TYPE (Script, NULL, frida_unref);
 
+static PyTypeObject PyRelayType =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "_frida.Relay",                               /* tp_name           */
+  sizeof (PyRelay),                             /* tp_basicsize      */
+  0,                                            /* tp_itemsize       */
+  NULL,                                         /* tp_dealloc        */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
+  NULL,                                         /* tp_getattr        */
+  NULL,                                         /* tp_setattr        */
+  NULL,                                         /* tp_compare        */
+  NULL,                                         /* tp_repr           */
+  NULL,                                         /* tp_as_number      */
+  NULL,                                         /* tp_as_sequence    */
+  NULL,                                         /* tp_as_mapping     */
+  NULL,                                         /* tp_hash           */
+  NULL,                                         /* tp_call           */
+  NULL,                                         /* tp_str            */
+  NULL,                                         /* tp_getattro       */
+  NULL,                                         /* tp_setattro       */
+  NULL,                                         /* tp_as_buffer      */
+  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
+  "Frida Relay",                                /* tp_doc            */
+  NULL,                                         /* tp_traverse       */
+  NULL,                                         /* tp_clear          */
+  NULL,                                         /* tp_richcompare    */
+  0,                                            /* tp_weaklistoffset */
+  NULL,                                         /* tp_iter           */
+  NULL,                                         /* tp_iternext       */
+  NULL,                                         /* tp_methods        */
+  NULL,                                         /* tp_members        */
+  NULL,                                         /* tp_getset         */
+  &PyGObjectType,                               /* tp_base           */
+  NULL,                                         /* tp_dict           */
+  NULL,                                         /* tp_descr_get      */
+  NULL,                                         /* tp_descr_set      */
+  0,                                            /* tp_dictoffset     */
+  (initproc) PyRelay_init,                      /* tp_init           */
+};
+
+PYFRIDA_DEFINE_TYPE (Relay, NULL, g_object_unref);
+
+static PyTypeObject PyPortalMembershipType =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "_frida.PortalMembership",                    /* tp_name           */
+  sizeof (PyPortalMembership),                  /* tp_basicsize      */
+  0,                                            /* tp_itemsize       */
+  NULL,                                         /* tp_dealloc        */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
+  NULL,                                         /* tp_getattr        */
+  NULL,                                         /* tp_setattr        */
+  NULL,                                         /* tp_compare        */
+  NULL,                                         /* tp_repr           */
+  NULL,                                         /* tp_as_number      */
+  NULL,                                         /* tp_as_sequence    */
+  NULL,                                         /* tp_as_mapping     */
+  NULL,                                         /* tp_hash           */
+  NULL,                                         /* tp_call           */
+  NULL,                                         /* tp_str            */
+  NULL,                                         /* tp_getattro       */
+  NULL,                                         /* tp_setattro       */
+  NULL,                                         /* tp_as_buffer      */
+  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
+  "Frida Portal Membership",                    /* tp_doc            */
+  NULL,                                         /* tp_traverse       */
+  NULL,                                         /* tp_clear          */
+  NULL,                                         /* tp_richcompare    */
+  0,                                            /* tp_weaklistoffset */
+  NULL,                                         /* tp_iter           */
+  NULL,                                         /* tp_iternext       */
+  PyPortalMembership_methods,                   /* tp_methods        */
+  NULL,                                         /* tp_members        */
+  NULL,                                         /* tp_getset         */
+  &PyGObjectType,                               /* tp_base           */
+  NULL,                                         /* tp_dict           */
+  NULL,                                         /* tp_descr_get      */
+  NULL,                                         /* tp_descr_set      */
+  0,                                            /* tp_dictoffset     */
+  NULL,                                         /* tp_init           */
+};
+
+PYFRIDA_DEFINE_TYPE (PortalMembership, NULL, frida_unref);
+
+static PyTypeObject PyPortalServiceType =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "_frida.PortalService",                       /* tp_name           */
+  sizeof (PyPortalService),                     /* tp_basicsize      */
+  0,                                            /* tp_itemsize       */
+  (destructor) PyPortalService_dealloc,         /* tp_dealloc        */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
+  NULL,                                         /* tp_getattr        */
+  NULL,                                         /* tp_setattr        */
+  NULL,                                         /* tp_compare        */
+  NULL,                                         /* tp_repr           */
+  NULL,                                         /* tp_as_number      */
+  NULL,                                         /* tp_as_sequence    */
+  NULL,                                         /* tp_as_mapping     */
+  NULL,                                         /* tp_hash           */
+  NULL,                                         /* tp_call           */
+  NULL,                                         /* tp_str            */
+  NULL,                                         /* tp_getattro       */
+  NULL,                                         /* tp_setattro       */
+  NULL,                                         /* tp_as_buffer      */
+  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
+  "Frida Portal Service",                       /* tp_doc            */
+  NULL,                                         /* tp_traverse       */
+  NULL,                                         /* tp_clear          */
+  NULL,                                         /* tp_richcompare    */
+  0,                                            /* tp_weaklistoffset */
+  NULL,                                         /* tp_iter           */
+  NULL,                                         /* tp_iternext       */
+  PyPortalService_methods,                      /* tp_methods        */
+  PyPortalService_members,                      /* tp_members        */
+  NULL,                                         /* tp_getset         */
+  &PyGObjectType,                               /* tp_base           */
+  NULL,                                         /* tp_dict           */
+  NULL,                                         /* tp_descr_get      */
+  NULL,                                         /* tp_descr_set      */
+  0,                                            /* tp_dictoffset     */
+  (initproc) PyPortalService_init,              /* tp_init           */
+};
+
+PYFRIDA_DEFINE_TYPE (PortalService, PyPortalService_init_from_handle, frida_unref);
+
+static PyTypeObject PyEndpointParametersType =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "_frida.EndpointParameters",                  /* tp_name           */
+  sizeof (PyEndpointParameters),                /* tp_basicsize      */
+  0,                                            /* tp_itemsize       */
+  NULL,                                         /* tp_dealloc        */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
+  NULL,                                         /* tp_getattr        */
+  NULL,                                         /* tp_setattr        */
+  NULL,                                         /* tp_compare        */
+  NULL,                                         /* tp_repr           */
+  NULL,                                         /* tp_as_number      */
+  NULL,                                         /* tp_as_sequence    */
+  NULL,                                         /* tp_as_mapping     */
+  NULL,                                         /* tp_hash           */
+  NULL,                                         /* tp_call           */
+  NULL,                                         /* tp_str            */
+  NULL,                                         /* tp_getattro       */
+  NULL,                                         /* tp_setattro       */
+  NULL,                                         /* tp_as_buffer      */
+  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
+  "Frida EndpointParameters",                   /* tp_doc            */
+  NULL,                                         /* tp_traverse       */
+  NULL,                                         /* tp_clear          */
+  NULL,                                         /* tp_richcompare    */
+  0,                                            /* tp_weaklistoffset */
+  NULL,                                         /* tp_iter           */
+  NULL,                                         /* tp_iternext       */
+  NULL,                                         /* tp_methods        */
+  NULL,                                         /* tp_members        */
+  NULL,                                         /* tp_getset         */
+  &PyGObjectType,                               /* tp_base           */
+  NULL,                                         /* tp_dict           */
+  NULL,                                         /* tp_descr_get      */
+  NULL,                                         /* tp_descr_set      */
+  0,                                            /* tp_dictoffset     */
+  (initproc) PyEndpointParameters_init,         /* tp_init           */
+};
+
+PYFRIDA_DEFINE_TYPE (EndpointParameters, NULL, g_object_unref);
+
 static PyTypeObject PyFileMonitorType =
 {
   PyVarObject_HEAD_INIT (NULL, 0)
@@ -1058,7 +1377,7 @@ static PyTypeObject PyFileMonitorType =
   NULL,                                         /* tp_setattro       */
   NULL,                                         /* tp_as_buffer      */
   Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
-  "Frida FileMonitor",                          /* tp_doc            */
+  "Frida File Monitor",                         /* tp_doc            */
   NULL,                                         /* tp_traverse       */
   NULL,                                         /* tp_clear          */
   NULL,                                         /* tp_richcompare    */
@@ -1463,7 +1782,7 @@ PyGObjectSignalClosure_marshal (GClosure * closure, GValue * return_gvalue, guin
   (void) invocation_hint;
   (void) marshal_data;
 
-  if (g_atomic_int_get (&device_managers_alive) == 0)
+  if (g_atomic_int_get (&toplevel_objects_alive) == 0)
     return;
 
   gstate = PyGILState_Ensure ();
@@ -1880,7 +2199,99 @@ PyGObject_marshal_object (gpointer handle, GType type)
   if (spec == NULL)
     spec = &PYFRIDA_TYPE_SPEC (GObject);
 
+  if (G_IS_SOCKET_ADDRESS (handle))
+    return PyGObject_marshal_socket_address (handle);
+
   return PyGObject_new_take_handle (g_object_ref (handle), spec);
+}
+
+static PyObject *
+PyGObject_marshal_socket_address (GSocketAddress * address)
+{
+  PyObject * result = NULL;
+
+  if (G_IS_INET_SOCKET_ADDRESS (address))
+  {
+    GInetSocketAddress * sa;
+    GInetAddress * ia;
+    gchar * host;
+    guint16 port;
+
+    sa = G_INET_SOCKET_ADDRESS (address);
+    ia = g_inet_socket_address_get_address (sa);
+
+    host = g_inet_address_to_string (ia);
+    port = g_inet_socket_address_get_port (sa);
+
+    if (g_socket_address_get_family (address) == G_SOCKET_FAMILY_IPV4)
+      result = Py_BuildValue ("(sH)", host, port);
+    else
+      result = Py_BuildValue ("(sHII)", host, port, g_inet_socket_address_get_flowinfo (sa), g_inet_socket_address_get_scope_id (sa));
+
+    g_free (host);
+  }
+#ifdef G_OS_UNIX
+  else if (G_IS_UNIX_SOCKET_ADDRESS (address))
+  {
+    GUnixSocketAddress * sa = G_UNIX_SOCKET_ADDRESS (address);
+
+    switch (g_unix_socket_address_get_address_type (sa))
+    {
+      case G_UNIX_SOCKET_ADDRESS_ANONYMOUS:
+      {
+        result = PyUnicode_FromUTF8String ("");
+        break;
+      }
+      case G_UNIX_SOCKET_ADDRESS_PATH:
+      {
+        gchar * path = g_filename_to_utf8 (g_unix_socket_address_get_path (sa), -1, NULL, NULL, NULL);
+        result = PyUnicode_FromUTF8String (path);
+        g_free (path);
+        break;
+      }
+      case G_UNIX_SOCKET_ADDRESS_ABSTRACT:
+      case G_UNIX_SOCKET_ADDRESS_ABSTRACT_PADDED:
+      {
+        result = PyBytes_FromStringAndSize (g_unix_socket_address_get_path (sa), g_unix_socket_address_get_path_len (sa));
+        break;
+      }
+      default:
+      {
+        result = Py_None;
+        Py_INCREF (result);
+        break;
+      }
+    }
+  }
+#endif
+
+  if (result == NULL)
+    result = PyGObject_new_take_handle (g_object_ref (address), &PYFRIDA_TYPE_SPEC (GObject));
+
+  return result;
+}
+
+static gboolean
+PyGObject_unmarshal_certificate (const gchar * str, GTlsCertificate ** certificate)
+{
+  GError * error = NULL;
+
+  if (strchr (str, '\n') != NULL)
+    *certificate = g_tls_certificate_new_from_pem (str, -1, &error);
+  else
+    *certificate = g_tls_certificate_new_from_file (str, &error);
+  if (error != NULL)
+    goto propagate_error;
+
+  return TRUE;
+
+propagate_error:
+  {
+    PyFrida_raise (g_error_new_literal (FRIDA_ERROR, FRIDA_ERROR_INVALID_ARGUMENT, error->message));
+    g_error_free (error);
+
+    return FALSE;
+  }
 }
 
 
@@ -1890,7 +2301,7 @@ PyDeviceManager_init (PyDeviceManager * self, PyObject * args, PyObject * kw)
   if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
     return -1;
 
-  g_atomic_int_inc (&device_managers_alive);
+  g_atomic_int_inc (&toplevel_objects_alive);
 
   PyGObject_take_handle (&self->parent, frida_device_manager_new (), &PYFRIDA_TYPE_SPEC (DeviceManager));
 
@@ -1902,7 +2313,7 @@ PyDeviceManager_dealloc (PyDeviceManager * self)
 {
   FridaDeviceManager * handle;
 
-  g_atomic_int_dec_and_test (&device_managers_alive);
+  g_atomic_int_dec_and_test (&toplevel_objects_alive);
 
   handle = PyGObject_steal_handle (&self->parent);
   if (handle != NULL)
@@ -2016,40 +2427,97 @@ PyDeviceManager_enumerate_devices (PyDeviceManager * self)
 }
 
 static PyObject *
-PyDeviceManager_add_remote_device (PyDeviceManager * self, PyObject * args)
+PyDeviceManager_add_remote_device (PyDeviceManager * self, PyObject * args, PyObject * kw)
 {
-  const char * location;
+  PyObject * result = NULL;
+  static char * keywords[] = { "address", "certificate", "token", NULL };
+  char * address;
+  char * certificate = NULL;
+  char * token = NULL;
+  FridaRemoteDeviceOptions * options;
   GError * error = NULL;
-  FridaDevice * result;
+  FridaDevice * handle;
 
-  if (!PyArg_ParseTuple (args, "s", &location))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|eses", keywords,
+        "utf-8", &address,
+        "utf-8", &certificate,
+        "utf-8", &token))
     return NULL;
 
-  Py_BEGIN_ALLOW_THREADS
-  result = frida_device_manager_add_remote_device_sync (PY_GOBJECT_HANDLE (self), location, g_cancellable_get_current (), &error);
-  Py_END_ALLOW_THREADS
-  if (error != NULL)
-    return PyFrida_raise (error);
+  options = PyDeviceManager_parse_remote_device_options (certificate, token);
+  if (options == NULL)
+    goto beach;
 
-  return PyDevice_new_take_handle (result);
+  Py_BEGIN_ALLOW_THREADS
+  handle = frida_device_manager_add_remote_device_sync (PY_GOBJECT_HANDLE (self), address, options, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  result = (error == NULL)
+      ? PyDevice_new_take_handle (handle)
+      : PyFrida_raise (error);
+
+beach:
+  g_clear_object (&options);
+
+  PyMem_Free (token);
+  PyMem_Free (certificate);
+  PyMem_Free (address);
+
+  return result;
 }
 
 static PyObject *
-PyDeviceManager_remove_remote_device (PyDeviceManager * self, PyObject * args)
+PyDeviceManager_remove_remote_device (PyDeviceManager * self, PyObject * args, PyObject * kw)
 {
-  const char * location;
+  static char * keywords[] = { "address", NULL };
+  char * address;
   GError * error = NULL;
 
-  if (!PyArg_ParseTuple (args, "s", &location))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es", keywords, "utf-8", &address))
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_device_manager_remove_remote_device_sync (PY_GOBJECT_HANDLE (self), location, g_cancellable_get_current (), &error);
+  frida_device_manager_remove_remote_device_sync (PY_GOBJECT_HANDLE (self), address, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
+
+  PyMem_Free (address);
+
   if (error != NULL)
     return PyFrida_raise (error);
 
   Py_RETURN_NONE;
+}
+
+static FridaRemoteDeviceOptions *
+PyDeviceManager_parse_remote_device_options (const gchar * certificate_value, const gchar * token)
+{
+  FridaRemoteDeviceOptions * options;
+
+  options = frida_remote_device_options_new ();
+
+  if (certificate_value != NULL)
+  {
+    GTlsCertificate * certificate;
+
+    if (!PyGObject_unmarshal_certificate (certificate_value, &certificate))
+      goto propagate_error;
+
+    frida_remote_device_options_set_certificate (options, certificate);
+
+    g_object_unref (certificate);
+  }
+
+  if (token != NULL)
+    frida_remote_device_options_set_token (options, token);
+
+  return options;
+
+propagate_error:
+  {
+    g_object_unref (options);
+
+    return NULL;
+  }
 }
 
 
@@ -2602,6 +3070,21 @@ PyDevice_open_channel (PyDevice * self, PyObject * args)
   return PyIOStream_new_take_handle (stream);
 }
 
+static PyObject *
+PyDevice_get_bus (PyDevice * self, PyObject * args)
+{
+  GError * error = NULL;
+  FridaBus * handle;
+
+  Py_BEGIN_ALLOW_THREADS
+  handle = frida_device_get_bus_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  return PyBus_new_take_handle (handle);
+}
+
 
 static PyObject *
 PyApplication_new_take_handle (FridaApplication * handle)
@@ -3045,6 +3528,40 @@ PyIcon_repr (PyIcon * self)
 
 
 static PyObject *
+PyBus_new_take_handle (FridaBus * handle)
+{
+  return PyGObject_new_take_handle (handle, &PYFRIDA_TYPE_SPEC (Bus));
+}
+
+static PyObject *
+PyBus_post (PyScript * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "message", "data", NULL };
+  char * message;
+  gconstpointer data_buffer = NULL;
+  Py_ssize_t data_size = 0;
+  GBytes * data;
+  GError * error = NULL;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|z#", keywords, "utf-8", &message, &data_buffer, &data_size))
+    return NULL;
+  data = (data_buffer != NULL) ? g_bytes_new (data_buffer, data_size) : NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_bus_post_sync (PY_GOBJECT_HANDLE (self), message, data, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  g_bytes_unref (data);
+  PyMem_Free (message);
+
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+
+static PyObject *
 PySession_new_take_handle (FridaSession * handle)
 {
   return PyGObject_new_take_handle (handle, &PYFRIDA_TYPE_SPEC (Session));
@@ -3315,6 +3832,172 @@ PySession_enable_jit (PySession * self)
   Py_RETURN_NONE;
 }
 
+static PyObject *
+PySession_setup_peer_connection (PySession * self, PyObject * args, PyObject * kw)
+{
+  gboolean success = FALSE;
+  static char * keywords[] = { "stun_server", "relays", NULL };
+  char * stun_server = NULL;
+  PyObject * relays = NULL;
+  FridaPeerOptions * options = NULL;
+  GError * error = NULL;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "|esO", keywords,
+        "utf-8", &stun_server,
+        &relays))
+    goto beach;
+
+  options = PySession_parse_peer_options (stun_server, relays);
+  if (options == NULL)
+    goto beach;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_session_setup_peer_connection_sync (PY_GOBJECT_HANDLE (self), options, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  if (error != NULL)
+    goto propagate_error;
+
+  success = TRUE;
+  goto beach;
+
+propagate_error:
+  {
+    PyFrida_raise (error);
+    goto beach;
+  }
+beach:
+  {
+    g_clear_object (&options);
+
+    PyMem_Free (stun_server);
+
+    if (!success)
+      return NULL;
+
+    Py_RETURN_NONE;
+  }
+}
+
+static FridaPeerOptions *
+PySession_parse_peer_options (const gchar * stun_server, PyObject * relays)
+{
+  FridaPeerOptions * options;
+  PyObject * relay;
+
+  options = frida_peer_options_new ();
+
+  frida_peer_options_set_stun_server (options, stun_server);
+
+  if (relays != NULL)
+  {
+    Py_ssize_t n, i;
+
+    n = PySequence_Length (relays);
+    if (n == -1)
+      goto propagate_error;
+
+    for (i = 0; i != n; i++)
+    {
+      relay = PySequence_GetItem (relays, i);
+      if (relay == NULL)
+        goto propagate_error;
+
+      if (!PyObject_IsInstance (relay, (PyObject *) &PYFRIDA_TYPE (Relay)))
+        goto expected_relay;
+
+      frida_peer_options_add_relay (options, PY_GOBJECT_HANDLE (relay));
+
+      Py_DECREF (relay);
+    }
+  }
+
+  return options;
+
+expected_relay:
+  {
+    Py_DECREF (relay);
+
+    PyErr_SetString (PyExc_TypeError, "expected sequence of Relay objects");
+    goto propagate_error;
+  }
+propagate_error:
+  {
+    g_object_unref (options);
+
+    return NULL;
+  }
+}
+
+static PyObject *
+PySession_join_portal (PySession * self, PyObject * args, PyObject * kw)
+{
+  PyObject * result = NULL;
+  static char * keywords[] = { "address", "certificate", "token", NULL };
+  char * address;
+  char * certificate = NULL;
+  char * token = NULL;
+  FridaPortalOptions * options;
+  GError * error = NULL;
+  FridaPortalMembership * handle;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|eses", keywords, "utf-8", &address, "utf-8", &certificate, "utf-8", &token))
+    return NULL;
+
+  options = PySession_parse_portal_options (certificate, token);
+  if (options == NULL)
+    goto beach;
+
+  Py_BEGIN_ALLOW_THREADS
+  handle = frida_session_join_portal_sync (PY_GOBJECT_HANDLE (self), address, options, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  result = (error == NULL)
+      ? PyPortalMembership_new_take_handle (handle)
+      : PyFrida_raise (error);
+
+beach:
+  g_clear_object (&options);
+
+  PyMem_Free (token);
+  PyMem_Free (certificate);
+  PyMem_Free (address);
+
+  return result;
+}
+
+static FridaPortalOptions *
+PySession_parse_portal_options (const gchar * certificate_value, const gchar * token)
+{
+  FridaPortalOptions * options;
+
+  options = frida_portal_options_new ();
+
+  if (certificate_value != NULL)
+  {
+    GTlsCertificate * certificate;
+
+    if (!PyGObject_unmarshal_certificate (certificate_value, &certificate))
+      goto propagate_error;
+
+    frida_portal_options_set_certificate (options, certificate);
+
+    g_object_unref (certificate);
+  }
+
+  if (token != NULL)
+    frida_portal_options_set_token (options, token);
+
+  return options;
+
+propagate_error:
+  {
+    g_object_unref (options);
+
+    return NULL;
+  }
+}
+
 
 static PyObject *
 PyScript_new_take_handle (FridaScript * handle)
@@ -3389,6 +4072,401 @@ PyScript_post (PyScript * self, PyObject * args, PyObject * kw)
     return PyFrida_raise (error);
 
   Py_RETURN_NONE;
+}
+
+
+static int
+PyRelay_init (PyRelay * self, PyObject * args, PyObject * kw)
+{
+  int result = -1;
+  static char * keywords[] = { "address", "username", "password", "kind", NULL };
+  char * address = NULL;
+  char * username = NULL;
+  char * password = NULL;
+  char * kind_value = NULL;
+  FridaRelayKind kind;
+  FridaRelay * handle;
+
+  if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
+    goto beach;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "eseseses", keywords,
+        "utf-8", &address,
+        "utf-8", &username,
+        "utf-8", &password,
+        "utf-8", &kind_value))
+    goto beach;
+
+  if (!PyGObject_unmarshal_enum (kind_value, FRIDA_TYPE_RELAY_KIND, &kind))
+    goto beach;
+
+  handle = frida_relay_new (address, username, password, kind);
+
+  PyGObject_take_handle (&self->parent, handle, &PYFRIDA_TYPE_SPEC (Relay));
+
+  result = 0;
+
+beach:
+  PyMem_Free (kind_value);
+  PyMem_Free (password);
+  PyMem_Free (username);
+  PyMem_Free (address);
+
+  return result;
+}
+
+
+static PyObject *
+PyPortalMembership_new_take_handle (FridaPortalMembership * handle)
+{
+  return PyGObject_new_take_handle (handle, &PYFRIDA_TYPE_SPEC (PortalMembership));
+}
+
+static PyObject *
+PyPortalMembership_terminate (PyPortalMembership * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_portal_membership_terminate_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+
+static int
+PyPortalService_init (PyPortalService * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "cluster_params", "control_params", NULL };
+  PyEndpointParameters * cluster_params;
+  PyEndpointParameters * control_params = NULL;
+  FridaPortalService * handle;
+
+  if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
+    return -1;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "O!|O!", keywords,
+        &PYFRIDA_TYPE (EndpointParameters), &cluster_params,
+        &PYFRIDA_TYPE (EndpointParameters), &control_params))
+    return -1;
+
+  g_atomic_int_inc (&toplevel_objects_alive);
+
+  handle = frida_portal_service_new (PY_GOBJECT_HANDLE (cluster_params),
+      (control_params != NULL) ? PY_GOBJECT_HANDLE (control_params) : NULL);
+
+  PyGObject_take_handle (&self->parent, handle, &PYFRIDA_TYPE_SPEC (PortalService));
+
+  PyPortalService_init_from_handle (self, handle);
+
+  return 0;
+}
+
+static void
+PyPortalService_init_from_handle (PyPortalService * self, FridaPortalService * handle)
+{
+  self->device = PyDevice_new_take_handle (g_object_ref (frida_portal_service_get_device (handle)));
+}
+
+static void
+PyPortalService_dealloc (PyPortalService * self)
+{
+  FridaPortalService * handle;
+
+  g_atomic_int_dec_and_test (&toplevel_objects_alive);
+
+  handle = PyGObject_steal_handle (&self->parent);
+  if (handle != NULL)
+  {
+    Py_BEGIN_ALLOW_THREADS
+    frida_portal_service_stop_sync (handle, NULL, NULL);
+    frida_unref (handle);
+    Py_END_ALLOW_THREADS
+  }
+
+  Py_XDECREF (self->device);
+
+  PyGObjectType.tp_dealloc ((PyObject *) self);
+}
+
+static PyObject *
+PyPortalService_start (PyPortalService * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_portal_service_start_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyPortalService_stop (PyPortalService * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_portal_service_stop_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyPortalService_post (PyScript * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "connection_id", "message", "data", NULL };
+  unsigned int connection_id;
+  char * message;
+  gconstpointer data_buffer = NULL;
+  Py_ssize_t data_size = 0;
+  GBytes * data;
+  GError * error = NULL;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "Ies|z#", keywords,
+        &connection_id,
+        "utf-8", &message,
+        &data_buffer, &data_size))
+    return NULL;
+  data = (data_buffer != NULL) ? g_bytes_new (data_buffer, data_size) : NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_portal_service_post_sync (PY_GOBJECT_HANDLE (self), connection_id, message, data, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  g_bytes_unref (data);
+  PyMem_Free (message);
+
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyPortalService_broadcast (PyScript * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "message", "data", NULL };
+  char * message;
+  gconstpointer data_buffer = NULL;
+  Py_ssize_t data_size = 0;
+  GBytes * data;
+  GError * error = NULL;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|z#", keywords,
+        "utf-8", &message,
+        &data_buffer, &data_size))
+    return NULL;
+  data = (data_buffer != NULL) ? g_bytes_new (data_buffer, data_size) : NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_portal_service_broadcast_sync (PY_GOBJECT_HANDLE (self), message, data, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  g_bytes_unref (data);
+  PyMem_Free (message);
+
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+
+static int
+PyEndpointParameters_init (PyEndpointParameters * self, PyObject * args, PyObject * kw)
+{
+  int result = -1;
+  static char * keywords[] = { "address", "port", "certificate", "auth_token", "auth_callback", NULL };
+  char * address = NULL;
+  unsigned short int port = 0;
+  char * certificate_value = NULL;
+  char * auth_token = NULL;
+  PyObject * auth_callback = NULL;
+  GTlsCertificate * certificate = NULL;
+  FridaAuthenticationService * auth_service = NULL;
+  FridaEndpointParameters * handle;
+
+  if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
+    goto beach;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "|esHesesO", keywords,
+        "utf-8", &address,
+        &port,
+        "utf-8", &certificate_value,
+        "utf-8", &auth_token,
+        &auth_callback))
+    goto beach;
+
+  if (certificate_value != NULL && !PyGObject_unmarshal_certificate (certificate_value, &certificate))
+    goto beach;
+
+  if (auth_token != NULL)
+    auth_service = FRIDA_AUTHENTICATION_SERVICE (frida_static_authentication_service_new (auth_token));
+  else if (auth_callback != NULL)
+    auth_service = FRIDA_AUTHENTICATION_SERVICE (frida_python_authentication_service_new (auth_callback));
+
+  handle = frida_endpoint_parameters_new (address, port, certificate, auth_service);
+
+  PyGObject_take_handle (&self->parent, handle, &PYFRIDA_TYPE_SPEC (EndpointParameters));
+
+  result = 0;
+
+beach:
+  g_clear_object (&auth_service);
+  g_clear_object (&certificate);
+
+  PyMem_Free (auth_token);
+  PyMem_Free (certificate_value);
+  PyMem_Free (address);
+
+  return result;
+}
+
+
+G_DEFINE_TYPE_EXTENDED (FridaPythonAuthenticationService, frida_python_authentication_service, G_TYPE_OBJECT, 0,
+    G_IMPLEMENT_INTERFACE (FRIDA_TYPE_AUTHENTICATION_SERVICE, frida_python_authentication_service_iface_init))
+
+static FridaPythonAuthenticationService *
+frida_python_authentication_service_new (PyObject * callback)
+{
+  FridaPythonAuthenticationService * service;
+
+  service = g_object_new (FRIDA_TYPE_PYTHON_AUTHENTICATION_SERVICE, NULL);
+  service->callback = callback;
+  Py_IncRef (callback);
+
+  return service;
+}
+
+static void
+frida_python_authentication_service_class_init (FridaPythonAuthenticationServiceClass * klass)
+{
+  GObjectClass * object_class = G_OBJECT_CLASS (klass);
+
+  object_class->dispose = frida_python_authentication_service_dispose;
+}
+
+static void
+frida_python_authentication_service_iface_init (gpointer g_iface, gpointer iface_data)
+{
+  FridaAuthenticationServiceIface * iface = g_iface;
+
+  iface->authenticate = frida_python_authentication_service_authenticate;
+  iface->authenticate_finish = frida_python_authentication_service_authenticate_finish;
+}
+
+static void
+frida_python_authentication_service_init (FridaPythonAuthenticationService * self)
+{
+  self->pool = g_thread_pool_new ((GFunc) frida_python_authentication_service_do_authenticate, self, 1, FALSE, NULL);
+}
+
+static void
+frida_python_authentication_service_dispose (GObject * object)
+{
+  FridaPythonAuthenticationService * self = FRIDA_PYTHON_AUTHENTICATION_SERVICE (object);
+
+  if (self->pool != NULL)
+  {
+    g_thread_pool_free (self->pool, FALSE, FALSE);
+    self->pool = NULL;
+  }
+
+  if (self->callback != NULL)
+  {
+    PyGILState_STATE gstate;
+
+    gstate = PyGILState_Ensure ();
+
+    Py_DECREF (self->callback);
+    self->callback = NULL;
+
+    PyGILState_Release (gstate);
+  }
+
+  G_OBJECT_CLASS (frida_python_authentication_service_parent_class)->dispose (object);
+}
+
+static void
+frida_python_authentication_service_authenticate (FridaAuthenticationService * service, const gchar * token, GCancellable * cancellable,
+    GAsyncReadyCallback callback, gpointer user_data)
+{
+  FridaPythonAuthenticationService * self;
+  GTask * task;
+
+  self = FRIDA_PYTHON_AUTHENTICATION_SERVICE (service);
+
+  task = g_task_new (self, cancellable, callback, user_data);
+  g_task_set_task_data (task, g_strdup (token), g_free);
+
+  g_thread_pool_push (self->pool, task, NULL);
+}
+
+static void
+frida_python_authentication_service_authenticate_finish (FridaAuthenticationService * service, GAsyncResult * result, GError ** error)
+{
+  g_task_propagate_pointer (G_TASK (result), error);
+}
+
+static void
+frida_python_authentication_service_do_authenticate (GTask * task, FridaPythonAuthenticationService * self)
+{
+  const gchar * token;
+  PyGILState_STATE gstate;
+  PyObject * result;
+  gchar * message = NULL;
+
+  token = g_task_get_task_data (task);
+
+  gstate = PyGILState_Ensure ();
+
+  result = PyObject_CallFunction (self->callback, "s", token);
+  if (result != NULL)
+  {
+    Py_DECREF (result);
+  }
+  else
+  {
+    PyObject * type, * value, * traceback;
+    const gchar * str;
+
+    PyErr_Fetch (&type, &value, &traceback);
+
+    if (value != NULL)
+    {
+      PyObject * message_value = PyObject_Str (value);
+      PyGObject_unmarshal_string (message_value, &str);
+      message = g_strdup (str);
+      Py_DECREF (message_value);
+    }
+    else
+    {
+      message = g_strdup ("Internal error");
+    }
+
+    Py_DECREF (type);
+    Py_XDECREF (value);
+    Py_XDECREF (traceback);
+  }
+
+  PyGILState_Release (gstate);
+
+  if (message == NULL)
+    g_task_return_pointer (task, NULL, NULL);
+  else
+    g_task_return_new_error (task, FRIDA_ERROR, FRIDA_ERROR_INVALID_ARGUMENT, "%s", message);
+
+  g_free (message);
+  g_object_unref (task);
 }
 
 
@@ -4004,8 +5082,13 @@ MOD_INIT (_frida)
   PYFRIDA_REGISTER_TYPE (Child, FRIDA_TYPE_CHILD);
   PYFRIDA_REGISTER_TYPE (Crash, FRIDA_TYPE_CRASH);
   PYFRIDA_REGISTER_TYPE (Icon, FRIDA_TYPE_ICON);
+  PYFRIDA_REGISTER_TYPE (Bus, FRIDA_TYPE_BUS);
   PYFRIDA_REGISTER_TYPE (Session, FRIDA_TYPE_SESSION);
   PYFRIDA_REGISTER_TYPE (Script, FRIDA_TYPE_SCRIPT);
+  PYFRIDA_REGISTER_TYPE (Relay, FRIDA_TYPE_RELAY);
+  PYFRIDA_REGISTER_TYPE (PortalMembership, FRIDA_TYPE_PORTAL_MEMBERSHIP);
+  PYFRIDA_REGISTER_TYPE (PortalService, FRIDA_TYPE_PORTAL_SERVICE);
+  PYFRIDA_REGISTER_TYPE (EndpointParameters, FRIDA_TYPE_ENDPOINT_PARAMETERS);
   PYFRIDA_REGISTER_TYPE (FileMonitor, FRIDA_TYPE_FILE_MONITOR);
   PYFRIDA_REGISTER_TYPE (IOStream, G_TYPE_IO_STREAM);
   PYFRIDA_REGISTER_TYPE (Cancellable, G_TYPE_CANCELLABLE);
