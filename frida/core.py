@@ -535,6 +535,35 @@ class PortalService(object):
                 traceback.print_exc()
 
 
+class WebGatewayService(object):
+    def __init__(self, gateway_params=EndpointParameters(), target_params=EndpointParameters(), root=None, origin=None):
+        kw = {}
+
+        if root is not None:
+            kw['root'] = str(root)
+
+        if origin is not None:
+            kw['origin'] = origin
+
+        self._impl = _frida.WebGatewayService(gateway_params=gateway_params._impl,
+                                              target_params=target_params._impl,
+                                              **kw)
+
+    @cancellable
+    def start(self):
+        self._impl.start()
+
+    @cancellable
+    def stop(self):
+        self._impl.stop()
+
+    def on(self, signal, callback):
+        self._impl.on(signal, callback)
+
+    def off(self, signal, callback):
+        self._impl.off(signal, callback)
+
+
 class IOStream(object):
     def __init__(self, impl):
         self._impl = impl

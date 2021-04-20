@@ -126,6 +126,7 @@ typedef struct _PyScript                       PyScript;
 typedef struct _PyRelay                        PyRelay;
 typedef struct _PyPortalMembership             PyPortalMembership;
 typedef struct _PyPortalService                PyPortalService;
+typedef struct _PyWebGatewayService            PyWebGatewayService;
 typedef struct _PyEndpointParameters           PyEndpointParameters;
 typedef struct _PyFileMonitor                  PyFileMonitor;
 typedef struct _PyIOStream                     PyIOStream;
@@ -257,6 +258,11 @@ struct _PyPortalService
 {
   PyGObject parent;
   PyObject * device;
+};
+
+struct _PyWebGatewayService
+{
+  PyGObject parent;
 };
 
 struct _PyEndpointParameters
@@ -431,6 +437,11 @@ static PyObject * PyPortalService_start (PyPortalService * self);
 static PyObject * PyPortalService_stop (PyPortalService * self);
 static PyObject * PyPortalService_post (PyScript * self, PyObject * args, PyObject * kw);
 static PyObject * PyPortalService_broadcast (PyScript * self, PyObject * args, PyObject * kw);
+
+static int PyWebGatewayService_init (PyWebGatewayService * self, PyObject * args, PyObject * kw);
+static void PyWebGatewayService_dealloc (PyWebGatewayService * self);
+static PyObject * PyWebGatewayService_start (PyWebGatewayService * self);
+static PyObject * PyWebGatewayService_stop (PyWebGatewayService * self);
 
 static int PyEndpointParameters_init (PyEndpointParameters * self, PyObject * args, PyObject * kw);
 
@@ -647,6 +658,13 @@ static PyMethodDef PyPortalService_methods[] =
 static PyMemberDef PyPortalService_members[] =
 {
   { "device", T_OBJECT_EX, G_STRUCT_OFFSET (PyPortalService, device), READONLY, "Device for in-process control." },
+  { NULL }
+};
+
+static PyMethodDef PyWebGatewayService_methods[] =
+{
+  { "start", (PyCFunction) PyWebGatewayService_start, METH_NOARGS, "Start listening for incoming connections." },
+  { "stop", (PyCFunction) PyWebGatewayService_stop, METH_NOARGS, "Stop listening for incoming connections, and kick any connected clients." },
   { NULL }
 };
 
@@ -1312,6 +1330,48 @@ static PyTypeObject PyPortalServiceType =
 };
 
 PYFRIDA_DEFINE_TYPE (PortalService, PyPortalService_init_from_handle, frida_unref);
+
+static PyTypeObject PyWebGatewayServiceType =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "_frida.WebGatewayService",                   /* tp_name           */
+  sizeof (PyWebGatewayService),                 /* tp_basicsize      */
+  0,                                            /* tp_itemsize       */
+  (destructor) PyWebGatewayService_dealloc,     /* tp_dealloc        */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
+  NULL,                                         /* tp_getattr        */
+  NULL,                                         /* tp_setattr        */
+  NULL,                                         /* tp_compare        */
+  NULL,                                         /* tp_repr           */
+  NULL,                                         /* tp_as_number      */
+  NULL,                                         /* tp_as_sequence    */
+  NULL,                                         /* tp_as_mapping     */
+  NULL,                                         /* tp_hash           */
+  NULL,                                         /* tp_call           */
+  NULL,                                         /* tp_str            */
+  NULL,                                         /* tp_getattro       */
+  NULL,                                         /* tp_setattro       */
+  NULL,                                         /* tp_as_buffer      */
+  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
+  "Frida Web Gateway Service",                  /* tp_doc            */
+  NULL,                                         /* tp_traverse       */
+  NULL,                                         /* tp_clear          */
+  NULL,                                         /* tp_richcompare    */
+  0,                                            /* tp_weaklistoffset */
+  NULL,                                         /* tp_iter           */
+  NULL,                                         /* tp_iternext       */
+  PyWebGatewayService_methods,                  /* tp_methods        */
+  NULL,                                         /* tp_members        */
+  NULL,                                         /* tp_getset         */
+  &PyGObjectType,                               /* tp_base           */
+  NULL,                                         /* tp_dict           */
+  NULL,                                         /* tp_descr_get      */
+  NULL,                                         /* tp_descr_set      */
+  0,                                            /* tp_dictoffset     */
+  (initproc) PyWebGatewayService_init,          /* tp_init           */
+};
+
+PYFRIDA_DEFINE_TYPE (WebGatewayService, NULL, frida_unref);
 
 static PyTypeObject PyEndpointParametersType =
 {
@@ -4286,6 +4346,89 @@ PyPortalService_broadcast (PyScript * self, PyObject * args, PyObject * kw)
 
 
 static int
+PyWebGatewayService_init (PyWebGatewayService * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "gateway_params", "target_params", "root", "origin", NULL };
+  PyEndpointParameters * gateway_params, * target_params;
+  char * root_value = NULL;
+  char * origin = NULL;
+  GFile * root = NULL;
+  FridaWebGatewayService * handle;
+
+  if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
+    return -1;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "O!O!|eses", keywords,
+        &PYFRIDA_TYPE (EndpointParameters), &gateway_params,
+        &PYFRIDA_TYPE (EndpointParameters), &target_params,
+        "utf-8", &root_value,
+        "utf-8", &origin))
+    return -1;
+
+  root = (root_value != NULL) ? g_file_new_for_path (root_value) : NULL;
+
+  g_atomic_int_inc (&toplevel_objects_alive);
+
+  handle = frida_web_gateway_service_new (PY_GOBJECT_HANDLE (gateway_params), PY_GOBJECT_HANDLE (target_params), root, origin);
+
+  PyGObject_take_handle (&self->parent, handle, &PYFRIDA_TYPE_SPEC (WebGatewayService));
+
+  g_clear_object (&root);
+  PyMem_Free (origin);
+  PyMem_Free (root_value);
+
+  return 0;
+}
+
+static void
+PyWebGatewayService_dealloc (PyWebGatewayService * self)
+{
+  FridaWebGatewayService * handle;
+
+  g_atomic_int_dec_and_test (&toplevel_objects_alive);
+
+  handle = PyGObject_steal_handle (&self->parent);
+  if (handle != NULL)
+  {
+    Py_BEGIN_ALLOW_THREADS
+    frida_web_gateway_service_stop_sync (handle, NULL, NULL);
+    frida_unref (handle);
+    Py_END_ALLOW_THREADS
+  }
+
+  PyGObjectType.tp_dealloc ((PyObject *) self);
+}
+
+static PyObject *
+PyWebGatewayService_start (PyWebGatewayService * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_web_gateway_service_start_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyWebGatewayService_stop (PyWebGatewayService * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_web_gateway_service_stop_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+
+static int
 PyEndpointParameters_init (PyEndpointParameters * self, PyObject * args, PyObject * kw)
 {
   int result = -1;
@@ -5092,6 +5235,7 @@ MOD_INIT (_frida)
   PYFRIDA_REGISTER_TYPE (Relay, FRIDA_TYPE_RELAY);
   PYFRIDA_REGISTER_TYPE (PortalMembership, FRIDA_TYPE_PORTAL_MEMBERSHIP);
   PYFRIDA_REGISTER_TYPE (PortalService, FRIDA_TYPE_PORTAL_SERVICE);
+  PYFRIDA_REGISTER_TYPE (WebGatewayService, FRIDA_TYPE_WEB_GATEWAY_SERVICE);
   PYFRIDA_REGISTER_TYPE (EndpointParameters, FRIDA_TYPE_ENDPOINT_PARAMETERS);
   PYFRIDA_REGISTER_TYPE (FileMonitor, FRIDA_TYPE_FILE_MONITOR);
   PYFRIDA_REGISTER_TYPE (IOStream, G_TYPE_IO_STREAM);

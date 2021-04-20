@@ -29,6 +29,7 @@ __version__ = _frida.__version__
 
 Relay = _frida.Relay
 PortalService = core.PortalService
+WebGatewayService = core.WebGatewayService
 EndpointParameters = core.EndpointParameters
 FileMonitor = _frida.FileMonitor
 Cancellable = core.Cancellable
