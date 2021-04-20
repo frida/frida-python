@@ -3545,6 +3545,7 @@ PyBus_post (PyScript * self, PyObject * args, PyObject * kw)
 
   if (!PyArg_ParseTupleAndKeywords (args, kw, "es|z#", keywords, "utf-8", &message, &data_buffer, &data_size))
     return NULL;
+
   data = (data_buffer != NULL) ? g_bytes_new (data_buffer, data_size) : NULL;
 
   Py_BEGIN_ALLOW_THREADS
@@ -4059,6 +4060,7 @@ PyScript_post (PyScript * self, PyObject * args, PyObject * kw)
 
   if (!PyArg_ParseTupleAndKeywords (args, kw, "es|z#", keywords, "utf-8", &message, &data_buffer, &data_size))
     return NULL;
+
   data = (data_buffer != NULL) ? g_bytes_new (data_buffer, data_size) : NULL;
 
   Py_BEGIN_ALLOW_THREADS
@@ -4236,6 +4238,7 @@ PyPortalService_post (PyScript * self, PyObject * args, PyObject * kw)
         "utf-8", &message,
         &data_buffer, &data_size))
     return NULL;
+
   data = (data_buffer != NULL) ? g_bytes_new (data_buffer, data_size) : NULL;
 
   Py_BEGIN_ALLOW_THREADS
@@ -4265,6 +4268,7 @@ PyPortalService_broadcast (PyScript * self, PyObject * args, PyObject * kw)
         "utf-8", &message,
         &data_buffer, &data_size))
     return NULL;
+
   data = (data_buffer != NULL) ? g_bytes_new (data_buffer, data_size) : NULL;
 
   Py_BEGIN_ALLOW_THREADS

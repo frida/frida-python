@@ -39,7 +39,6 @@ class Application(object):
     def run(self):
         self._reactor.schedule(self._start)
         self._reactor.run()
-        print("Out")
 
     def _start(self):
         self._service.start()
@@ -48,7 +47,6 @@ class Application(object):
 
     def _stop(self):
         self._service.stop()
-        print("Stopped")
 
     def _process_input(self, reactor):
         while True:
