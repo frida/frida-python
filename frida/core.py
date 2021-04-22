@@ -250,6 +250,10 @@ class Session(object):
         return self._impl.compile_script(*args, **kwargs)
 
     @cancellable
+    def enumerate_orphaned_scripts(self):
+        return [OrphanedScript(o) for o in self._impl.enumerate_orphaned_scripts()]
+
+    @cancellable
     def enable_debugger(self, *args, **kwargs):
         self._impl.enable_debugger(*args, **kwargs)
 
@@ -446,6 +450,24 @@ class ScriptExports(object):
         def method(*args, **kwargs):
             return script._rpc_request('call', js_name, args, **kwargs)
         return method
+
+
+class OrphanedScript(object):
+    def __init__(self, impl):
+        self.name = impl.name
+
+        self._impl = impl
+
+    def __repr__(self):
+        return repr(self._impl)
+
+    @cancellable
+    def adopt(self):
+        return Script(self._impl.adopt())
+
+    @cancellable
+    def resume(self):
+        self._impl.resume()
 
 
 class PortalMembership(object):

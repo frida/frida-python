@@ -123,6 +123,7 @@ typedef struct _PyIcon                         PyIcon;
 typedef struct _PyBus                          PyBus;
 typedef struct _PySession                      PySession;
 typedef struct _PyScript                       PyScript;
+typedef struct _PyOrphanedScript               PyOrphanedScript;
 typedef struct _PyRelay                        PyRelay;
 typedef struct _PyPortalMembership             PyPortalMembership;
 typedef struct _PyPortalService                PyPortalService;
@@ -242,6 +243,12 @@ struct _PySession
 struct _PyScript
 {
   PyGObject parent;
+};
+
+struct _PyOrphanedScript
+{
+  PyGObject parent;
+  PyObject * name;
 };
 
 struct _PyRelay
@@ -412,6 +419,7 @@ static PyObject * PySession_create_script (PySession * self, PyObject * args, Py
 static PyObject * PySession_create_script_from_bytes (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_compile_script (PySession * self, PyObject * args, PyObject * kw);
 static FridaScriptOptions * PySession_parse_script_options (const gchar * name, const gchar * runtime_value);
+static PyObject * PySession_enumerate_orphaned_scripts (PySession * self);
 static PyObject * PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_disable_debugger (PySession * self);
 static PyObject * PySession_enable_jit (PySession * self);
@@ -425,6 +433,13 @@ static PyObject * PyScript_load (PyScript * self);
 static PyObject * PyScript_unload (PyScript * self);
 static PyObject * PyScript_eternalize (PyScript * self);
 static PyObject * PyScript_post (PyScript * self, PyObject * args, PyObject * kw);
+
+static PyObject * PyOrphanedScript_new_take_handle (FridaOrphanedScript * handle);
+static void PyOrphanedScript_init_from_handle (PyOrphanedScript * self, FridaOrphanedScript * handle);
+static void PyOrphanedScript_dealloc (PyOrphanedScript * self);
+static PyObject * PyOrphanedScript_repr (PyOrphanedScript * self);
+static PyObject * PyOrphanedScript_adopt (PyOrphanedScript * self);
+static PyObject * PyOrphanedScript_resume (PyOrphanedScript * self);
 
 static int PyRelay_init (PyRelay * self, PyObject * args, PyObject * kw);
 
@@ -618,6 +633,7 @@ static PyMethodDef PySession_methods[] =
   { "create_script", (PyCFunction) PySession_create_script, METH_VARARGS | METH_KEYWORDS, "Create a new script." },
   { "create_script_from_bytes", (PyCFunction) PySession_create_script_from_bytes, METH_VARARGS | METH_KEYWORDS, "Create a new script from bytecode." },
   { "compile_script", (PyCFunction) PySession_compile_script, METH_VARARGS | METH_KEYWORDS, "Compile script source code to bytecode." },
+  { "enumerate_orphaned_scripts", (PyCFunction) PySession_enumerate_orphaned_scripts, METH_NOARGS, "Enumerate orphaned scripts that may be adopted by this session." },
   { "enable_debugger", (PyCFunction) PySession_enable_debugger, METH_VARARGS | METH_KEYWORDS, "Enable the Node.js compatible script debugger." },
   { "disable_debugger", (PyCFunction) PySession_disable_debugger, METH_NOARGS, "Disable the Node.js compatible script debugger." },
   { "enable_jit", (PyCFunction) PySession_enable_jit, METH_NOARGS, "Enable JIT." },
@@ -638,6 +654,19 @@ static PyMethodDef PyScript_methods[] =
   { "unload", (PyCFunction) PyScript_unload, METH_NOARGS, "Unload the script." },
   { "eternalize", (PyCFunction) PyScript_eternalize, METH_NOARGS, "Eternalize the script." },
   { "post", (PyCFunction) PyScript_post, METH_VARARGS | METH_KEYWORDS, "Post a JSON-encoded message to the script." },
+  { NULL }
+};
+
+static PyMethodDef PyOrphanedScript_methods[] =
+{
+  { "adopt", (PyCFunction) PyOrphanedScript_adopt, METH_NOARGS, "Adopt the script." },
+  { "resume", (PyCFunction) PyOrphanedScript_resume, METH_NOARGS, "Resume message delivery." },
+  { NULL }
+};
+
+static PyMemberDef PyOrphanedScript_members[] =
+{
+  { "name", T_OBJECT_EX, G_STRUCT_OFFSET (PyOrphanedScript, name), READONLY, "User-defined name of the orphaned script." },
   { NULL }
 };
 
@@ -1205,6 +1234,48 @@ static PyTypeObject PyScriptType =
 };
 
 PYFRIDA_DEFINE_TYPE (Script, NULL, frida_unref);
+
+static PyTypeObject PyOrphanedScriptType =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "_frida.OrphanedScript",                      /* tp_name           */
+  sizeof (PyOrphanedScript),                    /* tp_basicsize      */
+  0,                                            /* tp_itemsize       */
+  (destructor) PyOrphanedScript_dealloc,        /* tp_dealloc        */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
+  NULL,                                         /* tp_getattr        */
+  NULL,                                         /* tp_setattr        */
+  NULL,                                         /* tp_compare        */
+  (reprfunc) PyOrphanedScript_repr,             /* tp_repr           */
+  NULL,                                         /* tp_as_number      */
+  NULL,                                         /* tp_as_sequence    */
+  NULL,                                         /* tp_as_mapping     */
+  NULL,                                         /* tp_hash           */
+  NULL,                                         /* tp_call           */
+  NULL,                                         /* tp_str            */
+  NULL,                                         /* tp_getattro       */
+  NULL,                                         /* tp_setattro       */
+  NULL,                                         /* tp_as_buffer      */
+  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
+  "Frida Orphaned Script",                      /* tp_doc            */
+  NULL,                                         /* tp_traverse       */
+  NULL,                                         /* tp_clear          */
+  NULL,                                         /* tp_richcompare    */
+  0,                                            /* tp_weaklistoffset */
+  NULL,                                         /* tp_iter           */
+  NULL,                                         /* tp_iternext       */
+  PyOrphanedScript_methods,                     /* tp_methods        */
+  PyOrphanedScript_members,                     /* tp_members        */
+  NULL,                                         /* tp_getset         */
+  &PyGObjectType,                               /* tp_base           */
+  NULL,                                         /* tp_dict           */
+  NULL,                                         /* tp_descr_get      */
+  NULL,                                         /* tp_descr_set      */
+  0,                                            /* tp_dictoffset     */
+  NULL,                                         /* tp_init           */
+};
+
+PYFRIDA_DEFINE_TYPE (OrphanedScript, PyOrphanedScript_init_from_handle, frida_unref);
 
 static PyTypeObject PyRelayType =
 {
@@ -3871,6 +3942,31 @@ invalid_argument:
 }
 
 static PyObject *
+PySession_enumerate_orphaned_scripts (PySession * self)
+{
+  GError * error = NULL;
+  FridaOrphanedScriptList * result;
+  gint result_length, i;
+  PyObject * orphans;
+
+  Py_BEGIN_ALLOW_THREADS
+  result = frida_session_enumerate_orphaned_scripts_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  result_length = frida_orphaned_script_list_size (result);
+  orphans = PyList_New (result_length);
+  for (i = 0; i != result_length; i++)
+  {
+    PyList_SET_ITEM (orphans, i, PyOrphanedScript_new_take_handle (frida_orphaned_script_list_get (result, i)));
+  }
+  g_object_unref (result);
+
+  return orphans;
+}
+
+static PyObject *
 PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw)
 {
   static char * keywords[] = { "port", NULL };
@@ -4154,6 +4250,70 @@ PyScript_post (PyScript * self, PyObject * args, PyObject * kw)
   g_bytes_unref (data);
   PyMem_Free (message);
 
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+
+static PyObject *
+PyOrphanedScript_new_take_handle (FridaOrphanedScript * handle)
+{
+  return PyGObject_new_take_handle (handle, &PYFRIDA_TYPE_SPEC (OrphanedScript));
+}
+
+static void
+PyOrphanedScript_init_from_handle (PyOrphanedScript * self, FridaOrphanedScript * handle)
+{
+  self->name = PyUnicode_FromUTF8String (frida_orphaned_script_get_name (handle));
+}
+
+static void
+PyOrphanedScript_dealloc (PyOrphanedScript * self)
+{
+  Py_XDECREF (self->name);
+
+  PyGObjectType.tp_dealloc ((PyObject *) self);
+}
+
+static PyObject *
+PyOrphanedScript_repr (PyOrphanedScript * self)
+{
+  PyObject * result, * name_bytes;
+
+  name_bytes = PyUnicode_AsUTF8String (self->name);
+
+  result = PyRepr_FromFormat ("OrphanedScript(name=\"%s\")", PyBytes_AsString (name_bytes));
+
+  Py_XDECREF (name_bytes);
+
+  return result;
+}
+
+static PyObject *
+PyOrphanedScript_adopt (PyOrphanedScript * self)
+{
+  GError * error = NULL;
+  FridaScript * handle;
+
+  Py_BEGIN_ALLOW_THREADS
+  handle = frida_orphaned_script_adopt_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  return (error == NULL)
+      ? PyScript_new_take_handle (handle)
+      : PyFrida_raise (error);
+}
+
+static PyObject *
+PyOrphanedScript_resume (PyOrphanedScript * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_orphaned_script_resume_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
 
@@ -5260,6 +5420,7 @@ MOD_INIT (_frida)
   PYFRIDA_REGISTER_TYPE (Bus, FRIDA_TYPE_BUS);
   PYFRIDA_REGISTER_TYPE (Session, FRIDA_TYPE_SESSION);
   PYFRIDA_REGISTER_TYPE (Script, FRIDA_TYPE_SCRIPT);
+  PYFRIDA_REGISTER_TYPE (OrphanedScript, FRIDA_TYPE_ORPHANED_SCRIPT);
   PYFRIDA_REGISTER_TYPE (Relay, FRIDA_TYPE_RELAY);
   PYFRIDA_REGISTER_TYPE (PortalMembership, FRIDA_TYPE_PORTAL_MEMBERSHIP);
   PYFRIDA_REGISTER_TYPE (PortalService, FRIDA_TYPE_PORTAL_SERVICE);
