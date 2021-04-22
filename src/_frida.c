@@ -321,6 +321,7 @@ static PyObject * PyGObject_marshal_enum (gint value, GType type);
 static gboolean PyGObject_unmarshal_enum (const gchar * str, GType type, gpointer value);
 static PyObject * PyGObject_marshal_bytes (GBytes * bytes);
 static PyObject * PyGObject_marshal_bytes_non_nullable (GBytes * bytes);
+static gboolean PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant);
 static PyObject * PyGObject_marshal_variant_dict (GVariant * dict);
 static PyObject * PyGObject_marshal_socket_address (GSocketAddress * address);
 static gboolean PyGObject_unmarshal_certificate (const gchar * str, GTlsCertificate ** certificate);
@@ -2206,6 +2207,88 @@ PyGObject_marshal_bytes_non_nullable (GBytes * bytes)
 }
 
 static PyObject *
+PyGObject_marshal_variant (GVariant * variant)
+{
+  if (g_variant_is_of_type (variant, G_VARIANT_TYPE_STRING))
+  {
+    return PyGObject_marshal_string (g_variant_get_string (variant, NULL));
+  }
+  else if (g_variant_is_of_type (variant, G_VARIANT_TYPE_INT64))
+  {
+    return PyLong_FromLongLong (g_variant_get_int64 (variant));
+  }
+  else if (g_variant_is_of_type (variant, G_VARIANT_TYPE_BOOLEAN))
+  {
+    return PyBool_FromLong (g_variant_get_boolean (variant));
+  }
+  else
+  {
+    g_assert_not_reached ();
+  }
+}
+
+static gboolean
+PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant)
+{
+  if (PyFrida_is_string (value))
+  {
+    const gchar * str;
+
+    PyGObject_unmarshal_string (value, &str);
+
+    *variant = g_variant_new_string (str);
+  }
+  else if (PyBool_Check (value))
+  {
+    *variant = g_variant_new_boolean (value == Py_True);
+  }
+#if PY_MAJOR_VERSION < 3
+  else if (PyUnicode_Check (value))
+  {
+    PyObject * value_utf8;
+
+    value_utf8 = PyUnicode_AsUTF8String (value);
+    if (value_utf8 == NULL)
+      goto propagate_error;
+
+    *variant = g_variant_new_string (PyBytes_AsString (value_utf8));
+
+    Py_DECREF (value_utf8);
+  }
+  else if (PyInt_Check (value))
+  {
+    *variant = g_variant_new_int64 (PyInt_AS_LONG (value));
+  }
+#endif
+  else if (PyLong_Check (value))
+  {
+    PY_LONG_LONG l;
+
+    l = PyLong_AsLongLong (value);
+    if (l == -1 && PyErr_Occurred ())
+      goto propagate_error;
+
+    *variant = g_variant_new_int64 (l);
+  }
+  else
+  {
+    goto unsupported_type;
+  }
+
+  return TRUE;
+
+unsupported_type:
+  {
+    PyErr_SetString (PyExc_TypeError, "unsupported type");
+    goto propagate_error;
+  }
+propagate_error:
+  {
+    return FALSE;
+  }
+}
+
+static PyObject *
 PyGObject_marshal_variant_dict (GVariant * dict)
 {
   PyObject * result;
@@ -2218,24 +2301,7 @@ PyGObject_marshal_variant_dict (GVariant * dict)
   g_variant_iter_init (&iter, dict);
   while (g_variant_iter_next (&iter, "{sv}", &key, &raw_value))
   {
-    PyObject * value = NULL;
-
-    if (g_variant_is_of_type (raw_value, G_VARIANT_TYPE_STRING))
-    {
-      value = PyGObject_marshal_string (g_variant_get_string (raw_value, NULL));
-    }
-    else if (g_variant_is_of_type (raw_value, G_VARIANT_TYPE_INT64))
-    {
-      value = PyLong_FromLongLong (g_variant_get_int64 (raw_value));
-    }
-    else if (g_variant_is_of_type (raw_value, G_VARIANT_TYPE_BOOLEAN))
-    {
-      value = PyBool_FromLong (g_variant_get_boolean (raw_value));
-    }
-    else
-    {
-      g_assert_not_reached ();
-    }
+    PyObject * value = PyGObject_marshal_variant (raw_value);
 
     PyDict_SetItemString (result, key, value);
 
@@ -2887,50 +2953,8 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
       if (!PyGObject_unmarshal_string (key, &raw_key))
         goto invalid_dict_key;
 
-      if (PyFrida_is_string (value))
-      {
-        const gchar * str;
-
-        PyGObject_unmarshal_string (value, &str);
-
-        raw_value = g_variant_new_string (str);
-      }
-      else if (PyBool_Check (value))
-      {
-        raw_value = g_variant_new_boolean (value == Py_True);
-      }
-#if PY_MAJOR_VERSION < 3
-      else if (PyUnicode_Check (value))
-      {
-        PyObject * value_utf8;
-
-        value_utf8 = PyUnicode_AsUTF8String (value);
-        if (value_utf8 == NULL)
-          goto invalid_dict_value;
-
-        raw_value = g_variant_new_string (PyBytes_AsString (value_utf8));
-
-        Py_DECREF (value_utf8);
-      }
-      else if (PyInt_Check (value))
-      {
-        raw_value = g_variant_new_int64 (PyInt_AS_LONG (value));
-      }
-#endif
-      else if (PyLong_Check (value))
-      {
-        PY_LONG_LONG l;
-
-        l = PyLong_AsLongLong (value);
-        if (l == -1 && PyErr_Occurred ())
-          goto invalid_dict_value;
-
-        raw_value = g_variant_new_int64 (l);
-      }
-      else
-      {
-        goto invalid_aux_dict;
-      }
+      if (!PyGObject_unmarshal_variant (value, &raw_value))
+        goto invalid_dict_value;
 
       g_variant_dict_insert_value (aux, raw_key, raw_value);
     }
