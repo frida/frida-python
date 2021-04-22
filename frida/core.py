@@ -475,7 +475,7 @@ class EndpointParameters(object):
             if auth_scheme == 'token':
                 kw['auth_token'] = auth_data
             elif auth_scheme == 'callback':
-                kw['auth_callback'] = auth_data
+                kw['auth_callback'] = make_auth_callback(auth_data)
             else:
                 raise ValueError("invalid authentication scheme")
 
@@ -491,8 +491,10 @@ class PortalService(object):
 
         self.device = impl.device
         self._impl = impl
+        self._on_authenticated_callbacks = []
         self._on_message_callbacks = []
 
+        impl.on('authenticated', self._on_authenticated)
         impl.on('message', self._on_message)
 
     @cancellable
@@ -514,16 +516,29 @@ class PortalService(object):
         self._impl.broadcast(raw_message, **kwargs)
 
     def on(self, signal, callback):
-        if signal == 'message':
+        if signal == 'authenticated':
+            self._on_authenticated_callbacks.append(callback)
+        elif signal == 'message':
             self._on_message_callbacks.append(callback)
         else:
             self._impl.on(signal, callback)
 
     def off(self, signal, callback):
-        if signal == 'message':
+        if signal == 'authenticated':
+            self._on_authenticated_callbacks.remove(callback)
+        elif signal == 'message':
             self._on_message_callbacks.remove(callback)
         else:
             self._impl.off(signal, callback)
+
+    def _on_authenticated(self, connection_id, raw_session_info):
+        session_info = json.loads(raw_session_info)
+
+        for callback in self._on_authenticated_callbacks[:]:
+            try:
+                callback(connection_id, session_info)
+            except:
+                traceback.print_exc()
 
     def _on_message(self, connection_id, raw_message, data):
         message = json.loads(raw_message)
@@ -656,6 +671,13 @@ class CancellablePollFD(object):
 
     def __exit__(self, *args):
         self.release()
+
+
+def make_auth_callback(callback):
+    def authenticate(token):
+        session_info = callback(token)
+        return json.dumps(session_info)
+    return authenticate
 
 
 def _to_camel_case(name):

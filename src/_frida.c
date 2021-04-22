@@ -451,7 +451,7 @@ static void frida_python_authentication_service_iface_init (gpointer g_iface, gp
 static void frida_python_authentication_service_dispose (GObject * object);
 static void frida_python_authentication_service_authenticate (FridaAuthenticationService * service, const gchar * token,
     GCancellable * cancellable, GAsyncReadyCallback callback, gpointer user_data);
-static void frida_python_authentication_service_authenticate_finish (FridaAuthenticationService * service, GAsyncResult * result,
+static gchar * frida_python_authentication_service_authenticate_finish (FridaAuthenticationService * service, GAsyncResult * result,
     GError ** error);
 static void frida_python_authentication_service_do_authenticate (GTask * task, FridaPythonAuthenticationService * self);
 
@@ -4582,10 +4582,10 @@ frida_python_authentication_service_authenticate (FridaAuthenticationService * s
   g_thread_pool_push (self->pool, task, NULL);
 }
 
-static void
+static gchar *
 frida_python_authentication_service_authenticate_finish (FridaAuthenticationService * service, GAsyncResult * result, GError ** error)
 {
-  g_task_propagate_pointer (G_TASK (result), error);
+  return g_task_propagate_pointer (G_TASK (result), error);
 }
 
 static void
@@ -4594,6 +4594,8 @@ frida_python_authentication_service_do_authenticate (GTask * task, FridaPythonAu
   const gchar * token;
   PyGILState_STATE gstate;
   PyObject * result;
+  const gchar * session_info_value;
+  gchar * session_info = NULL;
   gchar * message = NULL;
 
   token = g_task_get_task_data (task);
@@ -4601,9 +4603,9 @@ frida_python_authentication_service_do_authenticate (GTask * task, FridaPythonAu
   gstate = PyGILState_Ensure ();
 
   result = PyObject_CallFunction (self->callback, "s", token);
-  if (result != NULL)
+  if (result != NULL && PyGObject_unmarshal_string (result, &session_info_value))
   {
-    Py_DECREF (result);
+    session_info = g_strdup (session_info_value);
   }
   else
   {
@@ -4629,10 +4631,12 @@ frida_python_authentication_service_do_authenticate (GTask * task, FridaPythonAu
     Py_XDECREF (traceback);
   }
 
+  Py_XDECREF (result);
+
   PyGILState_Release (gstate);
 
-  if (message == NULL)
-    g_task_return_pointer (task, NULL, NULL);
+  if (session_info != NULL)
+    g_task_return_pointer (task, session_info, g_free);
   else
     g_task_return_new_error (task, FRIDA_ERROR, FRIDA_ERROR_INVALID_ARGUMENT, "%s", message);
 

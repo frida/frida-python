@@ -3,12 +3,13 @@ import frida
 from frida_tools.application import Reactor
 import hashlib
 import hmac
+import json
 
 
 ENABLE_CONTROL_INTERFACE = True
 
 
-class Application(object):
+class Application:
     def __init__(self):
         self._reactor = Reactor(run_until_return=self._process_input)
 
@@ -27,6 +28,9 @@ class Application(object):
         service = frida.PortalService(cluster_params, control_params)
         self._service = service
         self._device = service.device
+        self._peers = {}
+        self._nicks = set()
+        self._history = []
 
         service.on('node-connected', lambda *args: self._reactor.schedule(lambda: self._on_node_connected(*args)))
         service.on('node-joined', lambda *args: self._reactor.schedule(lambda: self._on_node_joined(*args)))
@@ -34,6 +38,7 @@ class Application(object):
         service.on('node-disconnected', lambda *args: self._reactor.schedule(lambda: self._on_node_disconnected(*args)))
         service.on('controller-connected', lambda *args: self._reactor.schedule(lambda: self._on_controller_connected(*args)))
         service.on('controller-disconnected', lambda *args: self._reactor.schedule(lambda: self._on_controller_disconnected(*args)))
+        service.on('authenticated', lambda *args: self._reactor.schedule(lambda: self._on_authenticated(*args)))
         service.on('message', lambda *args: self._reactor.schedule(lambda: self._on_message(*args)))
 
     def run(self):
@@ -64,6 +69,23 @@ class Application(object):
                 self._reactor.schedule(self._stop)
                 break
 
+    def _authenticate(self, raw_token):
+        try:
+            token = json.loads(raw_token)
+            nick = str(token['nick'])
+            secret = token['secret'].encode('utf-8')
+        except:
+            raise ValueError("invalid request")
+
+        provided = hashlib.sha1(secret).digest()
+        expected = hashlib.sha1("knock-knock".encode('utf-8')).digest()
+        if not hmac.compare_digest(provided, expected):
+            raise ValueError("get outta here")
+
+        return {
+            'nick': nick,
+        }
+
     def _on_node_connected(self, connection_id, remote_address):
         print("on_node_connected()", connection_id, remote_address)
 
@@ -78,31 +100,73 @@ class Application(object):
 
     def _on_controller_connected(self, connection_id, remote_address):
         print("on_controller_connected()", connection_id, remote_address)
+        self._peers[connection_id] = Peer(remote_address)
 
     def _on_controller_disconnected(self, connection_id, remote_address):
         print("on_controller_disconnected()", connection_id, remote_address)
+        peer = self._peers.pop(connection_id)
+        self._release_nick(peer.nick)
+
+    def _on_authenticated(self, connection_id, session_info):
+        print("on_authenticated()", connection_id, session_info)
+        peer = self._peers.get(connection_id, None)
+        if peer is None:
+            return
+        peer.nick = self._acquire_nick(session_info['nick'])
 
     def _on_message(self, connection_id, message, data):
-        if message['type'] != 'chat':
+        peer = self._peers[connection_id]
+
+        mtype = message['type']
+        if mtype == 'hello':
+            if peer.synchronized:
+                return
+            self._service.post(connection_id, {
+                'type': 'history',
+                'items': self._history
+            })
+            peer.synchronized = True
+        elif mtype == 'chat':
+            text = message['text']
+
+            item = {
+                'type': 'chat',
+                'sender': peer.nick,
+                'text': text
+            }
+
+            self._service.broadcast(item)
+            self._service.post(connection_id, {
+                'type': 'ack'
+            })
+
+            self._history.append(item)
+            if len(self._history) == 20:
+                self._history.pop(0)
+        else:
             print("Unhandled message:", message)
-            return
 
-        text = message['text']
+    def _acquire_nick(self, requested):
+        candidate = requested
+        serial = 2
+        while candidate in self._nicks:
+            candidate = requested + str(serial)
+            serial += 1
 
-        self._service.post(connection_id, {
-            'type': 'ack'
-        })
-        self._service.broadcast({
-            'type': 'chat',
-            'sender': connection_id,
-            'text': text
-        })
+        nick = candidate
+        self._nicks.add(nick)
 
-    def _authenticate(self, token):
-        provided = hashlib.sha1(token.encode('utf-8')).digest()
-        expected = hashlib.sha1("knock-knock".encode('utf-8')).digest()
-        if not hmac.compare_digest(provided, expected):
-            raise ValueError("get outta here")
+        return nick
+
+    def _release_nick(self, nick):
+        self._nicks.remove(nick)
+
+
+class Peer:
+    def __init__(self, remote_address):
+        self.nick = None
+        self.remote_address = remote_address
+        self.synchronized = False
 
 
 if __name__ == '__main__':
