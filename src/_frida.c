@@ -415,7 +415,6 @@ static PyObject * PySession_compile_script (PySession * self, PyObject * args, P
 static FridaScriptOptions * PySession_parse_script_options (const gchar * name, const gchar * runtime_value);
 static PyObject * PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_disable_debugger (PySession * self);
-static PyObject * PySession_enable_jit (PySession * self);
 static PyObject * PySession_setup_peer_connection (PySession * self, PyObject * args, PyObject * kw);
 static FridaPeerOptions * PySession_parse_peer_options (const gchar * stun_server, PyObject * relays);
 static PyObject * PySession_join_portal (PySession * self, PyObject * args, PyObject * kw);
@@ -621,7 +620,6 @@ static PyMethodDef PySession_methods[] =
   { "compile_script", (PyCFunction) PySession_compile_script, METH_VARARGS | METH_KEYWORDS, "Compile script source code to bytecode." },
   { "enable_debugger", (PyCFunction) PySession_enable_debugger, METH_VARARGS | METH_KEYWORDS, "Enable the Node.js compatible script debugger." },
   { "disable_debugger", (PyCFunction) PySession_disable_debugger, METH_NOARGS, "Disable the Node.js compatible script debugger." },
-  { "enable_jit", (PyCFunction) PySession_enable_jit, METH_NOARGS, "Enable JIT." },
   { "setup_peer_connection", (PyCFunction) PySession_setup_peer_connection, METH_VARARGS | METH_KEYWORDS, "Set up a peer connection with the target process." },
   { "join_portal", (PyCFunction) PySession_join_portal, METH_VARARGS | METH_KEYWORDS, "Join a portal." },
   { NULL }
@@ -3937,20 +3935,6 @@ PySession_disable_debugger (PySession * self)
 
   Py_BEGIN_ALLOW_THREADS
   frida_session_disable_debugger_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
-  Py_END_ALLOW_THREADS
-  if (error != NULL)
-    return PyFrida_raise (error);
-
-  Py_RETURN_NONE;
-}
-
-static PyObject *
-PySession_enable_jit (PySession * self)
-{
-  GError * error = NULL;
-
-  Py_BEGIN_ALLOW_THREADS
-  frida_session_enable_jit_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);

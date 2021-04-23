@@ -258,10 +258,6 @@ class Session(object):
         self._impl.disable_debugger()
 
     @cancellable
-    def enable_jit(self):
-        self._impl.enable_jit()
-
-    @cancellable
     def setup_peer_connection(self, *args, **kwargs):
         self._impl.setup_peer_connection(*args, **kwargs)
 
