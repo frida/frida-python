@@ -438,8 +438,8 @@ static PyObject * PyOrphanedScript_new_take_handle (FridaOrphanedScript * handle
 static void PyOrphanedScript_init_from_handle (PyOrphanedScript * self, FridaOrphanedScript * handle);
 static void PyOrphanedScript_dealloc (PyOrphanedScript * self);
 static PyObject * PyOrphanedScript_repr (PyOrphanedScript * self);
+static PyObject * PyOrphanedScript_lift (PyOrphanedScript * self);
 static PyObject * PyOrphanedScript_adopt (PyOrphanedScript * self);
-static PyObject * PyOrphanedScript_resume (PyOrphanedScript * self);
 
 static int PyRelay_init (PyRelay * self, PyObject * args, PyObject * kw);
 
@@ -659,8 +659,8 @@ static PyMethodDef PyScript_methods[] =
 
 static PyMethodDef PyOrphanedScript_methods[] =
 {
-  { "adopt", (PyCFunction) PyOrphanedScript_adopt, METH_NOARGS, "Adopt the script." },
-  { "resume", (PyCFunction) PyOrphanedScript_resume, METH_NOARGS, "Resume message delivery." },
+  { "lift", (PyCFunction) PyOrphanedScript_lift, METH_NOARGS, "Retrieve script to allow hooking up signal handlers." },
+  { "adopt", (PyCFunction) PyOrphanedScript_adopt, METH_NOARGS, "Perform the adoption and resume message delivery." },
   { NULL }
 };
 
@@ -4292,6 +4292,21 @@ PyOrphanedScript_repr (PyOrphanedScript * self)
 }
 
 static PyObject *
+PyOrphanedScript_lift (PyOrphanedScript * self)
+{
+  GError * error = NULL;
+  FridaScript * handle;
+
+  Py_BEGIN_ALLOW_THREADS
+  handle = frida_orphaned_script_lift_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  return (error == NULL)
+      ? PyScript_new_take_handle (handle)
+      : PyFrida_raise (error);
+}
+
+static PyObject *
 PyOrphanedScript_adopt (PyOrphanedScript * self)
 {
   GError * error = NULL;
@@ -4304,20 +4319,6 @@ PyOrphanedScript_adopt (PyOrphanedScript * self)
   return (error == NULL)
       ? PyScript_new_take_handle (handle)
       : PyFrida_raise (error);
-}
-
-static PyObject *
-PyOrphanedScript_resume (PyOrphanedScript * self)
-{
-  GError * error = NULL;
-
-  Py_BEGIN_ALLOW_THREADS
-  frida_orphaned_script_resume_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
-  Py_END_ALLOW_THREADS
-  if (error != NULL)
-    return PyFrida_raise (error);
-
-  Py_RETURN_NONE;
 }
 
 
