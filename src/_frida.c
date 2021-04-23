@@ -354,7 +354,7 @@ static PyObject * PyDevice_input (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_resume (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_kill (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_attach (PyDevice * self, PyObject * args, PyObject * kw);
-static FridaSessionOptions * PyDevice_parse_session_options (const gchar * realm_value);
+static FridaSessionOptions * PyDevice_parse_session_options (const gchar * realm_value, guint persist_timeout);
 static PyObject * PyDevice_inject_library_file (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_inject_library_blob (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_open_channel (PyDevice * self, PyObject * args);
@@ -3059,32 +3059,44 @@ PyDevice_kill (PyDevice * self, PyObject * args)
 static PyObject *
 PyDevice_attach (PyDevice * self, PyObject * args, PyObject * kw)
 {
-  static char * keywords[] = { "pid", "realm", NULL };
+  PyObject * result = NULL;
+  static char * keywords[] = { "pid", "realm", "session_persist_timeout", NULL };
   long pid;
-  const char * realm_value = NULL;
-  FridaSessionOptions * options;
+  char * realm_value = NULL;
+  unsigned int session_persist_timeout = 0;
+  FridaSessionOptions * options = NULL;
   GError * error = NULL;
   FridaSession * handle;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "l|z", keywords, &pid, &realm_value))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "l|esI", keywords,
+        &pid,
+        "utf-8", &realm_value,
+        &session_persist_timeout))
     return NULL;
 
-  options = PyDevice_parse_session_options (realm_value);
+  options = PyDevice_parse_session_options (realm_value, session_persist_timeout);
   if (options == NULL)
-    return NULL;
-
+    goto beach;
 
   Py_BEGIN_ALLOW_THREADS
   handle = frida_device_attach_sync (PY_GOBJECT_HANDLE (self), (guint) pid, options, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
-  if (error != NULL)
-    return PyFrida_raise (error);
 
-  return PySession_new_take_handle (handle);
+  result = (error == NULL)
+      ? PySession_new_take_handle (handle)
+      : PyFrida_raise (error);
+
+beach:
+  g_clear_object (&options);
+
+  PyMem_Free (realm_value);
+
+  return result;
 }
 
 static FridaSessionOptions *
-PyDevice_parse_session_options (const gchar * realm_value)
+PyDevice_parse_session_options (const gchar * realm_value,
+                                guint persist_timeout)
 {
   FridaSessionOptions * options;
 
@@ -3099,6 +3111,8 @@ PyDevice_parse_session_options (const gchar * realm_value)
 
     frida_session_options_set_realm (options, realm);
   }
+
+  frida_session_options_set_persist_timeout (options, persist_timeout);
 
   return options;
 
