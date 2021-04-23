@@ -354,6 +354,7 @@ static PyObject * PyDevice_input (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_resume (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_kill (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_attach (PyDevice * self, PyObject * args, PyObject * kw);
+static FridaSessionOptions * PyDevice_parse_session_options (const gchar * realm_value);
 static PyObject * PyDevice_inject_library_file (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_inject_library_blob (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_open_channel (PyDevice * self, PyObject * args);
@@ -3061,26 +3062,52 @@ PyDevice_attach (PyDevice * self, PyObject * args, PyObject * kw)
   static char * keywords[] = { "pid", "realm", NULL };
   long pid;
   const char * realm_value = NULL;
-  FridaRealm realm = FRIDA_REALM_NATIVE;
+  FridaSessionOptions * options;
   GError * error = NULL;
   FridaSession * handle;
 
   if (!PyArg_ParseTupleAndKeywords (args, kw, "l|z", keywords, &pid, &realm_value))
     return NULL;
 
-  if (realm_value != NULL)
-  {
-    if (!PyGObject_unmarshal_enum (realm_value, FRIDA_TYPE_REALM, &realm))
-      return NULL;
-  }
+  options = PyDevice_parse_session_options (realm_value);
+  if (options == NULL)
+    return NULL;
+
 
   Py_BEGIN_ALLOW_THREADS
-  handle = frida_device_attach_sync (PY_GOBJECT_HANDLE (self), (guint) pid, realm, g_cancellable_get_current (), &error);
+  handle = frida_device_attach_sync (PY_GOBJECT_HANDLE (self), (guint) pid, options, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
 
   return PySession_new_take_handle (handle);
+}
+
+static FridaSessionOptions *
+PyDevice_parse_session_options (const gchar * realm_value)
+{
+  FridaSessionOptions * options;
+
+  options = frida_session_options_new ();
+
+  if (realm_value != NULL)
+  {
+    FridaRealm realm;
+
+    if (!PyGObject_unmarshal_enum (realm_value, FRIDA_TYPE_REALM, &realm))
+      goto propagate_error;
+
+    frida_session_options_set_realm (options, realm);
+  }
+
+  return options;
+
+propagate_error:
+  {
+    g_object_unref (options);
+
+    return NULL;
+  }
 }
 
 static PyObject *
