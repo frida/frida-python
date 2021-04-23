@@ -8,14 +8,11 @@ import numbers
 import sys
 import threading
 import traceback
-import weakref
 
 import _frida
 
 
 _Cancellable = _frida.Cancellable
-
-wrappers = weakref.WeakValueDictionary()
 
 
 def cancellable(f):
@@ -58,15 +55,15 @@ class DeviceManager(object):
             raw_timeout = 0
         else:
             raw_timeout = int(timeout * 1000.0)
-        return wrap_device(self._impl.get_device_matching(lambda d: predicate(wrap_device(d)), raw_timeout))
+        return Device(self._impl.get_device_matching(lambda d: predicate(Device(d)), raw_timeout))
 
     @cancellable
     def enumerate_devices(self):
-        return [wrap_device(device) for device in self._impl.enumerate_devices()]
+        return [Device(device) for device in self._impl.enumerate_devices()]
 
     @cancellable
     def add_remote_device(self, *args, **kwargs):
-        return wrap_device(self._impl.add_remote_device(*args, **kwargs))
+        return Device(self._impl.add_remote_device(*args, **kwargs))
 
     @cancellable
     def remove_remote_device(self, *args, **kwargs):
@@ -156,7 +153,7 @@ class Device(object):
 
     @cancellable
     def attach(self, target, *args, **kwargs):
-        return wrap_session(self._impl.attach(self._pid_of(target), *args, **kwargs))
+        return Session(self._impl.attach(self._pid_of(target), *args, **kwargs))
 
     @cancellable
     def inject_library_file(self, target, path, entrypoint, data):
@@ -242,11 +239,11 @@ class Session(object):
 
     @cancellable
     def create_script(self, *args, **kwargs):
-        return wrap_script(self._impl.create_script(*args, **kwargs))
+        return Script(self._impl.create_script(*args, **kwargs))
 
     @cancellable
     def create_script_from_bytes(self, *args, **kwargs):
-        return wrap_script(self._impl.create_script_from_bytes(*args, **kwargs))
+        return Script(self._impl.create_script_from_bytes(*args, **kwargs))
 
     @cancellable
     def compile_script(self, *args, **kwargs):
@@ -254,7 +251,7 @@ class Session(object):
 
     @cancellable
     def enumerate_orphaned_scripts(self):
-        return [wrap_orphaned_script(o) for o in self._impl.enumerate_orphaned_scripts()]
+        return [OrphanedScript(o) for o in self._impl.enumerate_orphaned_scripts()]
 
     @cancellable
     def enable_debugger(self, *args, **kwargs):
@@ -274,7 +271,7 @@ class Session(object):
 
     @cancellable
     def join_portal(self, *args, **kwargs):
-        return wrap_portal_membership(self._impl.join_portal(*args, **kwargs))
+        return PortalMembership(self._impl.join_portal(*args, **kwargs))
 
     def on(self, signal, callback):
         self._impl.on(signal, callback)
@@ -465,12 +462,12 @@ class OrphanedScript(object):
         return repr(self._impl)
 
     @cancellable
-    def lift(self):
-        return wrap_script(self._impl.lift())
+    def adopt(self):
+        return Script(self._impl.adopt())
 
     @cancellable
-    def adopt(self):
-        return wrap_script(self._impl.adopt())
+    def resume(self):
+        self._impl.resume()
 
 
 class PortalMembership(object):
@@ -696,29 +693,6 @@ class CancellablePollFD(object):
 
     def __exit__(self, *args):
         self.release()
-
-
-def wrap_device(impl):
-    return wrap(impl, Device)
-
-def wrap_session(impl):
-    return wrap(impl, Session)
-
-def wrap_script(impl):
-    return wrap(impl, Script)
-
-def wrap_orphaned_script(impl):
-    return wrap(impl, OrphanedScript)
-
-def wrap_portal_membership(impl):
-    return wrap(impl, PortalMembership)
-
-def wrap(impl, C):
-    w = wrappers.get(impl, None)
-    if w is None:
-        w = C(impl)
-        wrappers[impl] = w
-    return w
 
 
 def make_auth_callback(callback):
