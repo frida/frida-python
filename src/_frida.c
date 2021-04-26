@@ -407,6 +407,7 @@ static int PySession_init (PySession * self, PyObject * args, PyObject * kw);
 static void PySession_init_from_handle (PySession * self, FridaSession * handle);
 static PyObject * PySession_repr (PySession * self);
 static PyObject * PySession_detach (PySession * self);
+static PyObject * PySession_resume (PySession * self);
 static PyObject * PySession_enable_child_gating (PySession * self);
 static PyObject * PySession_disable_child_gating (PySession * self);
 static PyObject * PySession_create_script (PySession * self, PyObject * args, PyObject * kw);
@@ -613,6 +614,7 @@ static PyMethodDef PyBus_methods[] =
 static PyMethodDef PySession_methods[] =
 {
   { "detach", (PyCFunction) PySession_detach, METH_NOARGS, "Detach session from the process." },
+  { "resume", (PyCFunction) PySession_resume, METH_NOARGS, "Resume session after network error." },
   { "enable_child_gating", (PyCFunction) PySession_enable_child_gating, METH_NOARGS, "Enable child gating." },
   { "disable_child_gating", (PyCFunction) PySession_disable_child_gating, METH_NOARGS, "Disable child gating." },
   { "create_script", (PyCFunction) PySession_create_script, METH_VARARGS | METH_KEYWORDS, "Create a new script." },
@@ -3721,6 +3723,20 @@ PySession_detach (PySession * self)
 
   Py_BEGIN_ALLOW_THREADS
   frida_session_detach_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PySession_resume (PySession * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_session_resume_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);

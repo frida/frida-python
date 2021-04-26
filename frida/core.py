@@ -230,6 +230,10 @@ class Session(object):
         self._impl.detach()
 
     @cancellable
+    def resume(self):
+        self._impl.resume()
+
+    @cancellable
     def enable_child_gating(self):
         self._impl.enable_child_gating()
 
