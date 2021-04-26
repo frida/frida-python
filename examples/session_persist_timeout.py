@@ -19,14 +19,14 @@ class Application(object):
         self._device = device
 
         print(">>> attach()")
-        session = self._device.attach(88679, session_persist_timeout=30)
+        session = self._device.attach("hello2", session_persist_timeout=30)
         print("<<< attach()")
         self._session = session
         session.on('detached', lambda *args: self._reactor.schedule(lambda: self._on_detached(*args)))
 
         print(">>> create_script()")
         script = session.create_script("""
-Interceptor.attach(ptr('0x100dc3f1c'), {
+Interceptor.attach(DebugSymbol.getFunctionByName('f'), {
   onEnter(args) {
     const n = args[0].toInt32();
     send(n);
