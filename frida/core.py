@@ -290,6 +290,9 @@ class Script(object):
         else:
             print(text, file=sys.stderr)
 
+    def list_exports(self):
+        return self._rpc_request('list')
+
     @cancellable
     def _rpc_request(self, *args):
         result = [False, None, None]
@@ -401,6 +404,8 @@ class ScriptExports(object):
             return script._rpc_request('call', js_name, args, **kwargs)
         return method
 
+    def __dir__(self):
+        return self._script.list_exports()
 
 class IOStream(object):
     def __init__(self, impl):
