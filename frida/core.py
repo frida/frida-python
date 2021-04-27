@@ -407,6 +407,7 @@ class ScriptExports(object):
     def __dir__(self):
         return self._script.list_exports()
 
+
 class IOStream(object):
     def __init__(self, impl):
         self._impl = impl
