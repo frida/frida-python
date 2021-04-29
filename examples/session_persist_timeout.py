@@ -26,12 +26,30 @@ class Application(object):
 
         print(">>> create_script()")
         script = session.create_script("""
+let _puts = null;
+
 Interceptor.attach(DebugSymbol.getFunctionByName('f'), {
   onEnter(args) {
     const n = args[0].toInt32();
     send(n);
   }
 });
+
+rpc.exports.dispose = () => {
+  puts('Script unloaded');
+};
+
+let serial = 1;
+setInterval(() => {
+  puts(`Agent still here! serial=${serial++}`);
+}, 5000);
+
+function puts(s) {
+  if (_puts === null) {
+    _puts = new NativeFunction(Module.getExportByName(null, 'puts'), 'int', ['pointer']);
+  }
+  _puts(Memory.allocUtf8String(s));
+}
 """)
         print("<<< create_script()")
         self._script = script
