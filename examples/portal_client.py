@@ -2,7 +2,6 @@ import frida
 from frida_tools.application import Reactor
 import json
 import sys
-import threading
 
 
 class Application:
@@ -22,7 +21,6 @@ class Application:
 
         self._channel = None
         self._prompt = "> "
-        self._ack_received = threading.Event()
 
     def run(self):
         self._reactor.schedule(self._start)
@@ -45,7 +43,7 @@ class Application:
             if text.startswith("/join "):
                 if self._channel is not None:
                     self._bus.post({
-                        'type': 'leave',
+                        'type': 'part',
                         'channel': self._channel
                     })
                 channel = text[6:]
@@ -55,7 +53,6 @@ class Application:
                     'type': 'join',
                     'channel': channel
                 })
-                self._print("*** Joined", channel)
                 continue
 
             if text.startswith("/announce "):
@@ -72,12 +69,9 @@ class Application:
             if self._channel is not None:
                 self._bus.post({
                     'channel': self._channel,
-                    'type': 'chat',
+                    'type': 'say',
                     'text': text
                 })
-
-                self._ack_received.wait()
-                self._ack_received.clear()
             else:
                 self._print("*** Need to /join a channel first")
 
@@ -85,20 +79,26 @@ class Application:
         mtype = message['type']
         if mtype == 'welcome':
             self._print("*** Welcome! Available channels:", repr(message['channels']))
-        elif mtype == 'history':
-            for item in message['items']:
-                self._on_bus_message(item, None)
+        elif mtype == 'membership':
+            self._print("*** Joined", message['channel'])
+            self._print("- Members:\n\t" + "\n\t".join(["{} (connected from {})".format(m['nick'], m['address']) for m in message['members']]))
+            for item in message['history']:
+                self._print("<{}> {}".format(item['sender'], item['text']))
+        elif mtype == 'join':
+            user = message['user']
+            self._print("👋 {} ({}) joined {}".format(user['nick'], user['address'], message['channel']))
+        elif mtype == 'part':
+            user = message['user']
+            self._print("🚪 {} ({}) left {}".format(user['nick'], user['address'], message['channel']))
         elif mtype == 'chat':
             self._print("<{}> {}".format(message['sender'], message['text']))
-        elif mtype == 'ack':
-            self._ack_received.set()
         elif mtype == 'announce':
             self._print("📣 <{}> {}".format(message['sender'], message['text']))
         else:
             self._print("Unhandled message:", message)
 
     def _print(self, *words):
-        print("\r\033[K" + " ".join(words))
+        print("\r\033[K" + " ".join([str(word) for word in words]))
         sys.stdout.write(self._prompt)
         sys.stdout.flush()
 

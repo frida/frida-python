@@ -30,8 +30,7 @@ class Application:
         self._device = service.device
         self._peers = {}
         self._nicks = set()
-        self._channels = set()
-        self._history = {}
+        self._channels = {}
 
         service.on('node-connected', lambda *args: self._reactor.schedule(lambda: self._on_node_connected(*args)))
         service.on('node-joined', lambda *args: self._reactor.schedule(lambda: self._on_node_joined(*args)))
@@ -102,11 +101,13 @@ class Application:
 
     def _on_controller_connected(self, connection_id, remote_address):
         print("on_controller_connected()", connection_id, remote_address)
-        self._peers[connection_id] = Peer(remote_address)
+        self._peers[connection_id] = Peer(connection_id, remote_address)
 
     def _on_controller_disconnected(self, connection_id, remote_address):
         print("on_controller_disconnected()", connection_id, remote_address)
         peer = self._peers.pop(connection_id)
+        for channel in list(peer.memberships):
+            channel.remove_member(peer)
         self._release_nick(peer.nick)
 
     def _on_authenticated(self, connection_id, session_info):
@@ -120,7 +121,7 @@ class Application:
         print("on_subscribe()", connection_id)
         self._service.post(connection_id, {
             'type': 'welcome',
-            'channels': list(self._channels)
+            'channels': list(self._channels.keys())
         })
 
     def _on_message(self, connection_id, message, data):
@@ -128,38 +129,17 @@ class Application:
 
         mtype = message['type']
         if mtype == 'join':
-            channel = message['channel']
-            self._channels.add(channel)
-            self._service.tag(connection_id, channel)
-            self._service.post(connection_id, {
-                'type': 'history',
-                'items': self._history.get(channel, [])
-            })
-        elif mtype == 'leave':
-            channel = message['channel']
-            self._service.untag(connection_id, channel)
-        elif mtype == 'chat':
-            channel = message['channel']
-            text = message['text']
-
-            item = {
-                'type': 'chat',
-                'sender': peer.nick,
-                'text': text
-            }
-
-            self._service.narrowcast(channel, item)
-            self._service.post(connection_id, {
-                'type': 'ack'
-            })
-
-            history = self._history.get(channel, None)
-            if history is None:
-                history = []
-                self._history[channel] = history
-            history.append(item)
-            if len(history) == 20:
-                history.pop(0)
+            self._get_channel(message['channel']).add_member(peer)
+        elif mtype == 'part':
+            channel = self._channels.get(message['channel'], None)
+            if channel is None:
+                return
+            channel.remove_member(peer)
+        elif mtype == 'say':
+            channel = self._channels.get(message['channel'], None)
+            if channel is None:
+                return
+            channel.post(message['text'], peer)
         elif mtype == 'announce':
             self._service.broadcast({
                 'type': 'announce',
@@ -184,11 +164,87 @@ class Application:
     def _release_nick(self, nick):
         self._nicks.remove(nick)
 
+    def _get_channel(self, name):
+        channel = self._channels.get(name, None)
+        if channel is None:
+            channel = Channel(name, self._service)
+            self._channels[name] = channel
+        return channel
+
 
 class Peer:
-    def __init__(self, remote_address):
+    def __init__(self, connection_id, remote_address):
         self.nick = None
+        self.connection_id = connection_id
         self.remote_address = remote_address
+        self.memberships = set()
+
+    def to_json(self):
+        return {
+            'nick': self.nick,
+            'address': self.remote_address[0]
+        }
+
+
+class Channel:
+    def __init__(self, name, service):
+        self.name = name
+        self.members = set()
+        self.history = []
+
+        self._service = service
+
+    def add_member(self, peer):
+        if self in peer.memberships:
+            return
+
+        peer.memberships.add(self)
+        self.members.add(peer)
+
+        self._service.narrowcast(self.name, {
+            'type': 'join',
+            'channel': self.name,
+            'user': peer.to_json()
+        })
+        self._service.tag(peer.connection_id, self.name)
+
+        self._service.post(peer.connection_id, {
+            'type': 'membership',
+            'channel': self.name,
+            'members': [peer.to_json() for peer in self.members],
+            'history': self.history
+        })
+
+    def remove_member(self, peer):
+        if self not in peer.memberships:
+            return
+
+        peer.memberships.remove(self)
+        self.members.remove(peer)
+
+        self._service.untag(peer.connection_id, self.name)
+        self._service.narrowcast(self.name, {
+            'type': 'part',
+            'channel': self.name,
+            'user': peer.to_json()
+        })
+
+    def post(self, text, peer):
+        if self not in peer.memberships:
+            return
+
+        item = {
+            'type': 'chat',
+            'sender': peer.nick,
+            'text': text
+        }
+
+        self._service.narrowcast(self.name, item)
+
+        history = self.history
+        history.append(item)
+        if len(history) == 20:
+            history.pop(0)
 
 
 if __name__ == '__main__':
