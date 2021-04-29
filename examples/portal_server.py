@@ -160,6 +160,12 @@ class Application:
             history.append(item)
             if len(history) == 20:
                 history.pop(0)
+        elif mtype == 'announce':
+            self._service.broadcast({
+                'type': 'announce',
+                'sender': peer.nick,
+                'text': message['text']
+            })
         else:
             print("Unhandled message:", message)
 

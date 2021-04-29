@@ -58,6 +58,13 @@ class Application:
                 self._print("*** Joined", channel)
                 continue
 
+            if text.startswith("/announce "):
+                self._bus.post({
+                    'type': 'announce',
+                    'text': text[10:]
+                })
+                continue
+
             if len(text) == 0:
                 self._print("Processes:", self._device.enumerate_processes())
                 continue
@@ -76,15 +83,17 @@ class Application:
 
     def _on_bus_message(self, message, data):
         mtype = message['type']
-        if mtype == 'chat':
-            self._print("<{}> {}".format(message['sender'], message['text']))
-        elif mtype == 'ack':
-            self._ack_received.set()
+        if mtype == 'welcome':
+            self._print("*** Welcome! Available channels:", repr(message['channels']))
         elif mtype == 'history':
             for item in message['items']:
                 self._on_bus_message(item, None)
-        elif mtype == 'welcome':
-            self._print("*** Welcome! Available channels:", repr(message['channels']))
+        elif mtype == 'chat':
+            self._print("<{}> {}".format(message['sender'], message['text']))
+        elif mtype == 'ack':
+            self._ack_received.set()
+        elif mtype == 'announce':
+            self._print("📣 <{}> {}".format(message['sender'], message['text']))
         else:
             self._print("Unhandled message:", message)
 
