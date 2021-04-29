@@ -3655,13 +3655,9 @@ PyBus_new_take_handle (FridaBus * handle)
 static PyObject *
 PyBus_subscribe (PyBus * self)
 {
-  GError * error = NULL;
-
   Py_BEGIN_ALLOW_THREADS
-  frida_bus_subscribe_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  frida_bus_subscribe (PY_GOBJECT_HANDLE (self));
   Py_END_ALLOW_THREADS
-  if (error != NULL)
-    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
@@ -3669,13 +3665,9 @@ PyBus_subscribe (PyBus * self)
 static PyObject *
 PyBus_unsubscribe (PyBus * self)
 {
-  GError * error = NULL;
-
   Py_BEGIN_ALLOW_THREADS
-  frida_bus_unsubscribe_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  frida_bus_unsubscribe (PY_GOBJECT_HANDLE (self));
   Py_END_ALLOW_THREADS
-  if (error != NULL)
-    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
@@ -3688,7 +3680,6 @@ PyBus_post (PyScript * self, PyObject * args, PyObject * kw)
   gconstpointer data_buffer = NULL;
   Py_ssize_t data_size = 0;
   GBytes * data;
-  GError * error = NULL;
 
   if (!PyArg_ParseTupleAndKeywords (args, kw, "es|z#", keywords, "utf-8", &message, &data_buffer, &data_size))
     return NULL;
@@ -3696,14 +3687,11 @@ PyBus_post (PyScript * self, PyObject * args, PyObject * kw)
   data = (data_buffer != NULL) ? g_bytes_new (data_buffer, data_size) : NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_bus_post_sync (PY_GOBJECT_HANDLE (self), message, data, g_cancellable_get_current (), &error);
+  frida_bus_post (PY_GOBJECT_HANDLE (self), message, data);
   Py_END_ALLOW_THREADS
 
   g_bytes_unref (data);
   PyMem_Free (message);
-
-  if (error != NULL)
-    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
