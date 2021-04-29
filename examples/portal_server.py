@@ -40,7 +40,6 @@ class Application:
         service.on('controller-disconnected', lambda *args: self._reactor.schedule(lambda: self._on_controller_disconnected(*args)))
         service.on('authenticated', lambda *args: self._reactor.schedule(lambda: self._on_authenticated(*args)))
         service.on('subscribe', lambda *args: self._reactor.schedule(lambda: self._on_subscribe(*args)))
-        service.on('unsubscribe', lambda *args: self._reactor.schedule(lambda: self._on_unsubscribe(*args)))
         service.on('message', lambda *args: self._reactor.schedule(lambda: self._on_message(*args)))
 
     def run(self):
@@ -122,9 +121,6 @@ class Application:
             'type': 'history',
             'items': self._history
         })
-
-    def _on_unsubscribe(self, connection_id):
-        print("on_unsubscribe()", connection_id)
 
     def _on_message(self, connection_id, message, data):
         peer = self._peers[connection_id]

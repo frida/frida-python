@@ -173,6 +173,7 @@ struct _PyDevice
   PyObject * name;
   PyObject * icon;
   PyObject * type;
+  PyObject * bus;
 };
 
 struct _PyApplication
@@ -358,7 +359,6 @@ static FridaSessionOptions * PyDevice_parse_session_options (const gchar * realm
 static PyObject * PyDevice_inject_library_file (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_inject_library_blob (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_open_channel (PyDevice * self, PyObject * args);
-static PyObject * PyDevice_get_bus (PyDevice * self, PyObject * args);
 
 static PyObject * PyApplication_new_take_handle (FridaApplication * handle);
 static int PyApplication_init (PyApplication * self, PyObject * args, PyObject * kw);
@@ -400,8 +400,7 @@ static void PyIcon_dealloc (PyIcon * self);
 static PyObject * PyIcon_repr (PyIcon * self);
 
 static PyObject * PyBus_new_take_handle (FridaBus * handle);
-static PyObject * PyBus_subscribe (PyBus * self);
-static PyObject * PyBus_unsubscribe (PyBus * self);
+static PyObject * PyBus_attach (PySession * self);
 static PyObject * PyBus_post (PyScript * self, PyObject * args, PyObject * kw);
 
 static PyObject * PySession_new_take_handle (FridaSession * handle);
@@ -527,7 +526,6 @@ static PyMethodDef PyDevice_methods[] =
   { "inject_library_file", (PyCFunction) PyDevice_inject_library_file, METH_VARARGS, "Inject a library file to a PID." },
   { "inject_library_blob", (PyCFunction) PyDevice_inject_library_blob, METH_VARARGS, "Inject a library blob to a PID." },
   { "open_channel", (PyCFunction) PyDevice_open_channel, METH_VARARGS, "Open a device-specific communication channel." },
-  { "get_bus", (PyCFunction) PyDevice_get_bus, METH_VARARGS, "Get message bus, if available." },
   { NULL }
 };
 
@@ -537,6 +535,7 @@ static PyMemberDef PyDevice_members[] =
   { "name", T_OBJECT_EX, G_STRUCT_OFFSET (PyDevice, name), READONLY, "Human-readable device name." },
   { "icon", T_OBJECT_EX, G_STRUCT_OFFSET (PyDevice, icon), READONLY, "Icon." },
   { "type", T_OBJECT_EX, G_STRUCT_OFFSET (PyDevice, type), READONLY, "Device type. One of: local, remote, usb." },
+  { "bus", T_OBJECT_EX, G_STRUCT_OFFSET (PyDevice, bus), READONLY, "Message bus." },
   { NULL }
 };
 
@@ -609,8 +608,7 @@ static PyMemberDef PyIcon_members[] =
 
 static PyMethodDef PyBus_methods[] =
 {
-  { "subscribe", (PyCFunction) PyBus_subscribe, METH_NOARGS, "Subscribe to broadcast messages." },
-  { "unsubscribe", (PyCFunction) PyBus_unsubscribe, METH_NOARGS, "Unsubscribe to broadcast messages." },
+  { "attach", (PyCFunction) PyBus_attach, METH_NOARGS, "Attach to the bus." },
   { "post", (PyCFunction) PyBus_post, METH_VARARGS | METH_KEYWORDS, "Post a JSON-encoded message to the bus." },
   { NULL }
 };
@@ -2666,6 +2664,7 @@ PyDevice_init (PyDevice * self, PyObject * args, PyObject * kw)
   self->name = NULL;
   self->icon = NULL;
   self->type = NULL;
+  self->bus = NULL;
 
   return 0;
 }
@@ -2677,11 +2676,13 @@ PyDevice_init_from_handle (PyDevice * self, FridaDevice * handle)
   self->name = PyUnicode_FromUTF8String (frida_device_get_name (handle));
   self->icon = PyIcon_new_from_handle (frida_device_get_icon (handle));
   self->type = PyGObject_marshal_enum (frida_device_get_dtype (handle), FRIDA_TYPE_DEVICE_TYPE);
+  self->bus = PyBus_new_take_handle (g_object_ref (frida_device_get_bus (handle)));
 }
 
 static void
 PyDevice_dealloc (PyDevice * self)
 {
+  Py_XDECREF (self->bus);
   Py_XDECREF (self->type);
   Py_XDECREF (self->icon);
   Py_XDECREF (self->name);
@@ -3197,21 +3198,6 @@ PyDevice_open_channel (PyDevice * self, PyObject * args)
   return PyIOStream_new_take_handle (stream);
 }
 
-static PyObject *
-PyDevice_get_bus (PyDevice * self, PyObject * args)
-{
-  GError * error = NULL;
-  FridaBus * handle;
-
-  Py_BEGIN_ALLOW_THREADS
-  handle = frida_device_get_bus_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
-  Py_END_ALLOW_THREADS
-  if (error != NULL)
-    return PyFrida_raise (error);
-
-  return PyBus_new_take_handle (handle);
-}
-
 
 static PyObject *
 PyApplication_new_take_handle (FridaApplication * handle)
@@ -3653,21 +3639,15 @@ PyBus_new_take_handle (FridaBus * handle)
 }
 
 static PyObject *
-PyBus_subscribe (PyBus * self)
+PyBus_attach (PySession * self)
 {
-  Py_BEGIN_ALLOW_THREADS
-  frida_bus_subscribe (PY_GOBJECT_HANDLE (self));
-  Py_END_ALLOW_THREADS
+  GError * error = NULL;
 
-  Py_RETURN_NONE;
-}
-
-static PyObject *
-PyBus_unsubscribe (PyBus * self)
-{
   Py_BEGIN_ALLOW_THREADS
-  frida_bus_unsubscribe (PY_GOBJECT_HANDLE (self));
+  frida_bus_attach_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }

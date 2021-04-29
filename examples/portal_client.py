@@ -17,7 +17,7 @@ class Application:
                                                                     certificate="/Users/oleavr/src/cert.pem",
                                                                     token=json.dumps(token))
 
-        self._bus = self._device.get_bus()
+        self._bus = self._device.bus
         self._bus.on('message', lambda *args: self._reactor.schedule(lambda: self._on_bus_message(*args)))
 
         self._prompt = "> "
@@ -28,7 +28,7 @@ class Application:
         self._reactor.run()
 
     def _start(self):
-        self._bus.subscribe()
+        self._bus.attach()
 
     def _process_input(self, reactor):
         while True:

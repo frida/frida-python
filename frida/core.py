@@ -82,6 +82,7 @@ class Device(object):
         self.name = device.name
         self.icon = device.icon
         self.type = device.type
+        self.bus = Bus(device.bus)
 
         self._impl = device
 
@@ -191,11 +192,9 @@ class Bus(object):
 
         impl.on('message', self._on_message)
 
-    def subscribe(self):
-        self._impl.subscribe()
-
-    def unsubscribe(self):
-        self._impl.unsubscribe()
+    @cancellable
+    def attach(self):
+        self._impl.attach()
 
     def post(self, message, **kwargs):
         raw_message = json.dumps(message)
