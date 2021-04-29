@@ -39,6 +39,8 @@ class Application:
         service.on('controller-connected', lambda *args: self._reactor.schedule(lambda: self._on_controller_connected(*args)))
         service.on('controller-disconnected', lambda *args: self._reactor.schedule(lambda: self._on_controller_disconnected(*args)))
         service.on('authenticated', lambda *args: self._reactor.schedule(lambda: self._on_authenticated(*args)))
+        service.on('subscribe', lambda *args: self._reactor.schedule(lambda: self._on_subscribe(*args)))
+        service.on('unsubscribe', lambda *args: self._reactor.schedule(lambda: self._on_unsubscribe(*args)))
         service.on('message', lambda *args: self._reactor.schedule(lambda: self._on_message(*args)))
 
     def run(self):
@@ -114,19 +116,20 @@ class Application:
             return
         peer.nick = self._acquire_nick(session_info['nick'])
 
+    def _on_subscribe(self, connection_id):
+        print("on_subscribe()", connection_id)
+        self._service.post(connection_id, {
+            'type': 'history',
+            'items': self._history
+        })
+
+    def _on_unsubscribe(self, connection_id):
+        print("on_unsubscribe()", connection_id)
+
     def _on_message(self, connection_id, message, data):
         peer = self._peers[connection_id]
 
-        mtype = message['type']
-        if mtype == 'hello':
-            if peer.synchronized:
-                return
-            self._service.post(connection_id, {
-                'type': 'history',
-                'items': self._history
-            })
-            peer.synchronized = True
-        elif mtype == 'chat':
+        if message['type'] == 'chat':
             text = message['text']
 
             item = {
@@ -166,7 +169,6 @@ class Peer:
     def __init__(self, remote_address):
         self.nick = None
         self.remote_address = remote_address
-        self.synchronized = False
 
 
 if __name__ == '__main__':

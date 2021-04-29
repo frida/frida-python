@@ -28,9 +28,7 @@ class Application:
         self._reactor.run()
 
     def _start(self):
-        self._bus.post({
-            'type': 'hello',
-        })
+        self._bus.subscribe()
 
     def _process_input(self, reactor):
         while True:
