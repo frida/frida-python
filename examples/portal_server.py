@@ -30,7 +30,8 @@ class Application:
         self._device = service.device
         self._peers = {}
         self._nicks = set()
-        self._history = []
+        self._channels = set()
+        self._history = {}
 
         service.on('node-connected', lambda *args: self._reactor.schedule(lambda: self._on_node_connected(*args)))
         service.on('node-joined', lambda *args: self._reactor.schedule(lambda: self._on_node_joined(*args)))
@@ -118,14 +119,27 @@ class Application:
     def _on_subscribe(self, connection_id):
         print("on_subscribe()", connection_id)
         self._service.post(connection_id, {
-            'type': 'history',
-            'items': self._history
+            'type': 'welcome',
+            'channels': list(self._channels)
         })
 
     def _on_message(self, connection_id, message, data):
         peer = self._peers[connection_id]
 
-        if message['type'] == 'chat':
+        mtype = message['type']
+        if mtype == 'join':
+            channel = message['channel']
+            self._channels.add(channel)
+            self._service.tag(connection_id, channel)
+            self._service.post(connection_id, {
+                'type': 'history',
+                'items': self._history.get(channel, [])
+            })
+        elif mtype == 'leave':
+            channel = message['channel']
+            self._service.untag(connection_id, channel)
+        elif mtype == 'chat':
+            channel = message['channel']
             text = message['text']
 
             item = {
@@ -134,14 +148,18 @@ class Application:
                 'text': text
             }
 
-            self._service.broadcast(item)
+            self._service.narrowcast(channel, item)
             self._service.post(connection_id, {
                 'type': 'ack'
             })
 
-            self._history.append(item)
-            if len(self._history) == 20:
-                self._history.pop(0)
+            history = self._history.get(channel, None)
+            if history is None:
+                history = []
+                self._history[channel] = history
+            history.append(item)
+            if len(history) == 20:
+                history.pop(0)
         else:
             print("Unhandled message:", message)
 

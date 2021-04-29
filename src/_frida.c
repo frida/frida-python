@@ -439,7 +439,10 @@ static void PyPortalService_dealloc (PyPortalService * self);
 static PyObject * PyPortalService_start (PyPortalService * self);
 static PyObject * PyPortalService_stop (PyPortalService * self);
 static PyObject * PyPortalService_post (PyScript * self, PyObject * args, PyObject * kw);
+static PyObject * PyPortalService_narrowcast (PyScript * self, PyObject * args, PyObject * kw);
 static PyObject * PyPortalService_broadcast (PyScript * self, PyObject * args, PyObject * kw);
+static PyObject * PyPortalService_tag (PyScript * self, PyObject * args, PyObject * kw);
+static PyObject * PyPortalService_untag (PyScript * self, PyObject * args, PyObject * kw);
 
 static int PyWebGatewayService_init (PyWebGatewayService * self, PyObject * args, PyObject * kw);
 static void PyWebGatewayService_dealloc (PyWebGatewayService * self);
@@ -655,7 +658,10 @@ static PyMethodDef PyPortalService_methods[] =
   { "start", (PyCFunction) PyPortalService_start, METH_NOARGS, "Start listening for incoming connections." },
   { "stop", (PyCFunction) PyPortalService_stop, METH_NOARGS, "Stop listening for incoming connections, and kick any connected clients." },
   { "post", (PyCFunction) PyPortalService_post, METH_VARARGS | METH_KEYWORDS, "Post a message to a specific control channel." },
+  { "narrowcast", (PyCFunction) PyPortalService_narrowcast, METH_VARARGS | METH_KEYWORDS, "Post a message to control channels with a specific tag." },
   { "broadcast", (PyCFunction) PyPortalService_broadcast, METH_VARARGS | METH_KEYWORDS, "Broadcast a message to all control channels." },
+  { "tag", (PyCFunction) PyPortalService_tag, METH_VARARGS | METH_KEYWORDS, "Tag a specific control channel." },
+  { "untag", (PyCFunction) PyPortalService_untag, METH_VARARGS | METH_KEYWORDS, "Untag a specific control channel." },
   { NULL }
 };
 
@@ -4366,6 +4372,34 @@ PyPortalService_post (PyScript * self, PyObject * args, PyObject * kw)
 }
 
 static PyObject *
+PyPortalService_narrowcast (PyScript * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "tag", "message", "data", NULL };
+  char * tag, * message;
+  gconstpointer data_buffer = NULL;
+  Py_ssize_t data_size = 0;
+  GBytes * data;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "eses|z#", keywords,
+        "utf-8", &tag,
+        "utf-8", &message,
+        &data_buffer, &data_size))
+    return NULL;
+
+  data = (data_buffer != NULL) ? g_bytes_new (data_buffer, data_size) : NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_portal_service_narrowcast (PY_GOBJECT_HANDLE (self), tag, message, data);
+  Py_END_ALLOW_THREADS
+
+  g_bytes_unref (data);
+  PyMem_Free (message);
+  PyMem_Free (tag);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
 PyPortalService_broadcast (PyScript * self, PyObject * args, PyObject * kw)
 {
   static char * keywords[] = { "message", "data", NULL };
@@ -4387,6 +4421,48 @@ PyPortalService_broadcast (PyScript * self, PyObject * args, PyObject * kw)
 
   g_bytes_unref (data);
   PyMem_Free (message);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyPortalService_tag (PyScript * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "connection_id", "tag", NULL };
+  unsigned int connection_id;
+  char * tag;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "Ies", keywords,
+        &connection_id,
+        "utf-8", &tag))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_portal_service_tag (PY_GOBJECT_HANDLE (self), connection_id, tag);
+  Py_END_ALLOW_THREADS
+
+  PyMem_Free (tag);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyPortalService_untag (PyScript * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "connection_id", "tag", NULL };
+  unsigned int connection_id;
+  char * tag;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "Ies", keywords,
+        &connection_id,
+        "utf-8", &tag))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_portal_service_untag (PY_GOBJECT_HANDLE (self), connection_id, tag);
+  Py_END_ALLOW_THREADS
+
+  PyMem_Free (tag);
 
   Py_RETURN_NONE;
 }

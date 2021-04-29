@@ -20,6 +20,7 @@ class Application:
         self._bus = self._device.bus
         self._bus.on('message', lambda *args: self._reactor.schedule(lambda: self._on_bus_message(*args)))
 
+        self._channel = None
         self._prompt = "> "
         self._ack_received = threading.Event()
 
@@ -34,38 +35,63 @@ class Application:
         while True:
             sys.stdout.write("\r")
             try:
-                message = input(self._prompt).strip()
+                text = input(self._prompt).strip()
             except:
                 self._reactor.cancel_io()
                 return
             sys.stdout.write("\033[1A\033[K")
             sys.stdout.flush()
 
-            if len(message) == 0:
-                print("Processes:", self._device.enumerate_processes())
+            if text.startswith("/join "):
+                if self._channel is not None:
+                    self._bus.post({
+                        'type': 'leave',
+                        'channel': self._channel
+                    })
+                channel = text[6:]
+                self._channel = channel
+                self._prompt = "{} > ".format(channel)
+                self._bus.post({
+                    'type': 'join',
+                    'channel': channel
+                })
+                self._print("*** Joined", channel)
                 continue
 
-            self._bus.post({
-                'type': 'chat',
-                'text': message
-            })
+            if len(text) == 0:
+                self._print("Processes:", self._device.enumerate_processes())
+                continue
 
-            self._ack_received.wait()
-            self._ack_received.clear()
+            if self._channel is not None:
+                self._bus.post({
+                    'channel': self._channel,
+                    'type': 'chat',
+                    'text': text
+                })
+
+                self._ack_received.wait()
+                self._ack_received.clear()
+            else:
+                self._print("*** Need to /join a channel first")
 
     def _on_bus_message(self, message, data):
         mtype = message['type']
         if mtype == 'chat':
-            print("\r\033[K<{}> {}".format(message['sender'], message['text']))
-            sys.stdout.write(self._prompt)
-            sys.stdout.flush()
+            self._print("<{}> {}".format(message['sender'], message['text']))
         elif mtype == 'ack':
             self._ack_received.set()
         elif mtype == 'history':
             for item in message['items']:
                 self._on_bus_message(item, None)
+        elif mtype == 'welcome':
+            self._print("*** Welcome! Available channels:", repr(message['channels']))
         else:
-            print("Unhandled message:", message)
+            self._print("Unhandled message:", message)
+
+    def _print(self, *words):
+        print("\r\033[K" + " ".join(words))
+        sys.stdout.write(self._prompt)
+        sys.stdout.flush()
 
 
 if __name__ == '__main__':

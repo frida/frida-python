@@ -513,9 +513,19 @@ class PortalService(object):
         raw_message = json.dumps(message)
         self._impl.post(connection_id, raw_message, **kwargs)
 
+    def narrowcast(self, tag, message, **kwargs):
+        raw_message = json.dumps(message)
+        self._impl.narrowcast(tag, raw_message, **kwargs)
+
     def broadcast(self, message, **kwargs):
         raw_message = json.dumps(message)
         self._impl.broadcast(raw_message, **kwargs)
+
+    def tag(self, connection_id, tag):
+        self._impl.tag(connection_id, tag)
+
+    def untag(self, connection_id, tag):
+        self._impl.untag(connection_id, tag)
 
     def on(self, signal, callback):
         if signal == 'authenticated':
