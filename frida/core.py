@@ -513,12 +513,10 @@ class PortalService(object):
     def stop(self):
         self._impl.stop()
 
-    @cancellable
     def post(self, connection_id, message, **kwargs):
         raw_message = json.dumps(message)
         self._impl.post(connection_id, raw_message, **kwargs)
 
-    @cancellable
     def broadcast(self, message, **kwargs):
         raw_message = json.dumps(message)
         self._impl.broadcast(raw_message, **kwargs)
