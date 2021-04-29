@@ -322,7 +322,7 @@ static gboolean PyGObject_unmarshal_enum (const gchar * str, GType type, gpointe
 static PyObject * PyGObject_marshal_bytes (GBytes * bytes);
 static PyObject * PyGObject_marshal_bytes_non_nullable (GBytes * bytes);
 static gboolean PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant);
-static PyObject * PyGObject_marshal_variant_dict (GVariant * dict);
+static PyObject * PyGObject_marshal_parameters_dict (GHashTable * dict);
 static PyObject * PyGObject_marshal_socket_address (GSocketAddress * address);
 static gboolean PyGObject_unmarshal_certificate (const gchar * str, GTlsCertificate ** certificate);
 static PyObject * PyGObject_marshal_object (gpointer handle, GType type);
@@ -2290,25 +2290,23 @@ propagate_error:
 }
 
 static PyObject *
-PyGObject_marshal_variant_dict (GVariant * dict)
+PyGObject_marshal_parameters_dict (GHashTable * dict)
 {
   PyObject * result;
-  GVariantIter iter;
-  gchar * key;
+  GHashTableIter iter;
+  const gchar * key;
   GVariant * raw_value;
 
   result = PyDict_New ();
 
-  g_variant_iter_init (&iter, dict);
-  while (g_variant_iter_next (&iter, "{sv}", &key, &raw_value))
+  g_hash_table_iter_init (&iter, dict);
+  while (g_hash_table_iter_next (&iter, (gpointer *) &key, (gpointer *) &raw_value))
   {
     PyObject * value = PyGObject_marshal_variant (raw_value);
 
     PyDict_SetItemString (result, key, value);
 
     Py_DECREF (value);
-    g_variant_unref (raw_value);
-    g_free (key);
   }
 
   return result;
@@ -2936,7 +2934,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
 
   if (aux_value != Py_None)
   {
-    GVariantDict * aux;
+    GHashTable * aux;
     Py_ssize_t pos;
     PyObject * key, * value;
 
@@ -2957,7 +2955,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
       if (!PyGObject_unmarshal_variant (value, &raw_value))
         goto invalid_dict_value;
 
-      g_variant_dict_insert_value (aux, raw_key, raw_value);
+      g_hash_table_insert (aux, g_strdup (raw_key), raw_value);
     }
   }
 
@@ -3543,19 +3541,11 @@ PyCrash_init (PyCrash * self, PyObject * args, PyObject * kw)
 static void
 PyCrash_init_from_handle (PyCrash * self, FridaCrash * handle)
 {
-  GVariantDict * parameters_dict;
-  GVariant * parameters;
-
   self->pid = frida_crash_get_pid (handle);
   self->process_name = PyGObject_marshal_string (frida_crash_get_process_name (handle));
   self->summary = PyGObject_marshal_string (frida_crash_get_summary (handle));
   self->report = PyGObject_marshal_string (frida_crash_get_report (handle));
-
-  parameters_dict = frida_crash_load_parameters (handle);
-  parameters = g_variant_dict_end (parameters_dict);
-  self->parameters = PyGObject_marshal_variant_dict (parameters);
-  g_variant_unref (parameters);
-  g_variant_dict_unref (parameters_dict);
+  self->parameters = PyGObject_marshal_parameters_dict (frida_crash_get_parameters (handle));
 }
 
 static void
