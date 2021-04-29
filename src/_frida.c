@@ -400,6 +400,8 @@ static void PyIcon_dealloc (PyIcon * self);
 static PyObject * PyIcon_repr (PyIcon * self);
 
 static PyObject * PyBus_new_take_handle (FridaBus * handle);
+static PyObject * PyBus_subscribe (PyBus * self);
+static PyObject * PyBus_unsubscribe (PyBus * self);
 static PyObject * PyBus_post (PyScript * self, PyObject * args, PyObject * kw);
 
 static PyObject * PySession_new_take_handle (FridaSession * handle);
@@ -607,6 +609,8 @@ static PyMemberDef PyIcon_members[] =
 
 static PyMethodDef PyBus_methods[] =
 {
+  { "subscribe", (PyCFunction) PyBus_subscribe, METH_NOARGS, "Subscribe to broadcast messages." },
+  { "unsubscribe", (PyCFunction) PyBus_unsubscribe, METH_NOARGS, "Unsubscribe to broadcast messages." },
   { "post", (PyCFunction) PyBus_post, METH_VARARGS | METH_KEYWORDS, "Post a JSON-encoded message to the bus." },
   { NULL }
 };
@@ -3646,6 +3650,34 @@ static PyObject *
 PyBus_new_take_handle (FridaBus * handle)
 {
   return PyGObject_new_take_handle (handle, &PYFRIDA_TYPE_SPEC (Bus));
+}
+
+static PyObject *
+PyBus_subscribe (PyBus * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_bus_subscribe_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyBus_unsubscribe (PyBus * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_bus_unsubscribe_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
 }
 
 static PyObject *

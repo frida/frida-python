@@ -192,6 +192,14 @@ class Bus(object):
         impl.on('message', self._on_message)
 
     @cancellable
+    def subscribe(self):
+        self._impl.subscribe()
+
+    @cancellable
+    def unsubscribe(self):
+        self._impl.unsubscribe()
+
+    @cancellable
     def post(self, message, **kwargs):
         raw_message = json.dumps(message)
         self._impl.post(raw_message, **kwargs)
