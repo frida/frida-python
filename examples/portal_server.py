@@ -92,6 +92,7 @@ class Application:
 
     def _on_node_joined(self, connection_id, application):
         print("on_node_joined()", connection_id, application)
+        print("\ttags:", self._service.enumerate_tags(connection_id))
 
     def _on_node_left(self, connection_id, application):
         print("on_node_left()", connection_id, application)

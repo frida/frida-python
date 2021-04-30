@@ -521,6 +521,9 @@ class PortalService(object):
         raw_message = json.dumps(message)
         self._impl.broadcast(raw_message, **kwargs)
 
+    def enumerate_tags(self, connection_id):
+        return self._impl.enumerate_tags(connection_id)
+
     def tag(self, connection_id, tag):
         self._impl.tag(connection_id, tag)
 

@@ -420,7 +420,7 @@ static PyObject * PySession_disable_debugger (PySession * self);
 static PyObject * PySession_setup_peer_connection (PySession * self, PyObject * args, PyObject * kw);
 static FridaPeerOptions * PySession_parse_peer_options (const gchar * stun_server, PyObject * relays);
 static PyObject * PySession_join_portal (PySession * self, PyObject * args, PyObject * kw);
-static FridaPortalOptions * PySession_parse_portal_options (const gchar * certificate_value, const gchar * token);
+static FridaPortalOptions * PySession_parse_portal_options (const gchar * certificate_value, const gchar * token, PyObject * acl_value);
 
 static PyObject * PyScript_new_take_handle (FridaScript * handle);
 static PyObject * PyScript_load (PyScript * self);
@@ -441,6 +441,7 @@ static PyObject * PyPortalService_stop (PyPortalService * self);
 static PyObject * PyPortalService_post (PyScript * self, PyObject * args, PyObject * kw);
 static PyObject * PyPortalService_narrowcast (PyScript * self, PyObject * args, PyObject * kw);
 static PyObject * PyPortalService_broadcast (PyScript * self, PyObject * args, PyObject * kw);
+static PyObject * PyPortalService_enumerate_tags (PyScript * self, PyObject * args);
 static PyObject * PyPortalService_tag (PyScript * self, PyObject * args, PyObject * kw);
 static PyObject * PyPortalService_untag (PyScript * self, PyObject * args, PyObject * kw);
 
@@ -660,6 +661,7 @@ static PyMethodDef PyPortalService_methods[] =
   { "post", (PyCFunction) PyPortalService_post, METH_VARARGS | METH_KEYWORDS, "Post a message to a specific control channel." },
   { "narrowcast", (PyCFunction) PyPortalService_narrowcast, METH_VARARGS | METH_KEYWORDS, "Post a message to control channels with a specific tag." },
   { "broadcast", (PyCFunction) PyPortalService_broadcast, METH_VARARGS | METH_KEYWORDS, "Broadcast a message to all control channels." },
+  { "enumerate_tags", (PyCFunction) PyPortalService_enumerate_tags, METH_VARARGS, "Enumerate tags of a specific connection." },
   { "tag", (PyCFunction) PyPortalService_tag, METH_VARARGS | METH_KEYWORDS, "Tag a specific control channel." },
   { "untag", (PyCFunction) PyPortalService_untag, METH_VARARGS | METH_KEYWORDS, "Untag a specific control channel." },
   { NULL }
@@ -4055,18 +4057,23 @@ static PyObject *
 PySession_join_portal (PySession * self, PyObject * args, PyObject * kw)
 {
   PyObject * result = NULL;
-  static char * keywords[] = { "address", "certificate", "token", NULL };
+  static char * keywords[] = { "address", "certificate", "token", "acl", NULL };
   char * address;
   char * certificate = NULL;
   char * token = NULL;
+  PyObject * acl = NULL;
   FridaPortalOptions * options;
   GError * error = NULL;
   FridaPortalMembership * handle;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|eses", keywords, "utf-8", &address, "utf-8", &certificate, "utf-8", &token))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|esesO", keywords,
+        "utf-8", &address,
+        "utf-8", &certificate,
+        "utf-8", &token,
+        &acl))
     return NULL;
 
-  options = PySession_parse_portal_options (certificate, token);
+  options = PySession_parse_portal_options (certificate, token, acl);
   if (options == NULL)
     goto beach;
 
@@ -4089,7 +4096,7 @@ beach:
 }
 
 static FridaPortalOptions *
-PySession_parse_portal_options (const gchar * certificate_value, const gchar * token)
+PySession_parse_portal_options (const gchar * certificate_value, const gchar * token, PyObject * acl_value)
 {
   FridaPortalOptions * options;
 
@@ -4109,6 +4116,19 @@ PySession_parse_portal_options (const gchar * certificate_value, const gchar * t
 
   if (token != NULL)
     frida_portal_options_set_token (options, token);
+
+  if (acl_value != NULL)
+  {
+    gchar ** acl;
+    gint acl_length;
+
+    if (!PyGObject_unmarshal_strv (acl_value, &acl, &acl_length))
+      goto propagate_error;
+
+    frida_portal_options_set_acl (options, acl, acl_length);
+
+    g_strfreev (acl);
+  }
 
   return options;
 
@@ -4423,6 +4443,27 @@ PyPortalService_broadcast (PyScript * self, PyObject * args, PyObject * kw)
   PyMem_Free (message);
 
   Py_RETURN_NONE;
+}
+
+static PyObject *
+PyPortalService_enumerate_tags (PyScript * self, PyObject * args)
+{
+  PyObject * result;
+  unsigned int connection_id;
+  gchar ** tags;
+  gint tags_length;
+
+  if (!PyArg_ParseTuple (args, "I", &connection_id))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  tags = frida_portal_service_enumerate_tags (PY_GOBJECT_HANDLE (self), connection_id, &tags_length);
+  Py_END_ALLOW_THREADS
+
+  result = PyGObject_marshal_strv (tags, tags_length);
+  g_strfreev (tags);
+
+  return result;
 }
 
 static PyObject *
