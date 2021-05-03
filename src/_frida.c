@@ -438,6 +438,7 @@ static void PyPortalService_init_from_handle (PyPortalService * self, FridaPorta
 static void PyPortalService_dealloc (PyPortalService * self);
 static PyObject * PyPortalService_start (PyPortalService * self);
 static PyObject * PyPortalService_stop (PyPortalService * self);
+static PyObject * PyPortalService_kick (PyScript * self, PyObject * args);
 static PyObject * PyPortalService_post (PyScript * self, PyObject * args, PyObject * kw);
 static PyObject * PyPortalService_narrowcast (PyScript * self, PyObject * args, PyObject * kw);
 static PyObject * PyPortalService_broadcast (PyScript * self, PyObject * args, PyObject * kw);
@@ -658,6 +659,7 @@ static PyMethodDef PyPortalService_methods[] =
 {
   { "start", (PyCFunction) PyPortalService_start, METH_NOARGS, "Start listening for incoming connections." },
   { "stop", (PyCFunction) PyPortalService_stop, METH_NOARGS, "Stop listening for incoming connections, and kick any connected clients." },
+  { "kick", (PyCFunction) PyPortalService_kick, METH_VARARGS, "Kick out a specific connection." },
   { "post", (PyCFunction) PyPortalService_post, METH_VARARGS | METH_KEYWORDS, "Post a message to a specific control channel." },
   { "narrowcast", (PyCFunction) PyPortalService_narrowcast, METH_VARARGS | METH_KEYWORDS, "Post a message to control channels with a specific tag." },
   { "broadcast", (PyCFunction) PyPortalService_broadcast, METH_VARARGS | METH_KEYWORDS, "Broadcast a message to all control channels." },
@@ -4359,6 +4361,21 @@ PyPortalService_stop (PyPortalService * self)
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyPortalService_kick (PyScript * self, PyObject * args)
+{
+  unsigned int connection_id;
+
+  if (!PyArg_ParseTuple (args, "I", &connection_id))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_portal_service_kick (PY_GOBJECT_HANDLE (self), connection_id);
+  Py_END_ALLOW_THREADS
 
   Py_RETURN_NONE;
 }
