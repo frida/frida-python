@@ -311,7 +311,6 @@ class Script(object):
     def eternalize(self):
         self._impl.eternalize()
 
-    @cancellable
     def post(self, message, **kwargs):
         raw_message = json.dumps(message)
         self._impl.post(raw_message, **kwargs)
@@ -362,11 +361,7 @@ class Script(object):
 
         message = ['frida:rpc', request_id]
         message.extend(args)
-        try:
-            self.post(message)
-        except Exception as e:
-            self._pending.pop(request_id, None)
-            raise
+        self.post(message)
 
         cancellable = Cancellable.get_current()
         cancel_handler = cancellable.connect(on_cancelled)

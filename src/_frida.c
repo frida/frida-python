@@ -4199,7 +4199,6 @@ PyScript_post (PyScript * self, PyObject * args, PyObject * kw)
   gconstpointer data_buffer = NULL;
   Py_ssize_t data_size = 0;
   GBytes * data;
-  GError * error = NULL;
 
   if (!PyArg_ParseTupleAndKeywords (args, kw, "es|z#", keywords, "utf-8", &message, &data_buffer, &data_size))
     return NULL;
@@ -4207,14 +4206,11 @@ PyScript_post (PyScript * self, PyObject * args, PyObject * kw)
   data = (data_buffer != NULL) ? g_bytes_new (data_buffer, data_size) : NULL;
 
   Py_BEGIN_ALLOW_THREADS
-  frida_script_post_sync (PY_GOBJECT_HANDLE (self), message, data, g_cancellable_get_current (), &error);
+  frida_script_post (PY_GOBJECT_HANDLE (self), message, data);
   Py_END_ALLOW_THREADS
 
   g_bytes_unref (data);
   PyMem_Free (message);
-
-  if (error != NULL)
-    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
