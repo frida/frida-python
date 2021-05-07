@@ -531,7 +531,7 @@ static PyMethodDef PyDevice_methods[] =
   { "attach", (PyCFunction) PyDevice_attach, METH_VARARGS | METH_KEYWORDS, "Attach to a PID." },
   { "inject_library_file", (PyCFunction) PyDevice_inject_library_file, METH_VARARGS, "Inject a library file to a PID." },
   { "inject_library_blob", (PyCFunction) PyDevice_inject_library_blob, METH_VARARGS, "Inject a library blob to a PID." },
-  { "open_channel_hex", (PyCFunction) PyDevice_open_channel, METH_VARARGS, "Open a device-specific communication channel." },
+  { "open_channel", (PyCFunction) PyDevice_open_channel, METH_VARARGS, "Open a device-specific communication channel." },
   { "query_system_parameters", (PyCFunction) PyDevice_query_system_parameters, METH_NOARGS, "Returns a dictionary of information about the current host system." },
   { NULL }
 };
