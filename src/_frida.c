@@ -3214,7 +3214,7 @@ static PyObject *
 PyDevice_query_system_parameters (PyDevice * self, PyObject * args)
 {
   GError * error = NULL;
-  GHashTable * system_parameters = frida_device_query_system_parameters_sync(PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  GHashTable * system_parameters = frida_device_query_system_parameters_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
 
   if (system_parameters == NULL)
     return PyDict_New ();
