@@ -359,6 +359,7 @@ static FridaSessionOptions * PyDevice_parse_session_options (const gchar * realm
 static PyObject * PyDevice_inject_library_file (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_inject_library_blob (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_open_channel (PyDevice * self, PyObject * args);
+static PyObject * PyDevice_query_system_parameters (PyDevice * self, PyObject * args);
 
 static PyObject * PyApplication_new_take_handle (FridaApplication * handle);
 static int PyApplication_init (PyApplication * self, PyObject * args, PyObject * kw);
@@ -530,7 +531,8 @@ static PyMethodDef PyDevice_methods[] =
   { "attach", (PyCFunction) PyDevice_attach, METH_VARARGS | METH_KEYWORDS, "Attach to a PID." },
   { "inject_library_file", (PyCFunction) PyDevice_inject_library_file, METH_VARARGS, "Inject a library file to a PID." },
   { "inject_library_blob", (PyCFunction) PyDevice_inject_library_blob, METH_VARARGS, "Inject a library blob to a PID." },
-  { "open_channel", (PyCFunction) PyDevice_open_channel, METH_VARARGS, "Open a device-specific communication channel." },
+  { "open_channel_hex", (PyCFunction) PyDevice_open_channel, METH_VARARGS, "Open a device-specific communication channel." },
+  { "query_system_parameters", (PyCFunction) PyDevice_query_system_parameters, METH_NOARGS, "Returns a dictionary of information about the current host system." },
   { NULL }
 };
 
@@ -3206,6 +3208,21 @@ PyDevice_open_channel (PyDevice * self, PyObject * args)
     return PyFrida_raise (error);
 
   return PyIOStream_new_take_handle (stream);
+}
+
+static PyObject *
+PyDevice_query_system_parameters (PyDevice * self, PyObject * args)
+{
+  GError * error = NULL;
+  GHashTable * system_parameters = frida_device_query_system_parameters_sync(PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+
+  if (system_parameters == NULL)
+    return PyDict_New ();
+
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  return PyGObject_marshal_parameters_dict(system_parameters);
 }
 
 

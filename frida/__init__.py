@@ -74,6 +74,10 @@ def inject_library_blob(target, blob, entrypoint, data, **kwargs):
     return get_local_device().inject_library_blob(target, blob, entrypoint, data, **kwargs)
 
 
+def query_system_parameters(**kwargs):
+    return get_local_device().query_system_parameters(**kwargs)
+
+
 def get_local_device(**kwargs):
     return get_device_matching(lambda d: d.type == 'local', timeout=0, **kwargs)
 

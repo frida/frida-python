@@ -184,6 +184,10 @@ class Device(object):
         else:
             return self.get_process(target).pid
 
+    @cancellable
+    def query_system_parameters(self):
+        return self._impl.query_system_parameters()
+
 
 class Bus(object):
     def __init__(self, impl):
