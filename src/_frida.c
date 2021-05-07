@@ -3222,7 +3222,7 @@ PyDevice_query_system_parameters (PyDevice * self, PyObject * args)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  return PyGObject_marshal_parameters_dict(system_parameters);
+  return PyGObject_marshal_parameters_dict (system_parameters);
 }
 
 
