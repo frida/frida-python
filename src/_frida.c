@@ -3993,7 +3993,7 @@ PySession_setup_peer_connection (PySession * self, PyObject * args, PyObject * k
   if (!PyArg_ParseTupleAndKeywords (args, kw, "|esO", keywords,
         "utf-8", &stun_server,
         &relays))
-    goto beach;
+    return NULL;
 
   options = PySession_parse_peer_options (stun_server, relays);
   if (options == NULL)
@@ -4251,14 +4251,14 @@ PyRelay_init (PyRelay * self, PyObject * args, PyObject * kw)
   FridaRelay * handle;
 
   if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
-    goto beach;
+    return -1;
 
   if (!PyArg_ParseTupleAndKeywords (args, kw, "eseseses", keywords,
         "utf-8", &address,
         "utf-8", &username,
         "utf-8", &password,
         "utf-8", &kind_value))
-    goto beach;
+    return -1;
 
   if (!PyGObject_unmarshal_enum (kind_value, FRIDA_TYPE_RELAY_KIND, &kind))
     goto beach;
@@ -4674,7 +4674,7 @@ PyEndpointParameters_init (PyEndpointParameters * self, PyObject * args, PyObjec
   FridaEndpointParameters * handle;
 
   if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
-    goto beach;
+    return -1;
 
   if (!PyArg_ParseTupleAndKeywords (args, kw, "|esHesesO", keywords,
         "utf-8", &address,
@@ -4682,7 +4682,7 @@ PyEndpointParameters_init (PyEndpointParameters * self, PyObject * args, PyObjec
         "utf-8", &certificate_value,
         "utf-8", &auth_token,
         &auth_callback))
-    goto beach;
+    return -1;
 
   if (certificate_value != NULL && !PyGObject_unmarshal_certificate (certificate_value, &certificate))
     goto beach;
