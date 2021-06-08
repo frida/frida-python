@@ -248,6 +248,10 @@ struct _PyScript
 struct _PyRelay
 {
   PyGObject parent;
+  PyObject * address;
+  PyObject * username;
+  PyObject * password;
+  PyObject * kind;
 };
 
 struct _PyPortalMembership
@@ -430,6 +434,9 @@ static PyObject * PyScript_eternalize (PyScript * self);
 static PyObject * PyScript_post (PyScript * self, PyObject * args, PyObject * kw);
 
 static int PyRelay_init (PyRelay * self, PyObject * args, PyObject * kw);
+static void PyRelay_init_from_handle (PyRelay * self, FridaRelay * handle);
+static void PyRelay_dealloc (PyRelay * self);
+static PyObject * PyRelay_repr (PyRelay * self);
 
 static PyObject * PyPortalMembership_new_take_handle (FridaPortalMembership * handle);
 static PyObject * PyPortalMembership_terminate (PyPortalMembership * self);
@@ -647,6 +654,15 @@ static PyMethodDef PyScript_methods[] =
   { "unload", (PyCFunction) PyScript_unload, METH_NOARGS, "Unload the script." },
   { "eternalize", (PyCFunction) PyScript_eternalize, METH_NOARGS, "Eternalize the script." },
   { "post", (PyCFunction) PyScript_post, METH_VARARGS | METH_KEYWORDS, "Post a JSON-encoded message to the script." },
+  { NULL }
+};
+
+static PyMemberDef PyRelay_members[] =
+{
+  { "address", T_OBJECT_EX, G_STRUCT_OFFSET (PyRelay, address), READONLY, "Network address or address:port of the TURN server." },
+  { "username", T_OBJECT_EX, G_STRUCT_OFFSET (PyRelay, username), READONLY, "The TURN username to use for the allocate request." },
+  { "password", T_OBJECT_EX, G_STRUCT_OFFSET (PyRelay, password), READONLY, "The TURN password to use for the allocate request." },
+  { "kind", T_OBJECT_EX, G_STRUCT_OFFSET (PyRelay, kind), READONLY, "Relay kind. One of: turn-udp, turn-tcp, turn-tls." },
   { NULL }
 };
 
@@ -1226,12 +1242,12 @@ static PyTypeObject PyRelayType =
   "_frida.Relay",                               /* tp_name           */
   sizeof (PyRelay),                             /* tp_basicsize      */
   0,                                            /* tp_itemsize       */
-  NULL,                                         /* tp_dealloc        */
+  (destructor) PyRelay_dealloc,                 /* tp_dealloc        */
   PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
   NULL,                                         /* tp_getattr        */
   NULL,                                         /* tp_setattr        */
   NULL,                                         /* tp_compare        */
-  NULL,                                         /* tp_repr           */
+  (reprfunc) PyRelay_repr,                      /* tp_repr           */
   NULL,                                         /* tp_as_number      */
   NULL,                                         /* tp_as_sequence    */
   NULL,                                         /* tp_as_mapping     */
@@ -1250,7 +1266,7 @@ static PyTypeObject PyRelayType =
   NULL,                                         /* tp_iter           */
   NULL,                                         /* tp_iternext       */
   NULL,                                         /* tp_methods        */
-  NULL,                                         /* tp_members        */
+  PyRelay_members,                              /* tp_members        */
   NULL,                                         /* tp_getset         */
   &PyGObjectType,                               /* tp_base           */
   NULL,                                         /* tp_dict           */
@@ -1260,7 +1276,7 @@ static PyTypeObject PyRelayType =
   (initproc) PyRelay_init,                      /* tp_init           */
 };
 
-PYFRIDA_DEFINE_TYPE (Relay, NULL, g_object_unref);
+PYFRIDA_DEFINE_TYPE (Relay, PyRelay_init_from_handle, g_object_unref);
 
 static PyTypeObject PyPortalMembershipType =
 {
@@ -4251,6 +4267,8 @@ PyRelay_init (PyRelay * self, PyObject * args, PyObject * kw)
 
   PyGObject_take_handle (&self->parent, handle, &PYFRIDA_TYPE_SPEC (Relay));
 
+  PyRelay_init_from_handle (self, handle);
+
   result = 0;
 
 beach:
@@ -4260,6 +4278,36 @@ beach:
   PyMem_Free (address);
 
   return result;
+}
+
+static void
+PyRelay_init_from_handle (PyRelay * self, FridaRelay * handle)
+{
+  self->address = PyUnicode_FromUTF8String (frida_relay_get_address (handle));
+  self->username = PyUnicode_FromUTF8String (frida_relay_get_username (handle));
+  self->password = PyUnicode_FromUTF8String (frida_relay_get_password (handle));
+  self->kind = PyGObject_marshal_enum (frida_relay_get_kind (handle), FRIDA_TYPE_RELAY_KIND);
+}
+
+static void
+PyRelay_dealloc (PyRelay * self)
+{
+  Py_XDECREF (self->kind);
+  Py_XDECREF (self->password);
+  Py_XDECREF (self->username);
+  Py_XDECREF (self->address);
+
+  PyGObjectType.tp_dealloc ((PyObject *) self);
+}
+
+static PyObject *
+PyRelay_repr (PyRelay * self)
+{
+  return PyRepr_FromFormat ("Relay(address=%R, username=%R, password=%R, kind=%R)",
+      self->address,
+      self->username,
+      self->password,
+      self->kind);
 }
 
 
