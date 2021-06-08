@@ -2726,22 +2726,10 @@ PyDevice_dealloc (PyDevice * self)
 static PyObject *
 PyDevice_repr (PyDevice * self)
 {
-  PyObject * id_bytes, * name_bytes, * type_bytes, * result;
-
-  id_bytes = PyUnicode_AsUTF8String (self->id);
-  name_bytes = PyUnicode_AsUTF8String (self->name);
-  type_bytes = PyUnicode_AsUTF8String (self->type);
-
-  result = PyRepr_FromFormat ("Device(id=\"%s\", name=\"%s\", type='%s')",
-      PyBytes_AsString (id_bytes),
-      PyBytes_AsString (name_bytes),
-      PyBytes_AsString (type_bytes));
-
-  Py_XDECREF (type_bytes);
-  Py_XDECREF (name_bytes);
-  Py_XDECREF (id_bytes);
-
-  return result;
+  return PyRepr_FromFormat ("Device(id=%R, name=%R, type=%R)",
+      self->id,
+      self->name,
+      self->type);
 }
 
 static PyObject *
@@ -3270,27 +3258,21 @@ PyApplication_dealloc (PyApplication * self)
 static PyObject *
 PyApplication_repr (PyApplication * self)
 {
-  PyObject * identifier_bytes, * name_bytes, * result;
-
-  identifier_bytes = PyUnicode_AsUTF8String (self->identifier);
-  name_bytes = PyUnicode_AsUTF8String (self->name);
+  PyObject * result;
 
   if (self->pid != 0)
   {
-    result = PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\", pid=%u)",
-        PyBytes_AsString (identifier_bytes),
-        PyBytes_AsString (name_bytes),
+    result = PyRepr_FromFormat ("Application(identifier=%R, name=%R, pid=%u)",
+        self->identifier,
+        self->name,
         self->pid);
   }
   else
   {
-    result = PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\")",
-        PyBytes_AsString (identifier_bytes),
-        PyBytes_AsString (name_bytes));
+    result = PyRepr_FromFormat ("Application(identifier=%R, name=%R)",
+        self->identifier,
+        self->name);
   }
-
-  Py_XDECREF (name_bytes);
-  Py_XDECREF (identifier_bytes);
 
   return result;
 }
@@ -3344,17 +3326,9 @@ PyProcess_dealloc (PyProcess * self)
 static PyObject *
 PyProcess_repr (PyProcess * self)
 {
-  PyObject * name_bytes, * result;
-
-  name_bytes = PyUnicode_AsUTF8String (self->name);
-
-  result = PyRepr_FromFormat ("Process(pid=%u, name=\"%s\")",
+  return PyRepr_FromFormat ("Process(pid=%u, name=%R)",
       self->pid,
-      PyBytes_AsString (name_bytes));
-
-  Py_XDECREF (name_bytes);
-
-  return result;
+      self->name);
 }
 
 static PyObject *
@@ -3410,15 +3384,9 @@ PySpawn_repr (PySpawn * self)
 
   if (self->identifier != Py_None)
   {
-    PyObject * identifier_bytes;
-
-    identifier_bytes = PyUnicode_AsUTF8String (self->identifier);
-
-    result = PyRepr_FromFormat ("Spawn(pid=%u, identifier=\"%s\")",
+    result = PyRepr_FromFormat ("Spawn(pid=%u, identifier=%R)",
         self->pid,
-        PyBytes_AsString (identifier_bytes));
-
-    Py_XDECREF (identifier_bytes);
+        self->identifier);
   }
   else
   {
@@ -3660,7 +3628,11 @@ PyIcon_dealloc (PyIcon * self)
 static PyObject *
 PyIcon_repr (PyIcon * self)
 {
-  return PyRepr_FromFormat ("Icon(width=%d, height=%d, rowstride=%d, pixels=<%zd bytes>)", self->width, self->height, self->rowstride, PyBytes_Size (self->pixels));
+  return PyRepr_FromFormat ("Icon(width=%d, height=%d, rowstride=%d, pixels=<%zd bytes>)",
+      self->width,
+      self->height,
+      self->rowstride,
+      PyBytes_Size (self->pixels));
 }
 
 
@@ -3735,7 +3707,8 @@ PySession_init_from_handle (PySession * self, FridaSession * handle)
 static PyObject *
 PySession_repr (PySession * self)
 {
-  return PyRepr_FromFormat ("Session(pid=%u)", self->pid);
+  return PyRepr_FromFormat ("Session(pid=%u)",
+      self->pid);
 }
 
 static PyObject *
