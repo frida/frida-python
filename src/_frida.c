@@ -3079,10 +3079,10 @@ static PyObject *
 PyDevice_attach (PyDevice * self, PyObject * args, PyObject * kw)
 {
   PyObject * result = NULL;
-  static char * keywords[] = { "pid", "realm", "session_persist_timeout", NULL };
+  static char * keywords[] = { "pid", "realm", "persist_timeout", NULL };
   long pid;
   char * realm_value = NULL;
-  unsigned int session_persist_timeout = 0;
+  unsigned int persist_timeout = 0;
   FridaSessionOptions * options = NULL;
   GError * error = NULL;
   FridaSession * handle;
@@ -3090,10 +3090,10 @@ PyDevice_attach (PyDevice * self, PyObject * args, PyObject * kw)
   if (!PyArg_ParseTupleAndKeywords (args, kw, "l|esI", keywords,
         &pid,
         "utf-8", &realm_value,
-        &session_persist_timeout))
+        &persist_timeout))
     return NULL;
 
-  options = PyDevice_parse_session_options (realm_value, session_persist_timeout);
+  options = PyDevice_parse_session_options (realm_value, persist_timeout);
   if (options == NULL)
     goto beach;
 

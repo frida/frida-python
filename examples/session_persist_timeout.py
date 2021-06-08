@@ -18,13 +18,10 @@ class Application(object):
         device = frida.get_remote_device()
         self._device = device
 
-        print(">>> attach()")
-        session = self._device.attach("hello2", session_persist_timeout=30)
-        print("<<< attach()")
+        session = self._device.attach("hello2", persist_timeout=30)
         self._session = session
         session.on('detached', lambda *args: self._reactor.schedule(lambda: self._on_detached(*args)))
 
-        print(">>> create_script()")
         script = session.create_script("""
 let _puts = null;
 
@@ -51,12 +48,9 @@ function puts(s) {
   _puts(Memory.allocUtf8String(s));
 }
 """)
-        print("<<< create_script()")
         self._script = script
         script.on('message', lambda *args: self._reactor.schedule(lambda: self._on_message(*args)))
-        print(">>> load()")
         script.load()
-        print("<<< load()")
 
     def _process_input(self, reactor):
         while True:
@@ -68,11 +62,9 @@ function puts(s) {
 
             if command == "resume":
                 try:
-                    print(">>> resume()")
                     self._session.resume()
-                    print("<<< resume()")
                 except Exception as e:
-                    print("!!!", e)
+                    print("Failed to resume:", e)
             else:
                 print("Unknown command")
 
