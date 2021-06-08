@@ -3446,11 +3446,11 @@ PyChild_init_from_handle (PyChild * self, FridaChild * handle)
 static void
 PyChild_dealloc (PyChild * self)
 {
-  Py_XDECREF (self->origin);
-  Py_XDECREF (self->identifier);
-  Py_XDECREF (self->path);
-  Py_XDECREF (self->argv);
   Py_XDECREF (self->envp);
+  Py_XDECREF (self->argv);
+  Py_XDECREF (self->path);
+  Py_XDECREF (self->identifier);
+  Py_XDECREF (self->origin);
 
   PyGObjectType.tp_dealloc ((PyObject *) self);
 }
@@ -3541,10 +3541,10 @@ PyCrash_init_from_handle (PyCrash * self, FridaCrash * handle)
 static void
 PyCrash_dealloc (PyCrash * self)
 {
-  Py_XDECREF (self->process_name);
-  Py_XDECREF (self->summary);
-  Py_XDECREF (self->report);
   Py_XDECREF (self->parameters);
+  Py_XDECREF (self->report);
+  Py_XDECREF (self->summary);
+  Py_XDECREF (self->process_name);
 
   PyGObjectType.tp_dealloc ((PyObject *) self);
 }
