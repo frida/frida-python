@@ -109,7 +109,8 @@ class Application:
         peer = self._peers.pop(connection_id)
         for channel in list(peer.memberships):
             channel.remove_member(peer)
-        self._release_nick(peer.nick)
+        if peer.nick is not None:
+            self._release_nick(peer.nick)
 
     def _on_authenticated(self, connection_id, session_info):
         print("on_authenticated()", connection_id, session_info)
