@@ -40,6 +40,10 @@ class Application:
             sys.stdout.write("\033[1A\033[K")
             sys.stdout.flush()
 
+            if len(text) == 0:
+                self._print("Processes:", self._device.enumerate_processes())
+                continue
+
             if text.startswith("/join "):
                 if self._channel is not None:
                     self._bus.post({
@@ -60,10 +64,6 @@ class Application:
                     'type': 'announce',
                     'text': text[10:]
                 })
-                continue
-
-            if len(text) == 0:
-                self._print("Processes:", self._device.enumerate_processes())
                 continue
 
             if self._channel is not None:
