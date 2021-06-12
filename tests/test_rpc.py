@@ -137,7 +137,7 @@ rpc.exports = {
         self.assertEqual(script._pending, {})
 
     def assertRaisesScriptDestroyed(self, operation):
-        self.assertRaisesMatching(frida.InvalidOperationError, "script is destroyed", operation)
+        self.assertRaisesMatching(frida.InvalidOperationError, "script has been destroyed", operation)
 
     def assertRaisesOperationCancelled(self, operation):
         self.assertRaisesMatching(frida.OperationCancelledError, "operation was cancelled", operation)

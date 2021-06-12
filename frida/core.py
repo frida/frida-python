@@ -421,7 +421,7 @@ class Script(object):
             if next_pending is None:
                 break
 
-            next_pending(None, _frida.InvalidOperationError('script is destroyed'))
+            next_pending(None, _frida.InvalidOperationError('script has been destroyed'))
 
     def _on_message(self, raw_message, data):
         message = json.loads(raw_message)
