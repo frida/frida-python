@@ -430,6 +430,7 @@ static PyObject * PySession_join_portal (PySession * self, PyObject * args, PyOb
 static FridaPortalOptions * PySession_parse_portal_options (const gchar * certificate_value, const gchar * token, PyObject * acl_value);
 
 static PyObject * PyScript_new_take_handle (FridaScript * handle);
+static PyObject * PyScript_is_destroyed (PyScript * self);
 static PyObject * PyScript_load (PyScript * self);
 static PyObject * PyScript_unload (PyScript * self);
 static PyObject * PyScript_eternalize (PyScript * self);
@@ -654,6 +655,7 @@ static PyMemberDef PySession_members[] =
 
 static PyMethodDef PyScript_methods[] =
 {
+  { "is_destroyed", (PyCFunction) PyScript_is_destroyed, METH_NOARGS, "Query whether the script has been destroyed." },
   { "load", (PyCFunction) PyScript_load, METH_NOARGS, "Load the script." },
   { "unload", (PyCFunction) PyScript_unload, METH_NOARGS, "Unload the script." },
   { "eternalize", (PyCFunction) PyScript_eternalize, METH_NOARGS, "Eternalize the script." },
@@ -4170,6 +4172,18 @@ static PyObject *
 PyScript_new_take_handle (FridaScript * handle)
 {
   return PyGObject_new_take_handle (handle, &PYFRIDA_TYPE_SPEC (Script));
+}
+
+static PyObject *
+PyScript_is_destroyed (PyScript * self)
+{
+  gboolean is_destroyed;
+
+  Py_BEGIN_ALLOW_THREADS
+  is_destroyed = frida_script_is_destroyed (PY_GOBJECT_HANDLE (self));
+  Py_END_ALLOW_THREADS
+
+  return PyBool_FromLong (is_destroyed);
 }
 
 static PyObject *

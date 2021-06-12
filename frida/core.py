@@ -307,6 +307,10 @@ class Script(object):
     def __repr__(self):
         return repr(self._impl)
 
+    @property
+    def is_destroyed(self):
+        return self._impl.is_destroyed()
+
     @cancellable
     def load(self):
         self._impl.load()
