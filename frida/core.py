@@ -374,20 +374,23 @@ class Script(object):
             self._next_request_id += 1
             self._pending[request_id] = on_complete
 
-        message = ['frida:rpc', request_id]
-        message.extend(args)
-        self.post(message)
+        if not self.is_destroyed:
+            message = ['frida:rpc', request_id]
+            message.extend(args)
+            self.post(message)
 
-        cancellable = Cancellable.get_current()
-        cancel_handler = cancellable.connect(on_cancelled)
-        try:
-            with self._cond:
-                while not result[0]:
-                    self._cond.wait()
-        finally:
-            cancellable.disconnect(cancel_handler)
+            cancellable = Cancellable.get_current()
+            cancel_handler = cancellable.connect(on_cancelled)
+            try:
+                with self._cond:
+                    while not result[0]:
+                        self._cond.wait()
+            finally:
+                cancellable.disconnect(cancel_handler)
 
-        cancellable.raise_if_cancelled()
+            cancellable.raise_if_cancelled()
+        else:
+            self._on_destroyed()
 
         if result[2] is not None:
             raise result[2]
