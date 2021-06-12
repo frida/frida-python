@@ -233,6 +233,10 @@ class Session(object):
     def __repr__(self):
         return repr(self._impl)
 
+    @property
+    def is_detached(self):
+        return self._impl.is_detached()
+
     @cancellable
     def detach(self):
         self._impl.detach()

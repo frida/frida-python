@@ -413,6 +413,7 @@ static PyObject * PySession_new_take_handle (FridaSession * handle);
 static int PySession_init (PySession * self, PyObject * args, PyObject * kw);
 static void PySession_init_from_handle (PySession * self, FridaSession * handle);
 static PyObject * PySession_repr (PySession * self);
+static PyObject * PySession_is_detached (PySession * self);
 static PyObject * PySession_detach (PySession * self);
 static PyObject * PySession_resume (PySession * self);
 static PyObject * PySession_enable_child_gating (PySession * self);
@@ -630,6 +631,7 @@ static PyMethodDef PyBus_methods[] =
 
 static PyMethodDef PySession_methods[] =
 {
+  { "is_detached", (PyCFunction) PySession_is_detached, METH_NOARGS, "Query whether the session is detached." },
   { "detach", (PyCFunction) PySession_detach, METH_NOARGS, "Detach session from the process." },
   { "resume", (PyCFunction) PySession_resume, METH_NOARGS, "Resume session after network error." },
   { "enable_child_gating", (PyCFunction) PySession_enable_child_gating, METH_NOARGS, "Enable child gating." },
@@ -3723,6 +3725,18 @@ PySession_repr (PySession * self)
 {
   return PyRepr_FromFormat ("Session(pid=%u)",
       self->pid);
+}
+
+static PyObject *
+PySession_is_detached (PySession * self)
+{
+  gboolean is_detached;
+
+  Py_BEGIN_ALLOW_THREADS
+  is_detached = frida_session_is_detached (PY_GOBJECT_HANDLE (self));
+  Py_END_ALLOW_THREADS
+
+  return PyBool_FromLong (is_detached);
 }
 
 static PyObject *
