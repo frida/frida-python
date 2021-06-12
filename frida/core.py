@@ -89,6 +89,10 @@ class Device(object):
     def __repr__(self):
         return repr(self._impl)
 
+    @property
+    def is_lost(self):
+        return self._impl.is_lost()
+
     @cancellable
     def get_frontmost_application(self):
         return self._impl.get_frontmost_application()

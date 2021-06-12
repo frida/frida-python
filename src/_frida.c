@@ -348,6 +348,7 @@ static int PyDevice_init (PyDevice * self, PyObject * args, PyObject * kw);
 static void PyDevice_init_from_handle (PyDevice * self, FridaDevice * handle);
 static void PyDevice_dealloc (PyDevice * self);
 static PyObject * PyDevice_repr (PyDevice * self);
+static PyObject * PyDevice_is_lost (PyDevice * self);
 static PyObject * PyDevice_get_frontmost_application (PyDevice * self);
 static PyObject * PyDevice_enumerate_applications (PyDevice * self);
 static PyObject * PyDevice_enumerate_processes (PyDevice * self);
@@ -524,6 +525,7 @@ static PyMethodDef PyDeviceManager_methods[] =
 
 static PyMethodDef PyDevice_methods[] =
 {
+  { "is_lost", (PyCFunction) PyDevice_is_lost, METH_NOARGS, "Query whether the device has been lost." },
   { "get_frontmost_application", (PyCFunction) PyDevice_get_frontmost_application, METH_NOARGS, "Get details about the frontmost application." },
   { "enumerate_applications", (PyCFunction) PyDevice_enumerate_applications, METH_NOARGS, "Enumerate applications." },
   { "enumerate_processes", (PyCFunction) PyDevice_enumerate_processes, METH_NOARGS, "Enumerate processes." },
@@ -2730,6 +2732,18 @@ PyDevice_repr (PyDevice * self)
       self->id,
       self->name,
       self->type);
+}
+
+static PyObject *
+PyDevice_is_lost (PyDevice * self)
+{
+  gboolean is_lost;
+
+  Py_BEGIN_ALLOW_THREADS
+  is_lost = frida_device_is_lost (PY_GOBJECT_HANDLE (self));
+  Py_END_ALLOW_THREADS
+
+  return PyBool_FromLong (is_lost);
 }
 
 static PyObject *
