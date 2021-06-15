@@ -2732,10 +2732,22 @@ PyDevice_dealloc (PyDevice * self)
 static PyObject *
 PyDevice_repr (PyDevice * self)
 {
-  return PyRepr_FromFormat ("Device(id=%R, name=%R, type=%R)",
-      self->id,
-      self->name,
-      self->type);
+  PyObject * id_bytes, * name_bytes, * type_bytes, * result;
+
+  id_bytes = PyUnicode_AsUTF8String (self->id);
+  name_bytes = PyUnicode_AsUTF8String (self->name);
+  type_bytes = PyUnicode_AsUTF8String (self->type);
+
+  result = PyRepr_FromFormat ("Device(id=\"%s\", name=\"%s\", type='%s')",
+      PyBytes_AsString (id_bytes),
+      PyBytes_AsString (name_bytes),
+      PyBytes_AsString (type_bytes));
+
+  Py_DECREF (type_bytes);
+  Py_DECREF (name_bytes);
+  Py_DECREF (id_bytes);
+
+  return result;
 }
 
 static PyObject *
@@ -3276,21 +3288,27 @@ PyApplication_dealloc (PyApplication * self)
 static PyObject *
 PyApplication_repr (PyApplication * self)
 {
-  PyObject * result;
+  PyObject * identifier_bytes, * name_bytes, * result;
+
+  identifier_bytes = PyUnicode_AsUTF8String (self->identifier);
+  name_bytes = PyUnicode_AsUTF8String (self->name);
 
   if (self->pid != 0)
   {
-    result = PyRepr_FromFormat ("Application(identifier=%R, name=%R, pid=%u)",
-        self->identifier,
-        self->name,
+    result = PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\", pid=%u)",
+        PyBytes_AsString (identifier_bytes),
+        PyBytes_AsString (name_bytes),
         self->pid);
   }
   else
   {
-    result = PyRepr_FromFormat ("Application(identifier=%R, name=%R)",
-        self->identifier,
-        self->name);
+    result = PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\")",
+        PyBytes_AsString (identifier_bytes),
+        PyBytes_AsString (name_bytes));
   }
+
+  Py_DECREF (name_bytes);
+  Py_DECREF (identifier_bytes);
 
   return result;
 }
@@ -3344,9 +3362,17 @@ PyProcess_dealloc (PyProcess * self)
 static PyObject *
 PyProcess_repr (PyProcess * self)
 {
-  return PyRepr_FromFormat ("Process(pid=%u, name=%R)",
+  PyObject * name_bytes, * result;
+
+  name_bytes = PyUnicode_AsUTF8String (self->name);
+
+  result = PyRepr_FromFormat ("Process(pid=%u, name=\"%s\")",
       self->pid,
-      self->name);
+      PyBytes_AsString (name_bytes));
+
+  Py_DECREF (name_bytes);
+
+  return result;
 }
 
 static PyObject *
@@ -3402,9 +3428,15 @@ PySpawn_repr (PySpawn * self)
 
   if (self->identifier != Py_None)
   {
-    result = PyRepr_FromFormat ("Spawn(pid=%u, identifier=%R)",
+    PyObject * identifier_bytes;
+
+    identifier_bytes = PyUnicode_AsUTF8String (self->identifier);
+
+    result = PyRepr_FromFormat ("Spawn(pid=%u, identifier=\"%s\")",
         self->pid,
-        self->identifier);
+        PyBytes_AsString (identifier_bytes));
+
+    Py_DECREF (identifier_bytes);
   }
   else
   {
@@ -3646,11 +3678,7 @@ PyIcon_dealloc (PyIcon * self)
 static PyObject *
 PyIcon_repr (PyIcon * self)
 {
-  return PyRepr_FromFormat ("Icon(width=%d, height=%d, rowstride=%d, pixels=<%zd bytes>)",
-      self->width,
-      self->height,
-      self->rowstride,
-      PyBytes_Size (self->pixels));
+  return PyRepr_FromFormat ("Icon(width=%d, height=%d, rowstride=%d, pixels=<%zd bytes>)", self->width, self->height, self->rowstride, PyBytes_Size (self->pixels));
 }
 
 
@@ -3725,8 +3753,7 @@ PySession_init_from_handle (PySession * self, FridaSession * handle)
 static PyObject *
 PySession_repr (PySession * self)
 {
-  return PyRepr_FromFormat ("Session(pid=%u)",
-      self->pid);
+  return PyRepr_FromFormat ("Session(pid=%u)", self->pid);
 }
 
 static PyObject *
@@ -4318,11 +4345,25 @@ PyRelay_dealloc (PyRelay * self)
 static PyObject *
 PyRelay_repr (PyRelay * self)
 {
-  return PyRepr_FromFormat ("Relay(address=%R, username=%R, password=%R, kind=%R)",
-      self->address,
-      self->username,
-      self->password,
-      self->kind);
+  PyObject * result, * address_bytes, * username_bytes, * password_bytes, * kind_bytes;
+
+  address_bytes = PyUnicode_AsUTF8String (self->address);
+  username_bytes = PyUnicode_AsUTF8String (self->username);
+  password_bytes = PyUnicode_AsUTF8String (self->password);
+  kind_bytes = PyUnicode_AsUTF8String (self->kind);
+
+  result = PyRepr_FromFormat ("Relay(address=\"%s\", username=\"%s\", password=\"%s\", kind='%s')",
+      PyBytes_AsString (address_bytes),
+      PyBytes_AsString (username_bytes),
+      PyBytes_AsString (password_bytes),
+      PyBytes_AsString (kind_bytes));
+
+  Py_DECREF (kind_bytes);
+  Py_DECREF (password_bytes);
+  Py_DECREF (username_bytes);
+  Py_DECREF (address_bytes);
+
+  return result;
 }
 
 
