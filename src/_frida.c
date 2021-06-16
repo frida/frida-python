@@ -2257,6 +2257,29 @@ PyGObject_marshal_variant (GVariant * variant)
   {
     return PyBool_FromLong (g_variant_get_boolean (variant));
   }
+  else if (g_variant_is_of_type (variant, G_VARIANT_TYPE_VARDICT))
+  {
+    PyObject * dict;
+    GVariantIter iter;
+    gchar * key;
+    GVariant * raw_value;
+
+    dict = PyDict_New ();
+
+    g_variant_iter_init (&iter, variant);
+    while (g_variant_iter_next (&iter, "{sv}", &key, &raw_value))
+    {
+      PyObject * value = PyGObject_marshal_variant (raw_value);
+
+      PyDict_SetItemString (dict, key, value);
+
+      Py_DECREF (value);
+      g_variant_unref (raw_value);
+      g_free (key);
+    }
+
+    return dict;
+  }
   else
   {
     g_assert_not_reached ();
