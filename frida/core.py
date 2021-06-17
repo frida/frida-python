@@ -94,6 +94,10 @@ class Device(object):
         return self._impl.is_lost()
 
     @cancellable
+    def query_system_parameters(self):
+        return self._impl.query_system_parameters()
+
+    @cancellable
     def get_frontmost_application(self):
         return self._impl.get_frontmost_application()
 

@@ -349,6 +349,7 @@ static void PyDevice_init_from_handle (PyDevice * self, FridaDevice * handle);
 static void PyDevice_dealloc (PyDevice * self);
 static PyObject * PyDevice_repr (PyDevice * self);
 static PyObject * PyDevice_is_lost (PyDevice * self);
+static PyObject * PyDevice_query_system_parameters (PyDevice * self);
 static PyObject * PyDevice_get_frontmost_application (PyDevice * self);
 static PyObject * PyDevice_enumerate_applications (PyDevice * self);
 static PyObject * PyDevice_enumerate_processes (PyDevice * self);
@@ -528,6 +529,7 @@ static PyMethodDef PyDeviceManager_methods[] =
 static PyMethodDef PyDevice_methods[] =
 {
   { "is_lost", (PyCFunction) PyDevice_is_lost, METH_NOARGS, "Query whether the device has been lost." },
+  { "query_system_parameters", (PyCFunction) PyDevice_query_system_parameters, METH_NOARGS, "Returns a dictionary of information about the host system." },
   { "get_frontmost_application", (PyCFunction) PyDevice_get_frontmost_application, METH_NOARGS, "Get details about the frontmost application." },
   { "enumerate_applications", (PyCFunction) PyDevice_enumerate_applications, METH_NOARGS, "Enumerate applications." },
   { "enumerate_processes", (PyCFunction) PyDevice_enumerate_processes, METH_NOARGS, "Enumerate processes." },
@@ -2783,6 +2785,25 @@ PyDevice_is_lost (PyDevice * self)
   Py_END_ALLOW_THREADS
 
   return PyBool_FromLong (is_lost);
+}
+
+static PyObject *
+PyDevice_query_system_parameters (PyDevice * self)
+{
+  GError * error = NULL;
+  GHashTable * result;
+  PyObject * parameters;
+
+  Py_BEGIN_ALLOW_THREADS
+  result = frida_device_query_system_parameters_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  parameters = PyGObject_marshal_parameters_dict (result);
+  g_hash_table_unref (result);
+
+  return parameters;
 }
 
 static PyObject *

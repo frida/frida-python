@@ -50,6 +50,10 @@ TransportError = _frida.TransportError
 OperationCancelledError = _frida.OperationCancelledError
 
 
+def query_system_parameters(**kwargs):
+    return get_local_device().query_system_parameters(**kwargs)
+
+
 def spawn(*args, **kwargs):
     return get_local_device().spawn(*args, **kwargs)
 
