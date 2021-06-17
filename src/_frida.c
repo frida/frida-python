@@ -1950,25 +1950,33 @@ PyGObject_marshal_value (const GValue * value)
   {
     case G_TYPE_BOOLEAN:
       return PyBool_FromLong (g_value_get_boolean (value));
+
     case G_TYPE_INT:
       return PyLong_FromLong (g_value_get_int (value));
+
     case G_TYPE_UINT:
       return PyLong_FromUnsignedLong (g_value_get_uint (value));
+
     case G_TYPE_FLOAT:
       return PyFloat_FromDouble (g_value_get_float (value));
+
     case G_TYPE_DOUBLE:
       return PyFloat_FromDouble (g_value_get_double (value));
+
     case G_TYPE_STRING:
       return PyGObject_marshal_string (g_value_get_string (value));
+
     default:
       if (G_TYPE_IS_ENUM (type))
         return PyGObject_marshal_enum (g_value_get_enum (value), type);
-      else if (type == G_TYPE_BYTES)
+
+      if (type == G_TYPE_BYTES)
         return PyGObject_marshal_bytes (g_value_get_boxed (value));
-      else if (G_TYPE_IS_OBJECT (type))
+
+      if (G_TYPE_IS_OBJECT (type))
         return PyGObject_marshal_object (g_value_get_object (value), type);
-      else
-        goto unsupported_type;
+
+      goto unsupported_type;
   }
 
   g_assert_not_reached ();
@@ -2248,18 +2256,15 @@ static PyObject *
 PyGObject_marshal_variant (GVariant * variant)
 {
   if (g_variant_is_of_type (variant, G_VARIANT_TYPE_STRING))
-  {
     return PyGObject_marshal_string (g_variant_get_string (variant, NULL));
-  }
-  else if (g_variant_is_of_type (variant, G_VARIANT_TYPE_INT64))
-  {
+
+  if (g_variant_is_of_type (variant, G_VARIANT_TYPE_INT64))
     return PyLong_FromLongLong (g_variant_get_int64 (variant));
-  }
-  else if (g_variant_is_of_type (variant, G_VARIANT_TYPE_BOOLEAN))
-  {
+
+  if (g_variant_is_of_type (variant, G_VARIANT_TYPE_BOOLEAN))
     return PyBool_FromLong (g_variant_get_boolean (variant));
-  }
-  else if (g_variant_is_of_type (variant, G_VARIANT_TYPE_VARDICT))
+
+  if (g_variant_is_of_type (variant, G_VARIANT_TYPE_VARDICT))
   {
     PyObject * dict;
     GVariantIter iter;
@@ -2282,10 +2287,8 @@ PyGObject_marshal_variant (GVariant * variant)
 
     return dict;
   }
-  else
-  {
-    g_assert_not_reached ();
-  }
+
+  g_assert_not_reached ();
 }
 
 static gboolean
