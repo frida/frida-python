@@ -2274,6 +2274,7 @@ PyGObject_marshal_variant (GVariant * variant)
     dict = PyDict_New ();
 
     g_variant_iter_init (&iter, variant);
+
     while (g_variant_iter_next (&iter, "{sv}", &key, &raw_value))
     {
       PyObject * value = PyGObject_marshal_variant (raw_value);
@@ -2363,6 +2364,7 @@ PyGObject_marshal_parameters_dict (GHashTable * dict)
   result = PyDict_New ();
 
   g_hash_table_iter_init (&iter, dict);
+
   while (g_hash_table_iter_next (&iter, (gpointer *) &key, (gpointer *) &raw_value))
   {
     PyObject * value = PyGObject_marshal_variant (raw_value);
