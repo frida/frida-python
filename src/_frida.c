@@ -2289,6 +2289,26 @@ PyGObject_marshal_variant (GVariant * variant)
     return dict;
   }
 
+  if (g_variant_is_of_type (variant, G_VARIANT_TYPE_ARRAY))
+  {
+    GVariantIter iter;
+    PyObject * list;
+    guint i;
+    GVariant * child;
+
+    g_variant_iter_init (&iter, variant);
+
+    list = PyList_New (g_variant_iter_n_children (&iter));
+
+    for (i = 0; (child = g_variant_iter_next_value (&iter)) != NULL; i++)
+    {
+      PyList_SET_ITEM (list, i, PyGObject_marshal_variant (child));
+      g_variant_unref (child);
+    }
+
+    return list;
+  }
+
   g_assert_not_reached ();
 }
 
