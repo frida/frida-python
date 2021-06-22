@@ -2264,6 +2264,16 @@ PyGObject_marshal_variant (GVariant * variant)
   if (g_variant_is_of_type (variant, G_VARIANT_TYPE_BOOLEAN))
     return PyBool_FromLong (g_variant_get_boolean (variant));
 
+  if (g_variant_is_of_type (variant, G_VARIANT_TYPE ("ay")))
+  {
+    gconstpointer elements;
+    gsize n_elements;
+
+    elements = g_variant_get_fixed_array (variant, &n_elements, sizeof (guint8));
+
+    return PyBytes_FromStringAndSize (elements, n_elements);
+  }
+
   if (g_variant_is_of_type (variant, G_VARIANT_TYPE_VARDICT))
   {
     PyObject * dict;
