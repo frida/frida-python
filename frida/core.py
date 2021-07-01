@@ -98,16 +98,16 @@ class Device(object):
         return self._impl.query_system_parameters()
 
     @cancellable
-    def get_frontmost_application(self):
-        return self._impl.get_frontmost_application()
+    def get_frontmost_application(self, *args, **kwargs):
+        return self._impl.get_frontmost_application(*args, **kwargs)
 
     @cancellable
-    def enumerate_applications(self):
-        return self._impl.enumerate_applications()
+    def enumerate_applications(self, *args, **kwargs):
+        return self._impl.enumerate_applications(*args, **kwargs)
 
     @cancellable
-    def enumerate_processes(self):
-        return self._impl.enumerate_processes()
+    def enumerate_processes(self, *args, **kwargs):
+        return self._impl.enumerate_processes(*args, **kwargs)
 
     @cancellable
     def get_process(self, process_name):

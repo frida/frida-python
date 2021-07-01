@@ -119,7 +119,6 @@ typedef struct _PyProcess                      PyProcess;
 typedef struct _PySpawn                        PySpawn;
 typedef struct _PyChild                        PyChild;
 typedef struct _PyCrash                        PyCrash;
-typedef struct _PyIcon                         PyIcon;
 typedef struct _PyBus                          PyBus;
 typedef struct _PySession                      PySession;
 typedef struct _PyScript                       PyScript;
@@ -182,6 +181,7 @@ struct _PyApplication
   PyObject * identifier;
   PyObject * name;
   guint pid;
+  PyObject * parameters;
 };
 
 struct _PyProcess
@@ -189,6 +189,7 @@ struct _PyProcess
   PyGObject parent;
   guint pid;
   PyObject * name;
+  PyObject * parameters;
 };
 
 struct _PySpawn
@@ -218,15 +219,6 @@ struct _PyCrash
   PyObject * summary;
   PyObject * report;
   PyObject * parameters;
-};
-
-struct _PyIcon
-{
-  PyGObject parent;
-  gint width;
-  gint height;
-  gint rowstride;
-  PyObject * pixels;
 };
 
 struct _PyBus
@@ -350,9 +342,11 @@ static void PyDevice_dealloc (PyDevice * self);
 static PyObject * PyDevice_repr (PyDevice * self);
 static PyObject * PyDevice_is_lost (PyDevice * self);
 static PyObject * PyDevice_query_system_parameters (PyDevice * self);
-static PyObject * PyDevice_get_frontmost_application (PyDevice * self);
-static PyObject * PyDevice_enumerate_applications (PyDevice * self);
-static PyObject * PyDevice_enumerate_processes (PyDevice * self);
+static PyObject * PyDevice_get_frontmost_application (PyDevice * self, PyObject * args, PyObject * kw);
+static PyObject * PyDevice_enumerate_applications (PyDevice * self, PyObject * args, PyObject * kw);
+static FridaApplicationQueryOptions * PyDevice_parse_application_query_options (PyObject * identifiers_value, const gchar * scope_value);
+static PyObject * PyDevice_enumerate_processes (PyDevice * self, PyObject * args, PyObject * kw);
+static FridaProcessQueryOptions * PyDevice_parse_process_query_options (PyObject * pids_value, const gchar * scope_value);
 static PyObject * PyDevice_enable_spawn_gating (PyDevice * self);
 static PyObject * PyDevice_disable_spawn_gating (PyDevice * self);
 static PyObject * PyDevice_enumerate_pending_spawn (PyDevice * self);
@@ -372,16 +366,12 @@ static int PyApplication_init (PyApplication * self, PyObject * args, PyObject *
 static void PyApplication_init_from_handle (PyApplication * self, FridaApplication * handle);
 static void PyApplication_dealloc (PyApplication * self);
 static PyObject * PyApplication_repr (PyApplication * self);
-static PyObject * PyApplication_get_small_icon (PyApplication * self);
-static PyObject * PyApplication_get_large_icon (PyApplication * self);
 
 static PyObject * PyProcess_new_take_handle (FridaProcess * handle);
 static int PyProcess_init (PyProcess * self, PyObject * args, PyObject * kw);
 static void PyProcess_init_from_handle (PyProcess * self, FridaProcess * handle);
 static void PyProcess_dealloc (PyProcess * self);
 static PyObject * PyProcess_repr (PyProcess * self);
-static PyObject * PyProcess_get_small_icon (PyProcess * self);
-static PyObject * PyProcess_get_large_icon (PyProcess * self);
 
 static PyObject * PySpawn_new_take_handle (FridaSpawn * handle);
 static int PySpawn_init (PySpawn * self, PyObject * args, PyObject * kw);
@@ -399,12 +389,6 @@ static int PyCrash_init (PyCrash * self, PyObject * args, PyObject * kw);
 static void PyCrash_init_from_handle (PyCrash * self, FridaCrash * handle);
 static void PyCrash_dealloc (PyCrash * self);
 static PyObject * PyCrash_repr (PyCrash * self);
-
-static PyObject * PyIcon_new_from_handle (FridaIcon * handle);
-static int PyIcon_init (PyIcon * self, PyObject * args, PyObject * kw);
-static void PyIcon_init_from_handle (PyIcon * self, FridaIcon * handle);
-static void PyIcon_dealloc (PyIcon * self);
-static PyObject * PyIcon_repr (PyIcon * self);
 
 static PyObject * PyBus_new_take_handle (FridaBus * handle);
 static PyObject * PyBus_attach (PySession * self);
@@ -530,9 +514,9 @@ static PyMethodDef PyDevice_methods[] =
 {
   { "is_lost", (PyCFunction) PyDevice_is_lost, METH_NOARGS, "Query whether the device has been lost." },
   { "query_system_parameters", (PyCFunction) PyDevice_query_system_parameters, METH_NOARGS, "Returns a dictionary of information about the host system." },
-  { "get_frontmost_application", (PyCFunction) PyDevice_get_frontmost_application, METH_NOARGS, "Get details about the frontmost application." },
-  { "enumerate_applications", (PyCFunction) PyDevice_enumerate_applications, METH_NOARGS, "Enumerate applications." },
-  { "enumerate_processes", (PyCFunction) PyDevice_enumerate_processes, METH_NOARGS, "Enumerate processes." },
+  { "get_frontmost_application", (PyCFunction) PyDevice_get_frontmost_application, METH_VARARGS | METH_KEYWORDS, "Get details about the frontmost application." },
+  { "enumerate_applications", (PyCFunction) PyDevice_enumerate_applications, METH_VARARGS | METH_KEYWORDS, "Enumerate applications." },
+  { "enumerate_processes", (PyCFunction) PyDevice_enumerate_processes, METH_VARARGS | METH_KEYWORDS, "Enumerate processes." },
   { "enable_spawn_gating", (PyCFunction) PyDevice_enable_spawn_gating, METH_NOARGS, "Enable spawn gating." },
   { "disable_spawn_gating", (PyCFunction) PyDevice_disable_spawn_gating, METH_NOARGS, "Disable spawn gating." },
   { "enumerate_pending_spawn", (PyCFunction) PyDevice_enumerate_pending_spawn, METH_NOARGS, "Enumerate pending spawn." },
@@ -558,25 +542,12 @@ static PyMemberDef PyDevice_members[] =
   { NULL }
 };
 
-static PyMethodDef PyApplication_methods[] =
-{
-  { "get_small_icon", (PyCFunction) PyApplication_get_small_icon, METH_NOARGS, "Small icon." },
-  { "get_large_icon", (PyCFunction) PyApplication_get_large_icon, METH_NOARGS, "Large icon." },
-  { NULL }
-};
-
 static PyMemberDef PyApplication_members[] =
 {
   { "identifier", T_OBJECT_EX, G_STRUCT_OFFSET (PyApplication, identifier), READONLY, "Application identifier." },
   { "name", T_OBJECT_EX, G_STRUCT_OFFSET (PyApplication, name), READONLY, "Human-readable application name." },
   { "pid", T_UINT, G_STRUCT_OFFSET (PyApplication, pid), READONLY, "Process ID, or 0 if not running." },
-  { NULL }
-};
-
-static PyMethodDef PyProcess_methods[] =
-{
-  { "get_small_icon", (PyCFunction) PyProcess_get_small_icon, METH_NOARGS, "Small icon." },
-  { "get_large_icon", (PyCFunction) PyProcess_get_large_icon, METH_NOARGS, "Large icon." },
+  { "parameters", T_OBJECT_EX, G_STRUCT_OFFSET (PyApplication, parameters), READONLY, "Parameters." },
   { NULL }
 };
 
@@ -584,6 +555,7 @@ static PyMemberDef PyProcess_members[] =
 {
   { "pid", T_UINT, G_STRUCT_OFFSET (PyProcess, pid), READONLY, "Process ID." },
   { "name", T_OBJECT_EX, G_STRUCT_OFFSET (PyProcess, name), READONLY, "Human-readable process name." },
+  { "parameters", T_OBJECT_EX, G_STRUCT_OFFSET (PyProcess, parameters), READONLY, "Parameters." },
   { NULL }
 };
 
@@ -613,15 +585,6 @@ static PyMemberDef PyCrash_members[] =
   { "summary", T_OBJECT_EX, G_STRUCT_OFFSET (PyCrash, summary), READONLY, "Human-readable crash summary." },
   { "report", T_OBJECT_EX, G_STRUCT_OFFSET (PyCrash, report), READONLY, "Human-readable crash report." },
   { "parameters", T_OBJECT_EX, G_STRUCT_OFFSET (PyCrash, parameters), READONLY, "Parameters." },
-  { NULL }
-};
-
-static PyMemberDef PyIcon_members[] =
-{
-  { "width", T_INT, G_STRUCT_OFFSET (PyIcon, width), READONLY, "Width in pixels." },
-  { "height", T_INT, G_STRUCT_OFFSET (PyIcon, height), READONLY, "Height in pixels." },
-  { "rowstride", T_INT, G_STRUCT_OFFSET (PyIcon, rowstride), READONLY, "Row stride in bytes." },
-  { "pixels", T_OBJECT_EX, G_STRUCT_OFFSET (PyIcon, pixels), READONLY, "Pixels as a raw string containing RGBA data." },
   { NULL }
 };
 
@@ -895,7 +858,7 @@ static PyTypeObject PyApplicationType =
   0,                                            /* tp_weaklistoffset */
   NULL,                                         /* tp_iter           */
   NULL,                                         /* tp_iternext       */
-  PyApplication_methods,                        /* tp_methods        */
+  NULL,                                         /* tp_methods        */
   PyApplication_members,                        /* tp_members        */
   NULL,                                         /* tp_getset         */
   &PyGObjectType,                               /* tp_base           */
@@ -937,7 +900,7 @@ static PyTypeObject PyProcessType =
   0,                                            /* tp_weaklistoffset */
   NULL,                                         /* tp_iter           */
   NULL,                                         /* tp_iternext       */
-  PyProcess_methods,                            /* tp_methods        */
+  NULL,                                         /* tp_methods        */
   PyProcess_members,                            /* tp_members        */
   NULL,                                         /* tp_getset         */
   &PyGObjectType,                               /* tp_base           */
@@ -1075,48 +1038,6 @@ static PyTypeObject PyCrashType =
 };
 
 PYFRIDA_DEFINE_TYPE (Crash, PyCrash_init_from_handle, g_object_unref);
-
-static PyTypeObject PyIconType =
-{
-  PyVarObject_HEAD_INIT (NULL, 0)
-  "_frida.Icon",                                /* tp_name           */
-  sizeof (PyIcon),                              /* tp_basicsize      */
-  0,                                            /* tp_itemsize       */
-  (destructor) PyIcon_dealloc,                  /* tp_dealloc        */
-  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
-  NULL,                                         /* tp_getattr        */
-  NULL,                                         /* tp_setattr        */
-  NULL,                                         /* tp_compare        */
-  (reprfunc) PyIcon_repr,                       /* tp_repr           */
-  NULL,                                         /* tp_as_number      */
-  NULL,                                         /* tp_as_sequence    */
-  NULL,                                         /* tp_as_mapping     */
-  NULL,                                         /* tp_hash           */
-  NULL,                                         /* tp_call           */
-  NULL,                                         /* tp_str            */
-  NULL,                                         /* tp_getattro       */
-  NULL,                                         /* tp_setattro       */
-  NULL,                                         /* tp_as_buffer      */
-  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
-  "Frida Icon",                                 /* tp_doc            */
-  NULL,                                         /* tp_traverse       */
-  NULL,                                         /* tp_clear          */
-  NULL,                                         /* tp_richcompare    */
-  0,                                            /* tp_weaklistoffset */
-  NULL,                                         /* tp_iter           */
-  NULL,                                         /* tp_iternext       */
-  NULL,                                         /* tp_methods        */
-  PyIcon_members,                               /* tp_members        */
-  NULL,                                         /* tp_getset         */
-  &PyGObjectType,                               /* tp_base           */
-  NULL,                                         /* tp_dict           */
-  NULL,                                         /* tp_descr_get      */
-  NULL,                                         /* tp_descr_set      */
-  0,                                            /* tp_dictoffset     */
-  (initproc) PyIcon_init,                       /* tp_init           */
-};
-
-PYFRIDA_DEFINE_TYPE (Icon, PyIcon_init_from_handle, g_object_unref);
 
 static PyTypeObject PyBusType =
 {
@@ -2770,9 +2691,20 @@ PyDevice_init (PyDevice * self, PyObject * args, PyObject * kw)
 static void
 PyDevice_init_from_handle (PyDevice * self, FridaDevice * handle)
 {
+  GVariant * icon;
+
   self->id = PyUnicode_FromUTF8String (frida_device_get_id (handle));
   self->name = PyUnicode_FromUTF8String (frida_device_get_name (handle));
-  self->icon = PyIcon_new_from_handle (frida_device_get_icon (handle));
+  icon = frida_device_get_icon (handle);
+  if (icon != NULL)
+  {
+    self->icon = PyGObject_marshal_variant (icon);
+  }
+  else
+  {
+    self->icon = Py_None;
+    Py_IncRef (Py_None);
+  }
   self->type = PyGObject_marshal_enum (frida_device_get_dtype (handle), FRIDA_TYPE_DEVICE_TYPE);
   self->bus = PyBus_new_take_handle (g_object_ref (frida_device_get_bus (handle)));
 }
@@ -2842,14 +2774,35 @@ PyDevice_query_system_parameters (PyDevice * self)
 }
 
 static PyObject *
-PyDevice_get_frontmost_application (PyDevice * self)
+PyDevice_get_frontmost_application (PyDevice * self, PyObject * args, PyObject * kw)
 {
+  static char * keywords[] = { "scope", NULL };
+  const char * scope_value = NULL;
+  FridaFrontmostQueryOptions * options;
   GError * error = NULL;
   FridaApplication * result;
 
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "|s", keywords, &scope_value))
+    return NULL;
+
+  options = frida_frontmost_query_options_new ();
+
+  if (scope_value != NULL)
+  {
+    FridaScope scope;
+
+    if (!PyGObject_unmarshal_enum (scope_value, FRIDA_TYPE_SCOPE, &scope))
+      goto invalid_argument;
+
+    frida_frontmost_query_options_set_scope (options, scope);
+  }
+
   Py_BEGIN_ALLOW_THREADS
-  result = frida_device_get_frontmost_application_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  result = frida_device_get_frontmost_application_sync (PY_GOBJECT_HANDLE (self), options, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
+
+  g_object_unref (options);
+
   if (error != NULL)
     return PyFrida_raise (error);
 
@@ -2857,19 +2810,40 @@ PyDevice_get_frontmost_application (PyDevice * self)
     return PyApplication_new_take_handle (result);
   else
     Py_RETURN_NONE;
+
+invalid_argument:
+  {
+    g_object_unref (options);
+
+    return NULL;
+  }
 }
 
 static PyObject *
-PyDevice_enumerate_applications (PyDevice * self)
+PyDevice_enumerate_applications (PyDevice * self, PyObject * args, PyObject * kw)
 {
+  static char * keywords[] = { "identifiers", "scope", NULL };
+  PyObject * identifiers = NULL;
+  const char * scope = NULL;
+  FridaApplicationQueryOptions * options;
   GError * error = NULL;
   FridaApplicationList * result;
   gint result_length, i;
   PyObject * applications;
 
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "|Os", keywords, &identifiers, &scope))
+    return NULL;
+
+  options = PyDevice_parse_application_query_options (identifiers, scope);
+  if (options == NULL)
+    return NULL;
+
   Py_BEGIN_ALLOW_THREADS
-  result = frida_device_enumerate_applications_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  result = frida_device_enumerate_applications_sync (PY_GOBJECT_HANDLE (self), options, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
+
+  g_object_unref (options);
+
   if (error != NULL)
     return PyFrida_raise (error);
 
@@ -2884,17 +2858,83 @@ PyDevice_enumerate_applications (PyDevice * self)
   return applications;
 }
 
-static PyObject *
-PyDevice_enumerate_processes (PyDevice * self)
+static FridaApplicationQueryOptions *
+PyDevice_parse_application_query_options (PyObject * identifiers_value, const gchar * scope_value)
 {
+  FridaApplicationQueryOptions * options;
+
+  options = frida_application_query_options_new ();
+
+  if (identifiers_value != NULL)
+  {
+    gint n, i;
+
+    n = PySequence_Size (identifiers_value);
+    if (n == -1)
+      goto propagate_error;
+
+    for (i = 0; i != n; i++)
+    {
+      PyObject * element;
+      const gchar * identifier = NULL;
+
+      element = PySequence_GetItem (identifiers_value, i);
+      if (element == NULL)
+        goto propagate_error;
+      PyGObject_unmarshal_string (element, &identifier);
+      Py_DECREF (element);
+      if (identifier == NULL)
+        goto propagate_error;
+
+      frida_application_query_options_select_identifier (options, identifier);
+    }
+  }
+
+  if (scope_value != NULL)
+  {
+    FridaScope scope;
+
+    if (!PyGObject_unmarshal_enum (scope_value, FRIDA_TYPE_SCOPE, &scope))
+      goto propagate_error;
+
+    frida_application_query_options_set_scope (options, scope);
+  }
+
+  return options;
+
+propagate_error:
+  {
+    g_object_unref (options);
+
+    return NULL;
+  }
+}
+
+static PyObject *
+PyDevice_enumerate_processes (PyDevice * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "pids", "scope", NULL };
+  PyObject * pids = NULL;
+  const char * scope = NULL;
+  FridaProcessQueryOptions * options;
   GError * error = NULL;
   FridaProcessList * result;
   gint result_length, i;
   PyObject * processes;
 
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "|Os", keywords, &pids, &scope))
+    return NULL;
+
+  options = PyDevice_parse_process_query_options (pids, scope);
+  if (options == NULL)
+    return NULL;
+
   Py_BEGIN_ALLOW_THREADS
-  result = frida_device_enumerate_processes_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  result = frida_device_enumerate_processes_sync (PY_GOBJECT_HANDLE (self), options, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
+
+  g_object_unref (options);
+
   if (error != NULL)
     return PyFrida_raise (error);
 
@@ -2907,6 +2947,58 @@ PyDevice_enumerate_processes (PyDevice * self)
   g_object_unref (result);
 
   return processes;
+}
+
+static FridaProcessQueryOptions *
+PyDevice_parse_process_query_options (PyObject * pids_value, const gchar * scope_value)
+{
+  FridaProcessQueryOptions * options;
+
+  options = frida_process_query_options_new ();
+
+  if (pids_value != NULL)
+  {
+    gint n, i;
+
+    n = PySequence_Size (pids_value);
+    if (n == -1)
+      goto propagate_error;
+
+    for (i = 0; i != n; i++)
+    {
+      PyObject * element;
+      long long pid;
+
+      element = PySequence_GetItem (pids_value, i);
+      if (element == NULL)
+        goto propagate_error;
+      pid = PyLong_AsLongLong (element);
+      Py_DECREF (element);
+      if (pid == -1)
+        goto propagate_error;
+
+      frida_process_query_options_select_pid (options, pid);
+    }
+  }
+
+  if (scope_value != NULL)
+  {
+    FridaScope scope;
+
+    if (!PyGObject_unmarshal_enum (scope_value, FRIDA_TYPE_SCOPE, &scope))
+      goto propagate_error;
+
+    frida_process_query_options_set_scope (options, scope);
+  }
+
+  return options;
+
+propagate_error:
+  {
+    g_object_unref (options);
+
+    return NULL;
+  }
 }
 
 static PyObject *
@@ -3343,6 +3435,7 @@ PyApplication_init (PyApplication * self, PyObject * args, PyObject * kw)
   self->identifier = NULL;
   self->name = NULL;
   self->pid = 0;
+  self->parameters = NULL;
 
   return 0;
 }
@@ -3353,11 +3446,13 @@ PyApplication_init_from_handle (PyApplication * self, FridaApplication * handle)
   self->identifier = PyUnicode_FromUTF8String (frida_application_get_identifier (handle));
   self->name = PyUnicode_FromUTF8String (frida_application_get_name (handle));
   self->pid = frida_application_get_pid (handle);
+  self->parameters = PyGObject_marshal_parameters_dict (frida_application_get_parameters (handle));
 }
 
 static void
 PyApplication_dealloc (PyApplication * self)
 {
+  Py_XDECREF (self->parameters);
   Py_XDECREF (self->name);
   Py_XDECREF (self->identifier);
 
@@ -3367,41 +3462,33 @@ PyApplication_dealloc (PyApplication * self)
 static PyObject *
 PyApplication_repr (PyApplication * self)
 {
-  PyObject * identifier_bytes, * name_bytes, * result;
+  PyObject * result;
+  FridaApplication * handle;
+  GString * repr;
+  gchar * str;
 
-  identifier_bytes = PyUnicode_AsUTF8String (self->identifier);
-  name_bytes = PyUnicode_AsUTF8String (self->name);
+  handle = PY_GOBJECT_HANDLE (self);
+
+  repr = g_string_new ("Application(");
+
+  g_string_append_printf (repr, "identifier=\"%s\", name=\"%s\"",
+      frida_application_get_identifier (handle),
+      frida_application_get_name (handle));
 
   if (self->pid != 0)
-  {
-    result = PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\", pid=%u)",
-        PyBytes_AsString (identifier_bytes),
-        PyBytes_AsString (name_bytes),
-        self->pid);
-  }
-  else
-  {
-    result = PyRepr_FromFormat ("Application(identifier=\"%s\", name=\"%s\")",
-        PyBytes_AsString (identifier_bytes),
-        PyBytes_AsString (name_bytes));
-  }
+    g_string_append_printf (repr, ", pid=%u", self->pid);
 
-  Py_DECREF (name_bytes);
-  Py_DECREF (identifier_bytes);
+  str = PyFrida_repr (self->parameters);
+  g_string_append_printf (repr, ", parameters=%s", str);
+  g_free (str);
+
+  g_string_append (repr, ")");
+
+  result = PyRepr_FromString (repr->str);
+
+  g_string_free (repr, TRUE);
 
   return result;
-}
-
-static PyObject *
-PyApplication_get_small_icon (PyApplication * self)
-{
-  return PyIcon_new_from_handle (frida_application_get_small_icon (PY_GOBJECT_HANDLE (self)));
-}
-
-static PyObject *
-PyApplication_get_large_icon (PyApplication * self)
-{
-  return PyIcon_new_from_handle (frida_application_get_large_icon (PY_GOBJECT_HANDLE (self)));
 }
 
 
@@ -3419,6 +3506,7 @@ PyProcess_init (PyProcess * self, PyObject * args, PyObject * kw)
 
   self->pid = 0;
   self->name = NULL;
+  self->parameters = NULL;
 
   return 0;
 }
@@ -3428,11 +3516,13 @@ PyProcess_init_from_handle (PyProcess * self, FridaProcess * handle)
 {
   self->pid = frida_process_get_pid (handle);
   self->name = PyUnicode_FromUTF8String (frida_process_get_name (handle));
+  self->parameters = PyGObject_marshal_parameters_dict (frida_process_get_parameters (handle));
 }
 
 static void
 PyProcess_dealloc (PyProcess * self)
 {
+  Py_XDECREF (self->parameters);
   Py_XDECREF (self->name);
 
   PyGObjectType.tp_dealloc ((PyObject *) self);
@@ -3441,29 +3531,30 @@ PyProcess_dealloc (PyProcess * self)
 static PyObject *
 PyProcess_repr (PyProcess * self)
 {
-  PyObject * name_bytes, * result;
+  PyObject * result;
+  FridaProcess * handle;
+  GString * repr;
+  gchar * str;
 
-  name_bytes = PyUnicode_AsUTF8String (self->name);
+  handle = PY_GOBJECT_HANDLE (self);
 
-  result = PyRepr_FromFormat ("Process(pid=%u, name=\"%s\")",
+  repr = g_string_new ("Process(");
+
+  g_string_append_printf (repr, "pid=%u, name=\"%s\"",
       self->pid,
-      PyBytes_AsString (name_bytes));
+      frida_process_get_name (handle));
 
-  Py_DECREF (name_bytes);
+  str = PyFrida_repr (self->parameters);
+  g_string_append_printf (repr, ", parameters=%s", str);
+  g_free (str);
+
+  g_string_append (repr, ")");
+
+  result = PyRepr_FromString (repr->str);
+
+  g_string_free (repr, TRUE);
 
   return result;
-}
-
-static PyObject *
-PyProcess_get_small_icon (PyProcess * self)
-{
-  return PyIcon_new_from_handle (frida_process_get_small_icon (PY_GOBJECT_HANDLE (self)));
-}
-
-static PyObject *
-PyProcess_get_large_icon (PyProcess * self)
-{
-  return PyIcon_new_from_handle (frida_process_get_large_icon (PY_GOBJECT_HANDLE (self)));
 }
 
 
@@ -3707,57 +3798,6 @@ PyCrash_repr (PyCrash * self)
   g_string_free (repr, TRUE);
 
   return result;
-}
-
-
-static PyObject *
-PyIcon_new_from_handle (FridaIcon * handle)
-{
-  if (handle != NULL)
-    g_object_ref (handle);
-
-  return PyGObject_new_take_handle (handle, &PYFRIDA_TYPE_SPEC (Icon));
-}
-
-static int
-PyIcon_init (PyIcon * self, PyObject * args, PyObject * kw)
-{
-  if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
-    return -1;
-
-  self->width = 0;
-  self->height = 0;
-  self->rowstride = 0;
-  self->pixels = NULL;
-
-  return 0;
-}
-
-static void
-PyIcon_init_from_handle (PyIcon * self, FridaIcon * handle)
-{
-  gconstpointer pixels;
-  gsize pixels_size;
-
-  self->width = frida_icon_get_width (handle);
-  self->height = frida_icon_get_height (handle);
-  self->rowstride = frida_icon_get_rowstride (handle);
-  pixels = g_bytes_get_data (frida_icon_get_pixels (handle), &pixels_size);
-  self->pixels = PyBytes_FromStringAndSize ((char *) pixels, (Py_ssize_t) pixels_size);
-}
-
-static void
-PyIcon_dealloc (PyIcon * self)
-{
-  Py_XDECREF (self->pixels);
-
-  PyGObjectType.tp_dealloc ((PyObject *) self);
-}
-
-static PyObject *
-PyIcon_repr (PyIcon * self)
-{
-  return PyRepr_FromFormat ("Icon(width=%d, height=%d, rowstride=%d, pixels=<%zd bytes>)", self->width, self->height, self->rowstride, PyBytes_Size (self->pixels));
 }
 
 
@@ -5598,7 +5638,6 @@ MOD_INIT (_frida)
   PYFRIDA_REGISTER_TYPE (Spawn, FRIDA_TYPE_SPAWN);
   PYFRIDA_REGISTER_TYPE (Child, FRIDA_TYPE_CHILD);
   PYFRIDA_REGISTER_TYPE (Crash, FRIDA_TYPE_CRASH);
-  PYFRIDA_REGISTER_TYPE (Icon, FRIDA_TYPE_ICON);
   PYFRIDA_REGISTER_TYPE (Bus, FRIDA_TYPE_BUS);
   PYFRIDA_REGISTER_TYPE (Session, FRIDA_TYPE_SESSION);
   PYFRIDA_REGISTER_TYPE (Script, FRIDA_TYPE_SCRIPT);
