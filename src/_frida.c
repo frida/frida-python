@@ -2240,7 +2240,7 @@ PyGObject_marshal_variant (GVariant * variant)
     return list;
   }
 
-  g_assert_not_reached ();
+  Py_RETURN_NONE;
 }
 
 static gboolean
