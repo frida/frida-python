@@ -5,6 +5,7 @@
  */
 
 #include <frida-core.h>
+#include <string.h>
 #ifdef G_OS_UNIX
 # include <gio/gunixsocketaddress.h>
 #endif
@@ -104,6 +105,8 @@ static volatile gint toplevel_objects_alive = 0;
 
 static PyObject * inspect_getargspec;
 static PyObject * inspect_ismethod;
+
+static PyObject * datetime_constructor;
 
 static GHashTable * pygobject_type_spec_by_type;
 static GHashTable * frida_exception_by_error_code;
@@ -310,6 +313,7 @@ static PyObject * PyGObjectSignalClosure_marshal_params (const GValue * params, 
 static PyObject * PyGObject_marshal_value (const GValue * value);
 static PyObject * PyGObject_marshal_string (const gchar * str);
 static gboolean PyGObject_unmarshal_string (PyObject * value, const gchar ** str);
+static PyObject * PyGObject_marshal_datetime (const gchar * iso8601_text);
 static PyObject * PyGObject_marshal_strv (gchar * const * strv, gint length);
 static gboolean PyGObject_unmarshal_strv (PyObject * value, gchar *** strv, gint * length);
 static PyObject * PyGObject_marshal_envp (gchar * const * envp, gint length);
@@ -366,12 +370,14 @@ static int PyApplication_init (PyApplication * self, PyObject * args, PyObject *
 static void PyApplication_init_from_handle (PyApplication * self, FridaApplication * handle);
 static void PyApplication_dealloc (PyApplication * self);
 static PyObject * PyApplication_repr (PyApplication * self);
+static PyObject * PyApplication_marshal_parameters_dict (GHashTable * dict);
 
 static PyObject * PyProcess_new_take_handle (FridaProcess * handle);
 static int PyProcess_init (PyProcess * self, PyObject * args, PyObject * kw);
 static void PyProcess_init_from_handle (PyProcess * self, FridaProcess * handle);
 static void PyProcess_dealloc (PyProcess * self);
 static PyObject * PyProcess_repr (PyProcess * self);
+static PyObject * PyProcess_marshal_parameters_dict (GHashTable * dict);
 
 static PyObject * PySpawn_new_take_handle (FridaSpawn * handle);
 static int PySpawn_init (PySpawn * self, PyObject * args, PyObject * kw);
@@ -1931,6 +1937,33 @@ PyGObject_unmarshal_string (PyObject * value, const gchar ** str)
 }
 
 static PyObject *
+PyGObject_marshal_datetime (const gchar * iso8601_text)
+{
+  PyObject * result;
+  GDateTime * raw_dt, * dt;
+
+  raw_dt = g_date_time_new_from_iso8601 (iso8601_text, NULL);
+  if (raw_dt == NULL)
+    Py_RETURN_NONE;
+
+  dt = g_date_time_to_local (raw_dt);
+
+  result = PyObject_CallFunction (datetime_constructor, "iiiiiii",
+      g_date_time_get_year (dt),
+      g_date_time_get_month (dt),
+      g_date_time_get_day_of_month (dt),
+      g_date_time_get_hour (dt),
+      g_date_time_get_minute (dt),
+      g_date_time_get_second (dt),
+      g_date_time_get_microsecond (dt));
+
+  g_date_time_unref (dt);
+  g_date_time_unref (raw_dt);
+
+  return result;
+}
+
+static PyObject *
 PyGObject_marshal_strv (gchar * const * strv, gint length)
 {
   PyObject * result;
@@ -3446,7 +3479,7 @@ PyApplication_init_from_handle (PyApplication * self, FridaApplication * handle)
   self->identifier = PyUnicode_FromUTF8String (frida_application_get_identifier (handle));
   self->name = PyUnicode_FromUTF8String (frida_application_get_name (handle));
   self->pid = frida_application_get_pid (handle);
-  self->parameters = PyGObject_marshal_parameters_dict (frida_application_get_parameters (handle));
+  self->parameters = PyApplication_marshal_parameters_dict (frida_application_get_parameters (handle));
 }
 
 static void
@@ -3491,6 +3524,35 @@ PyApplication_repr (PyApplication * self)
   return result;
 }
 
+static PyObject *
+PyApplication_marshal_parameters_dict (GHashTable * dict)
+{
+  PyObject * result;
+  GHashTableIter iter;
+  const gchar * key;
+  GVariant * raw_value;
+
+  result = PyDict_New ();
+
+  g_hash_table_iter_init (&iter, dict);
+
+  while (g_hash_table_iter_next (&iter, (gpointer *) &key, (gpointer *) &raw_value))
+  {
+    PyObject * value;
+
+    if (strcmp (key, "started") == 0 && g_variant_is_of_type (raw_value, G_VARIANT_TYPE_STRING))
+      value = PyGObject_marshal_datetime (g_variant_get_string (raw_value, NULL));
+    else
+      value = PyGObject_marshal_variant (raw_value);
+
+    PyDict_SetItemString (result, key, value);
+
+    Py_DECREF (value);
+  }
+
+  return result;
+}
+
 
 static PyObject *
 PyProcess_new_take_handle (FridaProcess * handle)
@@ -3516,7 +3578,7 @@ PyProcess_init_from_handle (PyProcess * self, FridaProcess * handle)
 {
   self->pid = frida_process_get_pid (handle);
   self->name = PyUnicode_FromUTF8String (frida_process_get_name (handle));
-  self->parameters = PyGObject_marshal_parameters_dict (frida_process_get_parameters (handle));
+  self->parameters = PyProcess_marshal_parameters_dict (frida_process_get_parameters (handle));
 }
 
 static void
@@ -3553,6 +3615,35 @@ PyProcess_repr (PyProcess * self)
   result = PyRepr_FromString (repr->str);
 
   g_string_free (repr, TRUE);
+
+  return result;
+}
+
+static PyObject *
+PyProcess_marshal_parameters_dict (GHashTable * dict)
+{
+  PyObject * result;
+  GHashTableIter iter;
+  const gchar * key;
+  GVariant * raw_value;
+
+  result = PyDict_New ();
+
+  g_hash_table_iter_init (&iter, dict);
+
+  while (g_hash_table_iter_next (&iter, (gpointer *) &key, (gpointer *) &raw_value))
+  {
+    PyObject * value;
+
+    if (strcmp (key, "started") == 0 && g_variant_is_of_type (raw_value, G_VARIANT_TYPE_STRING))
+      value = PyGObject_marshal_datetime (g_variant_get_string (raw_value, NULL));
+    else
+      value = PyGObject_marshal_variant (raw_value);
+
+    PyDict_SetItemString (result, key, value);
+
+    Py_DECREF (value);
+  }
 
   return result;
 }
@@ -5611,7 +5702,7 @@ beach:
 
 MOD_INIT (_frida)
 {
-  PyObject * inspect, * module;
+  PyObject * inspect, * datetime, * module;
 
 #if PY_VERSION_HEX < 0x03070000
   PyEval_InitThreads ();
@@ -5621,6 +5712,10 @@ MOD_INIT (_frida)
   inspect_getargspec = PyObject_GetAttrString (inspect, PYFRIDA_GETARGSPEC_FUNCTION);
   inspect_ismethod = PyObject_GetAttrString (inspect, "ismethod");
   Py_DECREF (inspect);
+
+  datetime = PyImport_ImportModule ("datetime");
+  datetime_constructor = PyObject_GetAttrString (datetime, "datetime");
+  Py_DECREF (datetime);
 
   frida_init ();
 
