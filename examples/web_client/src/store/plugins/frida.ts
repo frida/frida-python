@@ -17,17 +17,26 @@ async function start() {
   });
   let peerBus: dbus.MessageBus | null = null;
 
+  const authServiceObj = await bus.getProxyObject('re.frida.AuthenticationService15', '/re/frida/AuthenticationService');
+  const authService = authServiceObj.getInterface('re.frida.AuthenticationService15');
+
+  const token = JSON.stringify({
+    nick: 'SomeoneOnTheWeb',
+    secret: 'knock-knock'
+  });
+  await authService.Authenticate(token);
+
   const hostSessionObj = await bus.getProxyObject('re.frida.HostSession15', '/re/frida/HostSession');
   const hostSession = hostSessionObj.getInterface('re.frida.HostSession15');
 
   const processes: HostProcessInfo[] = await hostSession.EnumerateProcesses({});
   console.log('Got processes:', processes);
 
-  const gadget = processes.find(([, name]) => name === 'Gadget');
-  if (gadget === undefined) {
-    throw new Error('Gadget process not found');
+  const target = processes.find(([, name]) => name === 'hello2');
+  if (target === undefined) {
+    throw new Error('Target process not found');
   }
-  const [pid] = gadget;
+  const [pid] = target;
   console.log('Got PID:', pid);
 
   const sessionId: AgentSessionId = await hostSession.Attach(pid, { persistTimeout: new Variant('u', 300) });

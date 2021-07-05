@@ -13,7 +13,6 @@ class Application:
             'secret': "knock-knock"
         }
         self._device = frida.get_device_manager().add_remote_device("::1",
-                                                                    certificate="/Users/oleavr/src/cert.pem",
                                                                     token=json.dumps(token))
 
         self._bus = self._device.bus

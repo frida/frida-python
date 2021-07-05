@@ -128,7 +128,6 @@ typedef struct _PyScript                       PyScript;
 typedef struct _PyRelay                        PyRelay;
 typedef struct _PyPortalMembership             PyPortalMembership;
 typedef struct _PyPortalService                PyPortalService;
-typedef struct _PyWebGatewayService            PyWebGatewayService;
 typedef struct _PyEndpointParameters           PyEndpointParameters;
 typedef struct _PyFileMonitor                  PyFileMonitor;
 typedef struct _PyIOStream                     PyIOStream;
@@ -260,11 +259,6 @@ struct _PyPortalService
   PyObject * device;
 };
 
-struct _PyWebGatewayService
-{
-  PyGObject parent;
-};
-
 struct _PyEndpointParameters
 {
   PyGObject parent;
@@ -336,8 +330,8 @@ static gboolean PyDeviceManager_is_matching_device (FridaDevice * device, PyObje
 static PyObject * PyDeviceManager_enumerate_devices (PyDeviceManager * self);
 static PyObject * PyDeviceManager_add_remote_device (PyDeviceManager * self, PyObject * args, PyObject * kw);
 static PyObject * PyDeviceManager_remove_remote_device (PyDeviceManager * self, PyObject * args, PyObject * kw);
-static FridaRemoteDeviceOptions * PyDeviceManager_parse_remote_device_options (const gchar * certificate_value, const gchar * token,
-    gint keepalive_interval);
+static FridaRemoteDeviceOptions * PyDeviceManager_parse_remote_device_options (const gchar * certificate_value, const gchar * origin,
+    const gchar * token, gint keepalive_interval);
 
 static PyObject * PyDevice_new_take_handle (FridaDevice * handle);
 static int PyDevice_init (PyDevice * self, PyObject * args, PyObject * kw);
@@ -447,11 +441,6 @@ static PyObject * PyPortalService_broadcast (PyScript * self, PyObject * args, P
 static PyObject * PyPortalService_enumerate_tags (PyScript * self, PyObject * args);
 static PyObject * PyPortalService_tag (PyScript * self, PyObject * args, PyObject * kw);
 static PyObject * PyPortalService_untag (PyScript * self, PyObject * args, PyObject * kw);
-
-static int PyWebGatewayService_init (PyWebGatewayService * self, PyObject * args, PyObject * kw);
-static void PyWebGatewayService_dealloc (PyWebGatewayService * self);
-static PyObject * PyWebGatewayService_start (PyWebGatewayService * self);
-static PyObject * PyWebGatewayService_stop (PyWebGatewayService * self);
 
 static int PyEndpointParameters_init (PyEndpointParameters * self, PyObject * args, PyObject * kw);
 
@@ -666,13 +655,6 @@ static PyMethodDef PyPortalService_methods[] =
 static PyMemberDef PyPortalService_members[] =
 {
   { "device", T_OBJECT_EX, G_STRUCT_OFFSET (PyPortalService, device), READONLY, "Device for in-process control." },
-  { NULL }
-};
-
-static PyMethodDef PyWebGatewayService_methods[] =
-{
-  { "start", (PyCFunction) PyWebGatewayService_start, METH_NOARGS, "Start listening for incoming connections." },
-  { "stop", (PyCFunction) PyWebGatewayService_stop, METH_NOARGS, "Stop listening for incoming connections, and kick any connected clients." },
   { NULL }
 };
 
@@ -1296,48 +1278,6 @@ static PyTypeObject PyPortalServiceType =
 };
 
 PYFRIDA_DEFINE_TYPE (PortalService, PyPortalService_init_from_handle, frida_unref);
-
-static PyTypeObject PyWebGatewayServiceType =
-{
-  PyVarObject_HEAD_INIT (NULL, 0)
-  "_frida.WebGatewayService",                   /* tp_name           */
-  sizeof (PyWebGatewayService),                 /* tp_basicsize      */
-  0,                                            /* tp_itemsize       */
-  (destructor) PyWebGatewayService_dealloc,     /* tp_dealloc        */
-  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
-  NULL,                                         /* tp_getattr        */
-  NULL,                                         /* tp_setattr        */
-  NULL,                                         /* tp_compare        */
-  NULL,                                         /* tp_repr           */
-  NULL,                                         /* tp_as_number      */
-  NULL,                                         /* tp_as_sequence    */
-  NULL,                                         /* tp_as_mapping     */
-  NULL,                                         /* tp_hash           */
-  NULL,                                         /* tp_call           */
-  NULL,                                         /* tp_str            */
-  NULL,                                         /* tp_getattro       */
-  NULL,                                         /* tp_setattro       */
-  NULL,                                         /* tp_as_buffer      */
-  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
-  "Frida Web Gateway Service",                  /* tp_doc            */
-  NULL,                                         /* tp_traverse       */
-  NULL,                                         /* tp_clear          */
-  NULL,                                         /* tp_richcompare    */
-  0,                                            /* tp_weaklistoffset */
-  NULL,                                         /* tp_iter           */
-  NULL,                                         /* tp_iternext       */
-  PyWebGatewayService_methods,                  /* tp_methods        */
-  NULL,                                         /* tp_members        */
-  NULL,                                         /* tp_getset         */
-  &PyGObjectType,                               /* tp_base           */
-  NULL,                                         /* tp_dict           */
-  NULL,                                         /* tp_descr_get      */
-  NULL,                                         /* tp_descr_set      */
-  0,                                            /* tp_dictoffset     */
-  (initproc) PyWebGatewayService_init,          /* tp_init           */
-};
-
-PYFRIDA_DEFINE_TYPE (WebGatewayService, NULL, frida_unref);
 
 static PyTypeObject PyEndpointParametersType =
 {
@@ -2604,23 +2544,25 @@ static PyObject *
 PyDeviceManager_add_remote_device (PyDeviceManager * self, PyObject * args, PyObject * kw)
 {
   PyObject * result = NULL;
-  static char * keywords[] = { "address", "certificate", "token", "keepalive_interval", NULL };
+  static char * keywords[] = { "address", "certificate", "origin", "token", "keepalive_interval", NULL };
   char * address;
   char * certificate = NULL;
+  char * origin = NULL;
   char * token = NULL;
   int keepalive_interval = -1;
   FridaRemoteDeviceOptions * options;
   GError * error = NULL;
   FridaDevice * handle;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|esesi", keywords,
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|esesesi", keywords,
         "utf-8", &address,
         "utf-8", &certificate,
+        "utf-8", &origin,
         "utf-8", &token,
         &keepalive_interval))
     return NULL;
 
-  options = PyDeviceManager_parse_remote_device_options (certificate, token, keepalive_interval);
+  options = PyDeviceManager_parse_remote_device_options (certificate, origin, token, keepalive_interval);
   if (options == NULL)
     goto beach;
 
@@ -2636,6 +2578,7 @@ beach:
   g_clear_object (&options);
 
   PyMem_Free (token);
+  PyMem_Free (origin);
   PyMem_Free (certificate);
   PyMem_Free (address);
 
@@ -2665,7 +2608,8 @@ PyDeviceManager_remove_remote_device (PyDeviceManager * self, PyObject * args, P
 }
 
 static FridaRemoteDeviceOptions *
-PyDeviceManager_parse_remote_device_options (const gchar * certificate_value, const gchar * token, gint keepalive_interval)
+PyDeviceManager_parse_remote_device_options (const gchar * certificate_value, const gchar * origin, const gchar * token,
+    gint keepalive_interval)
 {
   FridaRemoteDeviceOptions * options;
 
@@ -2682,6 +2626,9 @@ PyDeviceManager_parse_remote_device_options (const gchar * certificate_value, co
 
     g_object_unref (certificate);
   }
+
+  if (origin != NULL)
+    frida_remote_device_options_set_origin (options, origin);
 
   if (token != NULL)
     frida_remote_device_options_set_token (options, token);
@@ -4843,111 +4790,33 @@ PyPortalService_untag (PyScript * self, PyObject * args, PyObject * kw)
 
 
 static int
-PyWebGatewayService_init (PyWebGatewayService * self, PyObject * args, PyObject * kw)
-{
-  static char * keywords[] = { "gateway_params", "target_params", "root", "origin", NULL };
-  PyEndpointParameters * gateway_params, * target_params;
-  char * root_value = NULL;
-  char * origin = NULL;
-  GFile * root = NULL;
-  FridaWebGatewayService * handle;
-
-  if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
-    return -1;
-
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "O!O!|eses", keywords,
-        &PYFRIDA_TYPE (EndpointParameters), &gateway_params,
-        &PYFRIDA_TYPE (EndpointParameters), &target_params,
-        "utf-8", &root_value,
-        "utf-8", &origin))
-    return -1;
-
-  root = (root_value != NULL) ? g_file_new_for_path (root_value) : NULL;
-
-  g_atomic_int_inc (&toplevel_objects_alive);
-
-  handle = frida_web_gateway_service_new (PY_GOBJECT_HANDLE (gateway_params), PY_GOBJECT_HANDLE (target_params), root, origin);
-
-  PyGObject_take_handle (&self->parent, handle, &PYFRIDA_TYPE_SPEC (WebGatewayService));
-
-  g_clear_object (&root);
-  PyMem_Free (origin);
-  PyMem_Free (root_value);
-
-  return 0;
-}
-
-static void
-PyWebGatewayService_dealloc (PyWebGatewayService * self)
-{
-  FridaWebGatewayService * handle;
-
-  g_atomic_int_dec_and_test (&toplevel_objects_alive);
-
-  handle = PyGObject_steal_handle (&self->parent);
-  if (handle != NULL)
-  {
-    Py_BEGIN_ALLOW_THREADS
-    frida_web_gateway_service_stop_sync (handle, NULL, NULL);
-    frida_unref (handle);
-    Py_END_ALLOW_THREADS
-  }
-
-  PyGObjectType.tp_dealloc ((PyObject *) self);
-}
-
-static PyObject *
-PyWebGatewayService_start (PyWebGatewayService * self)
-{
-  GError * error = NULL;
-
-  Py_BEGIN_ALLOW_THREADS
-  frida_web_gateway_service_start_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
-  Py_END_ALLOW_THREADS
-  if (error != NULL)
-    return PyFrida_raise (error);
-
-  Py_RETURN_NONE;
-}
-
-static PyObject *
-PyWebGatewayService_stop (PyWebGatewayService * self)
-{
-  GError * error = NULL;
-
-  Py_BEGIN_ALLOW_THREADS
-  frida_web_gateway_service_stop_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
-  Py_END_ALLOW_THREADS
-  if (error != NULL)
-    return PyFrida_raise (error);
-
-  Py_RETURN_NONE;
-}
-
-
-static int
 PyEndpointParameters_init (PyEndpointParameters * self, PyObject * args, PyObject * kw)
 {
   int result = -1;
-  static char * keywords[] = { "address", "port", "certificate", "auth_token", "auth_callback", NULL };
+  static char * keywords[] = { "address", "port", "certificate", "origin", "auth_token", "auth_callback", "asset_root", NULL };
   char * address = NULL;
   unsigned short int port = 0;
   char * certificate_value = NULL;
+  char * origin = NULL;
   char * auth_token = NULL;
   PyObject * auth_callback = NULL;
+  char * asset_root_value = NULL;
   GTlsCertificate * certificate = NULL;
   FridaAuthenticationService * auth_service = NULL;
+  GFile * asset_root = NULL;
   FridaEndpointParameters * handle;
 
   if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
     return -1;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "|esHesesO", keywords,
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "|esHesesesOes", keywords,
         "utf-8", &address,
         &port,
         "utf-8", &certificate_value,
+        "utf-8", &origin,
         "utf-8", &auth_token,
-        &auth_callback))
+        &auth_callback,
+        "utf-8", &asset_root_value))
     return -1;
 
   if (certificate_value != NULL && !PyGObject_unmarshal_certificate (certificate_value, &certificate))
@@ -4958,17 +4827,23 @@ PyEndpointParameters_init (PyEndpointParameters * self, PyObject * args, PyObjec
   else if (auth_callback != NULL)
     auth_service = FRIDA_AUTHENTICATION_SERVICE (frida_python_authentication_service_new (auth_callback));
 
-  handle = frida_endpoint_parameters_new (address, port, certificate, auth_service);
+  if (asset_root_value != NULL)
+    asset_root = g_file_new_for_path (asset_root_value);
+
+  handle = frida_endpoint_parameters_new (address, port, certificate, origin, auth_service, asset_root);
 
   PyGObject_take_handle (&self->parent, handle, &PYFRIDA_TYPE_SPEC (EndpointParameters));
 
   result = 0;
 
 beach:
+  g_clear_object (&asset_root);
   g_clear_object (&auth_service);
   g_clear_object (&certificate);
 
+  PyMem_Free (asset_root_value);
   PyMem_Free (auth_token);
+  PyMem_Free (origin);
   PyMem_Free (certificate_value);
   PyMem_Free (address);
 
@@ -5739,7 +5614,6 @@ MOD_INIT (_frida)
   PYFRIDA_REGISTER_TYPE (Relay, FRIDA_TYPE_RELAY);
   PYFRIDA_REGISTER_TYPE (PortalMembership, FRIDA_TYPE_PORTAL_MEMBERSHIP);
   PYFRIDA_REGISTER_TYPE (PortalService, FRIDA_TYPE_PORTAL_SERVICE);
-  PYFRIDA_REGISTER_TYPE (WebGatewayService, FRIDA_TYPE_WEB_GATEWAY_SERVICE);
   PYFRIDA_REGISTER_TYPE (EndpointParameters, FRIDA_TYPE_ENDPOINT_PARAMETERS);
   PYFRIDA_REGISTER_TYPE (FileMonitor, FRIDA_TYPE_FILE_MONITOR);
   PYFRIDA_REGISTER_TYPE (IOStream, G_TYPE_IO_STREAM);

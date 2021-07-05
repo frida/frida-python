@@ -4,6 +4,7 @@ from frida_tools.application import Reactor
 import hashlib
 import hmac
 import json
+from pathlib import Path
 
 
 ENABLE_CONTROL_INTERFACE = True
@@ -18,10 +19,11 @@ class Application:
                                                   authentication=('token', "wow-such-secret"))
 
         if ENABLE_CONTROL_INTERFACE:
+            www = Path(__file__).parent.resolve() / "web_client" / "dist"
             control_params = frida.EndpointParameters(address="::1",
                                                       port=27042,
-                                                      certificate="/Users/oleavr/src/identity.pem",
-                                                      authentication=('callback', self._authenticate))
+                                                      authentication=('callback', self._authenticate),
+                                                      asset_root=www)
         else:
             control_params = None
 
