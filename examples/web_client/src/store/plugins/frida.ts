@@ -20,7 +20,7 @@ async function start() {
   const hostSessionObj = await bus.getProxyObject('re.frida.HostSession15', '/re/frida/HostSession');
   const hostSession = hostSessionObj.getInterface('re.frida.HostSession15');
 
-  const processes: HostProcessInfo[] = await hostSession.EnumerateProcesses();
+  const processes: HostProcessInfo[] = await hostSession.EnumerateProcesses({});
   console.log('Got processes:', processes);
 
   const gadget = processes.find(([, name]) => name === 'Gadget');
