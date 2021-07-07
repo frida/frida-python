@@ -24,12 +24,12 @@ async function start() {
     nick: 'SomeoneOnTheWeb',
     secret: 'knock-knock'
   });
-  await authService.Authenticate(token);
+  await authService.authenticate(token);
 
   const hostSessionObj = await bus.getProxyObject('re.frida.HostSession15', '/re/frida/HostSession');
   const hostSession = hostSessionObj.getInterface('re.frida.HostSession15');
 
-  const processes: HostProcessInfo[] = await hostSession.EnumerateProcesses({});
+  const processes: HostProcessInfo[] = await hostSession.enumerateProcesses({});
   console.log('Got processes:', processes);
 
   const target = processes.find(([, name]) => name === 'hello2');
@@ -39,7 +39,7 @@ async function start() {
   const [pid] = target;
   console.log('Got PID:', pid);
 
-  const sessionId: AgentSessionId = await hostSession.Attach(pid, { persistTimeout: new Variant('u', 300) });
+  const sessionId: AgentSessionId = await hostSession.attach(pid, { 'persist-timeout': new Variant('u', 300) });
 
   let agentSessionObj = await bus.getProxyObject('re.frida.AgentSession15', '/re/frida/AgentSession/' + sessionId[0]);
   let agentSession = agentSessionObj.getInterface('re.frida.AgentSession15');
@@ -47,7 +47,7 @@ async function start() {
   const sink = new MessageSink('re.frida.AgentMessageSink15');
   bus.export('/re/frida/AgentMessageSink/' + sessionId[0], sink);
 
-  const scriptId: AgentScriptId = await agentSession.CreateScript(`
+  const scriptId: AgentScriptId = await agentSession.createScript(`
 const _puts = new NativeFunction(Module.getExportByName(null, 'puts'), 'int', ['pointer']);
 
 function puts(s) {
@@ -63,18 +63,18 @@ setInterval(() => {
   n++;
 }, 1000);
   `, {});
-  await agentSession.LoadScript(scriptId);
+  await agentSession.loadScript(scriptId);
 
-  await agentSession.BeginMigration();
+  await agentSession.beginMigration();
 
   const peerConnection = new RTCPeerConnection();
 
   const pendingLocalCandidates = new IceCandidateQueue();
   pendingLocalCandidates.on('add', (candidates: RTCIceCandidate[]) => {
-    agentSession.AddCandidates(candidates.map(c => c.candidate));
+    agentSession.addCandidates(candidates.map(c => c.candidate));
   });
   pendingLocalCandidates.once('done', () => {
-    agentSession.NotifyCandidateGatheringDone();
+    agentSession.notifyCandidateGatheringDone();
   });
 
   const pendingRemoteCandidates = new IceCandidateQueue();
@@ -100,7 +100,7 @@ setInterval(() => {
   peerConnection.onicecandidate = e => {
     pendingLocalCandidates.add(e.candidate);
   };
-  agentSession.on('NewCandidates', (sdps: string[]) => {
+  agentSession.on('newCandidates', (sdps: string[]) => {
     for (const sdp of sdps) {
       pendingRemoteCandidates.add(new RTCIceCandidate({
         candidate: sdp,
@@ -109,7 +109,7 @@ setInterval(() => {
       }));
     }
   });
-  agentSession.on('CandidateGatheringDone', () => {
+  agentSession.on('candidateGatheringDone', () => {
     pendingRemoteCandidates.add(null);
   });
 
@@ -126,7 +126,7 @@ setInterval(() => {
 
     peerBus.export('/re/frida/AgentMessageSink', sink);
 
-    await agentSession.CommitMigration();
+    await agentSession.commitMigration();
 
     agentSessionObj = peerAgentSessionObj;
     agentSession = peerAgentSession;
@@ -142,7 +142,7 @@ setInterval(() => {
   const offer = await peerConnection.createOffer();
   await peerConnection.setLocalDescription(offer);
 
-  const answerSdp = await agentSession.OfferPeerConnection(offer.sdp, {});
+  const answerSdp = await agentSession.offerPeerConnection(offer.sdp, {});
   const answer = new RTCSessionDescription({ type: "answer", sdp: answerSdp });
   await peerConnection.setRemoteDescription(answer);
 
@@ -162,7 +162,7 @@ enum AgentMessageKind {
 
 class MessageSink extends Interface {
   @method({ inSignature: 'a(i(u)sbay)u' })
-  PostMessages(messages: AgentMessage[], batchId: number): void {
+  postMessages(messages: AgentMessage[], batchId: number): void {
     for (const [kind, scriptId, text, hasData, data] of messages) {
       if (kind === AgentMessageKind.Script) {
         const message = JSON.parse(text);
