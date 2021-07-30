@@ -3161,7 +3161,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
       if (!PyGObject_unmarshal_variant (value, &raw_value))
         goto invalid_dict_value;
 
-      g_hash_table_insert (aux, g_strdup (raw_key), raw_value);
+      g_hash_table_insert (aux, g_strdup (raw_key), g_variant_ref_sink (raw_value));
     }
   }
 
