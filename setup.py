@@ -182,7 +182,18 @@ class FridaPrebuiltExt(build_ext):
                 # index_url is a url compatible with PEP 503
                 index_url = get_index_url().strip()
                 frida_url = urljoin(index_url, "frida/")  # slash is necessary here
-                links_html = urlopen(frida_url, timeout=20).read().decode("utf-8")
+                timeout = 20
+                errmsg = (
+                    "unable to download it within {} seconds; "
+                    "please download it mamuallt to {}"
+                ).format("{}", egg_path)
+
+                print("downloading package list from", frida_url)
+                try:
+                    links_html = urlopen(frida_url, timeout=timeout).read().decode("utf-8")
+                except Exception:
+                    print(errmsg.format(timeout))
+                    raise
 
                 parser = PEP503PageParser(
                     "frida", frida_version, os_version, python_major_version)
@@ -200,10 +211,9 @@ class FridaPrebuiltExt(build_ext):
                     print("downloading prebuilt extension from", egg_url)
                     timeout = 120  # We'll assume the user has at least 200 kB/s transfer speed.
                     egg_data = urlopen(egg_url, timeout=timeout).read()
-                except Exception as e:
-                    message = "unable to download it within 120 seconds; please download it manually to {}"
-                    print(message.format(egg_path))
-                    raise e
+                except Exception:
+                    print(errmsg.format(timeout))
+                    raise
 
             egg_file = BytesIO(egg_data)
 
