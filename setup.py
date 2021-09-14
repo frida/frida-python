@@ -230,47 +230,48 @@ class FridaPrebuiltExt(build_ext):
             shutil.copyfile(frida_extension, target)
 
 
-setup(
-    name="frida",
-    version=frida_version,
-    description="Dynamic instrumentation toolkit for developers, reverse-engineers, and security researchers",
-    long_description=long_description,
-    long_description_content_type="text/markdown",
-    author="Frida Developers",
-    author_email="oleavr@frida.re",
-    url="https://frida.re",
-    install_requires=["setuptools"],
-    license="wxWindows Library Licence, Version 3.1",
-    keywords="frida debugger dynamic instrumentation inject javascript windows macos linux ios iphone ipad android qnx",
-    classifiers=[
-        "Development Status :: 5 - Production/Stable",
-        "Environment :: Console",
-        "Environment :: MacOS X",
-        "Environment :: Win32 (MS Windows)",
-        "Intended Audience :: Developers",
-        "Intended Audience :: Science/Research",
-        "License :: OSI Approved",
-        "Natural Language :: English",
-        "Operating System :: MacOS :: MacOS X",
-        "Operating System :: Microsoft :: Windows",
-        "Operating System :: POSIX :: Linux",
-        "Programming Language :: Python :: 2",
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.4",
-        "Programming Language :: Python :: 3.5",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: Implementation :: CPython",
-        "Programming Language :: JavaScript",
-        "Topic :: Software Development :: Debuggers",
-        "Topic :: Software Development :: Libraries :: Python Modules"
-    ],
-    packages=['frida'],
-    ext_modules=[Extension('_frida', [])],
-    cmdclass={
-        'build_ext': FridaPrebuiltExt
-    },
-    zip_safe=False
-)
+if __name__ == "__main__":
+    setup(
+        name="frida",
+        version=frida_version,
+        description="Dynamic instrumentation toolkit for developers, reverse-engineers, and security researchers",
+        long_description=long_description,
+        long_description_content_type="text/markdown",
+        author="Frida Developers",
+        author_email="oleavr@frida.re",
+        url="https://frida.re",
+        install_requires=["setuptools"],
+        license="wxWindows Library Licence, Version 3.1",
+        keywords="frida debugger dynamic instrumentation inject javascript windows macos linux ios iphone ipad android qnx",
+        classifiers=[
+            "Development Status :: 5 - Production/Stable",
+            "Environment :: Console",
+            "Environment :: MacOS X",
+            "Environment :: Win32 (MS Windows)",
+            "Intended Audience :: Developers",
+            "Intended Audience :: Science/Research",
+            "License :: OSI Approved",
+            "Natural Language :: English",
+            "Operating System :: MacOS :: MacOS X",
+            "Operating System :: Microsoft :: Windows",
+            "Operating System :: POSIX :: Linux",
+            "Programming Language :: Python :: 2",
+            "Programming Language :: Python :: 2.7",
+            "Programming Language :: Python :: 3",
+            "Programming Language :: Python :: 3.4",
+            "Programming Language :: Python :: 3.5",
+            "Programming Language :: Python :: 3.6",
+            "Programming Language :: Python :: 3.7",
+            "Programming Language :: Python :: 3.8",
+            "Programming Language :: Python :: Implementation :: CPython",
+            "Programming Language :: JavaScript",
+            "Topic :: Software Development :: Debuggers",
+            "Topic :: Software Development :: Libraries :: Python Modules"
+        ],
+        packages=['frida'],
+        ext_modules=[Extension('_frida', [])],
+        cmdclass={
+            'build_ext': FridaPrebuiltExt
+        },
+        zip_safe=False
+    )
