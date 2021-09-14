@@ -18,17 +18,25 @@ from setuptools.extension import Extension
 import shutil
 import struct
 import subprocess
+from collections import namedtuple
 import sys
 try:
     from urllib.request import urlopen, Request
 except:
     from urllib2 import urlopen, Request
 try:
-    import xmlrpclib
-except ImportError:
-    import xmlrpc.client as xmlrpclib
+    from urllib.parse import urljoin
+except:
+    from urlparse import urljoin
+try:
+    from html.parser import HTMLParser
+except:
+    from HTMLParser import HTMLParser
 import zipfile
 
+
+DEFAULT_INDEX_URL = "https://pypi.org/simple/"
+DEFAULT_PIP = "pip"
 
 package_dir = os.path.dirname(os.path.realpath(__file__))
 pkg_info = os.path.join(package_dir, "PKG-INFO")
@@ -44,18 +52,85 @@ else:
     frida_extension = os.environ['FRIDA_EXTENSION']
 frida_major_version = int(frida_version.split(".")[0])
 
+Tag = namedtuple("Tag", ["tagname", "attrs"])
+ParsedUrlInfo = namedtuple("ParsedUrlInfo",
+                           ["url", "filename", "major", "minor", "micro"])
 
-class UrllibTransport(xmlrpclib.Transport):
-    def __init__(self, *args, **kwargs):
-        xmlrpclib.Transport.__init__(self, *args, **kwargs)
 
-    def request(self, host, handler, request_body, verbose=0):
-        self.verbose = verbose
-        scheme = "https"
-        url = "%(scheme)s://%(host)s%(handler)s" % locals()
-        req = Request(url, data=request_body, headers={'Content-Type': 'text/xml'})
-        fp = urlopen(req)
-        return self.parse_response(fp)
+def get_index_url_from_pip(pip):
+    cmd = [pip, "config", "get", "global.index-url"]
+    try:
+        return subprocess.check_output(cmd)
+    except subprocess.CalledProcessError as e:
+        print("Warning: Failed to get index-url from pip. (%s: %s)" % (type(e).__name__, e))
+        raise
+    except OSError as e:
+        print(
+            "Warning: Failed to get index-url from pip. (Failed to execute %s, %s: %s)"
+            % (cmd, type(e).__name__, e)
+        )
+        raise
+
+
+def get_index_url():
+    """
+    Use FRIDA_INDEX_URL or FRIDA_PIP environment variables to customize
+    index-url compatibale with PEP 503 or path to the pip executable file.
+    """
+    index_url = os.environ.get("FRIDA_INDEX_URL")
+    if index_url:
+        return index_url
+    pip = os.environ.get("FRIDA_PIP", DEFAULT_PIP)
+    try:
+        index_url = get_index_url_from_pip(pip)
+    except (subprocess.CalledProcessError, OSError):
+        return DEFAULT_INDEX_URL
+    else:
+        return index_url
+
+
+# XXX Writing a whole HTML parser from scratch is not possible, and I'm not
+#     familiar with HTML spec.
+#     Is it a good idea to add bs4 (or something similar) to `pyproject.toml`?
+class PEP503PageParser(HTMLParser):
+
+    def __init__(self, name, version, os_version, py_major_version):
+        HTMLParser.__init__(self)
+        filename_pattern = \
+            r"^{}\-{}\-py(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<micro>\d+))?-{}.egg$"\
+            .format(re.escape(name), re.escape(version), re.escape(os_version))
+        if py_major_version == 2:
+            filename_pattern = filename_pattern.decode("utf-8")
+        self._filename_pattern = re.compile(filename_pattern)
+
+    def reset(self):
+        HTMLParser.reset(self)
+        self._path = []
+        self.urls = []
+
+    def handle_starttag(self, tag, attrs):
+        self._path.append(Tag(tag, dict(attrs)))
+
+    def handle_endtag(self, tag):
+        if tag == u"a":
+            while True:
+                if self._path.pop()[0] == tag:
+                    break
+        else:
+            if self._path and self._path[-1][0] == tag:
+                self._path.pop()
+
+    def handle_data(self, data):
+        match = self._filename_pattern.match(data)
+        if match:
+            self.urls.append(ParsedUrlInfo(
+                self._path[-1].attrs["href"],
+                data,
+                *map(
+                    lambda g: int(g) if g else None,
+                    map(match.group, ["major", "minor", "micro"])
+                )
+            ))
 
 
 class FridaPrebuiltExt(build_ext):
@@ -104,25 +179,22 @@ class FridaPrebuiltExt(build_ext):
                 print("prebuilt extension not found in home directory, will try downloading it")
 
                 print("querying pypi for available prebuilds")
-                client = xmlrpclib.ServerProxy("https://pypi.python.org/pypi", transport=UrllibTransport())
-                urls = client.release_urls("frida", frida_version)
+                # index_url is a url compatible with PEP 503
+                index_url = get_index_url().strip()
+                frida_url = urljoin(index_url, "frida/")  # slash is necessary here
+                links_html = urlopen(frida_url, timeout=20).read().decode("utf-8")
 
-                urls = [url for url in urls if url['python_version'] != 'source']
-
-                if python_major_version >= 3:
-                    urls = [url for url in urls if parse_version(url['python_version'])[0] == python_major_version]
-                else:
-                    urls = [url for url in urls if parse_version(url['python_version']) == python_version]
-
-                os_suffix = "-{}.egg".format(os_version)
-                urls = [url for url in urls if url['filename'].endswith(os_suffix)]
+                parser = PEP503PageParser(
+                    "frida", frida_version, os_version, python_major_version)
+                parser.feed(links_html)
+                urls = [url for url in parser.urls if url.major == python_major_version]
 
                 if len(urls) == 0:
                     raise NotImplementedError("could not find prebuilt Frida extension; "
                                               "prebuilds only provided for Python 2.7 and 3.4+")
 
                 url = urls[0]
-                egg_url = url['url']
+                egg_url = urljoin(frida_url, url.url)
 
                 try:
                     print("downloading prebuilt extension from", egg_url)
@@ -146,10 +218,6 @@ class FridaPrebuiltExt(build_ext):
                 f.write(extension_data)
         else:
             shutil.copyfile(frida_extension, target)
-
-
-def parse_version(version):
-    return tuple(map(int, version.split(".")))
 
 
 setup(
