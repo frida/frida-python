@@ -72,7 +72,7 @@ def get_index_url_from_pip():
     except OSError as e:
         print(
             "Warning: Failed to get index-url from pip. (Failed to execute "
-            "{}, {}: {}".format(cmd, type(e).__name__, e)
+            "{}, {}: {})".format(cmd, type(e).__name__, e)
         )
         raise
 
