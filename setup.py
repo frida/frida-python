@@ -1,7 +1,16 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+import sys
+import os
+import platform
+import re
+import zipfile
+import shutil
+import struct
 import codecs
+import subprocess
+from collections import namedtuple
 try:
     from io import BytesIO
 except:
@@ -9,17 +18,6 @@ except:
         from cStringIO import StringIO as BytesIO
     except:
         from StringIO import StringIO as BytesIO
-import os
-import platform
-import re
-from setuptools import setup
-from setuptools.command.build_ext import build_ext
-from setuptools.extension import Extension
-import shutil
-import struct
-import subprocess
-from collections import namedtuple
-import sys
 try:
     from urllib.request import urlopen, Request
 except:
@@ -32,7 +30,10 @@ try:
     from html.parser import HTMLParser
 except:
     from HTMLParser import HTMLParser
-import zipfile
+
+from setuptools import setup
+from setuptools.command.build_ext import build_ext
+from setuptools.extension import Extension
 
 
 DEFAULT_INDEX_URL = "https://pypi.org/simple/"
