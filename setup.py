@@ -36,7 +36,6 @@ import zipfile
 
 
 DEFAULT_INDEX_URL = "https://pypi.org/simple/"
-DEFAULT_PIP = "pip"
 
 package_dir = os.path.dirname(os.path.realpath(__file__))
 pkg_info = os.path.join(package_dir, "PKG-INFO")
@@ -57,8 +56,8 @@ ParsedUrlInfo = namedtuple("ParsedUrlInfo",
                            ["url", "filename", "major", "minor", "micro"])
 
 
-def get_index_url_from_pip(pip):
-    cmd = [pip, "config", "get", "global.index-url"]
+def get_index_url_from_pip():
+    cmd = [sys.executable, "-m", "pip", "config", "get", "global.index-url"]
     try:
         return subprocess.check_output(cmd)
     except subprocess.CalledProcessError as e:
@@ -73,16 +72,15 @@ def get_index_url_from_pip(pip):
 
 
 def get_index_url():
-    """
-    Use FRIDA_INDEX_URL or FRIDA_PIP environment variables to customize
-    index-url compatibale with PEP 503 or path to the pip executable file.
+    """get `index-url` from environment or pip
+    Use FRIDA_INDEX_URL environment variable to customize index-url compatibale
+    with PEP 503.
     """
     index_url = os.environ.get("FRIDA_INDEX_URL")
     if index_url:
         return index_url
-    pip = os.environ.get("FRIDA_PIP", DEFAULT_PIP)
     try:
-        index_url = get_index_url_from_pip(pip)
+        index_url = get_index_url_from_pip()
     except (subprocess.CalledProcessError, OSError):
         return DEFAULT_INDEX_URL
     else:
