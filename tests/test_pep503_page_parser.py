@@ -56,12 +56,12 @@ htmls = [
 ]
 cases = [
     (
-        setup.PEP503PageParser("frida", "15.1.1", "win-amd64", py_major_version),
+        setup.PEP503PageParser("frida", "15.1.1", "win-amd64"),
         htmls[0],
         []
     ),
     (
-        setup.PEP503PageParser("frida", "1.4.1", "macosx-10.9-intel", py_major_version),
+        setup.PEP503PageParser("frida", "1.4.1", "macosx-10.9-intel"),
         htmls[0],
         [
             setup.ParsedUrlInfo(
@@ -72,17 +72,17 @@ cases = [
         ]
     ),
     (
-        setup.PEP503PageParser("frida", "1.4.1", "macosx-11.0-arm64", py_major_version),
+        setup.PEP503PageParser("frida", "1.4.1", "macosx-11.0-arm64"),
         htmls[0],
         []
     ),
     (
-        setup.PEP503PageParser("frida", "15.1.0", "win-amd64", py_major_version),
+        setup.PEP503PageParser("frida", "15.1.0", "win-amd64"),
         htmls[1],
         []
     ),
     (
-        setup.PEP503PageParser("frida", "15.0.7", "win-amd64", py_major_version),
+        setup.PEP503PageParser("frida", "15.0.7", "win-amd64"),
         htmls[1],
         [
             setup.ParsedUrlInfo(
@@ -98,7 +98,7 @@ cases = [
         ]
     ),
     (
-        setup.PEP503PageParser("frida", "15.0.7", "linux-i686", py_major_version),
+        setup.PEP503PageParser("frida", "15.0.7", "linux-i686"),
         htmls[1],
         [
             setup.ParsedUrlInfo(
@@ -114,7 +114,7 @@ cases = [
         ]
     ),
     (
-        setup.PEP503PageParser("frida", "15.0.8", "linux-x86_64", py_major_version),
+        setup.PEP503PageParser("frida", "15.0.8", "linux-x86_64"),
         htmls[1],
         [
             setup.ParsedUrlInfo(
@@ -130,12 +130,12 @@ cases = [
         ]
     ),
     (
-        setup.PEP503PageParser("frida", "15.0.7", "linux-amd64", py_major_version),
+        setup.PEP503PageParser("frida", "15.0.7", "linux-amd64"),
         htmls[1],
         []
     ),
     (
-        setup.PEP503PageParser("frida", "15.0.8", "macosx-11.0-fat64", py_major_version),
+        setup.PEP503PageParser("frida", "15.0.8", "macosx-11.0-fat64"),
         htmls[1],
         [
             setup.ParsedUrlInfo(

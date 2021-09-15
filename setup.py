@@ -37,6 +37,10 @@ import zipfile
 
 DEFAULT_INDEX_URL = "https://pypi.org/simple/"
 
+python_version = sys.version_info[0:2]
+python_major_version = python_version[0]
+PY2 = python_major_version == 2
+
 package_dir = os.path.dirname(os.path.realpath(__file__))
 pkg_info = os.path.join(package_dir, "PKG-INFO")
 in_source_package = os.path.isfile(pkg_info)
@@ -93,12 +97,12 @@ def get_index_url():
 #     Is it a good idea to add bs4 (or something similar) to `pyproject.toml`?
 class PEP503PageParser(HTMLParser):
 
-    def __init__(self, name, version, os_version, py_major_version):
+    def __init__(self, name, version, os_version):
         HTMLParser.__init__(self)
         filename_pattern = \
             r"^{}\-{}\-py(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<micro>\d+))?-{}.egg$"\
             .format(re.escape(name), re.escape(version), re.escape(os_version))
-        if py_major_version == 2:
+        if PY2:
             filename_pattern = filename_pattern.decode("utf-8")
         self._filename_pattern = re.compile(filename_pattern)
 
@@ -143,8 +147,6 @@ class FridaPrebuiltExt(build_ext):
             pass
 
         if in_source_package:
-            python_version = sys.version_info[0:2]
-            python_major_version = python_version[0]
             system = platform.system()
             arch = struct.calcsize('P') * 8
             if system == 'Windows':
@@ -194,8 +196,7 @@ class FridaPrebuiltExt(build_ext):
                     print(errmsg.format(timeout))
                     raise
 
-                parser = PEP503PageParser(
-                    "frida", frida_version, os_version, python_major_version)
+                parser = PEP503PageParser("frida", frida_version, os_version)
                 parser.feed(links_html)
                 urls = [url for url in parser.urls if url.major == python_major_version]
 
