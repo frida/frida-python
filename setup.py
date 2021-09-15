@@ -61,12 +61,13 @@ def get_index_url_from_pip():
     try:
         return subprocess.check_output(cmd)
     except subprocess.CalledProcessError as e:
-        print("Warning: Failed to get index-url from pip. (%s: %s)" % (type(e).__name__, e))
+        print("Warning: Failed to get index-url from pip. ({}: {})".format(
+            type(e).__name__, e))
         raise
     except OSError as e:
         print(
-            "Warning: Failed to get index-url from pip. (Failed to execute %s, %s: %s)"
-            % (cmd, type(e).__name__, e)
+            "Warning: Failed to get index-url from pip. (Failed to execute "
+            "{}, {}: {}".format(cmd, type(e).__name__, e)
         )
         raise
 
