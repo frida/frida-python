@@ -99,9 +99,9 @@ class PEP503PageParser(HTMLParser):
 
     def __init__(self, name, version, os_version):
         HTMLParser.__init__(self)
-        filename_pattern = \
-            r"^{}\-{}\-py(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<micro>\d+))?-{}.egg$"\
-            .format(re.escape(name), re.escape(version), re.escape(os_version))
+        filename_pattern = (
+            r"^{}\-{}\-py(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<micro>\d+))?-{}.egg$"
+        ).format(*map(re.escape, [name, version, os_version]))
         if PY2:
             filename_pattern = filename_pattern.decode("utf-8")
         self._filename_pattern = re.compile(filename_pattern)
@@ -117,13 +117,18 @@ class PEP503PageParser(HTMLParser):
     def handle_endtag(self, tag):
         if tag == u"a":
             while True:
-                if self._path.pop()[0] == tag:
+                if self._path.pop().tagname == tag:
                     break
         else:
-            if self._path and self._path[-1][0] == tag:
+            if self._path and self._path[-1].tagname == tag:
                 self._path.pop()
 
     def handle_data(self, data):
+        if not (self._path
+                and self._path[-1].tagname == u"a"
+                and self._path[-1].attrs.get("href")):
+            return
+
         match = self._filename_pattern.match(data)
         if match:
             self.urls.append(ParsedUrlInfo(
@@ -215,6 +220,7 @@ class FridaPrebuiltExt(build_ext):
                     print(errmsg.format(timeout))
                     raise
 
+            # TODO check the hash digest
             egg_file = BytesIO(egg_data)
 
             print("extracting prebuilt extension")
