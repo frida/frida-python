@@ -87,6 +87,8 @@ class FridaPrebuiltExt(build_ext):
                 machine = platform.machine()
                 if machine == "" or "86" in machine:
                     arch_name = "x86_64" if arch == 64 else "i686"
+                elif os_name == 'android' and machine.startswith("armv"):
+                    arch_name = 'armv7l'
                 else:
                     arch_name = machine
                 os_version = "{}-{}".format(os_name, arch_name)
