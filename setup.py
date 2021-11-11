@@ -10,7 +10,9 @@ import shutil
 import struct
 import codecs
 import subprocess
+import hashlib
 from collections import namedtuple
+from functools import partial
 try:
     from io import BytesIO
 except:
@@ -23,9 +25,9 @@ try:
 except:
     from urllib2 import urlopen, Request
 try:
-    from urllib.parse import urljoin
+    from urllib.parse import urljoin, urlparse
 except:
-    from urlparse import urljoin
+    from urlparse import urljoin, urlparse
 try:
     from html.parser import HTMLParser
 except:
@@ -151,6 +153,33 @@ class PEP503PageParser(HTMLParser):
             ))
 
 
+def check_pep503_hash(bytes_io, url):
+    parse_result = urlparse(url)
+    fragment = parse_result.fragment
+    if not fragment:
+        return
+
+    hashname, hashvalue = fragment.split("=")
+    if hashname not in {"md5", "sha1", "sha224", "sha256", "sha348", "sha512"}:
+        raise ValueError("Unsupported hash algorithm: {}, hashvalue={}".format(
+            hashname, hashvalue,
+        ))
+
+    h = hashlib.new(hashname)
+    for block in iter(partial(bytes_io.read, 4096), ""):  # iterate until EOF
+        h.update(block)
+    digest = h.digest()
+    bytes_io.seek(0)  # reset offset
+
+    if digest == hashvalue:
+        return
+    else:
+        raise ValueError(
+            "`{}` hash checking failed! Expected: {}, but got: {}".format(
+                hashname, hashvalue, digest)
+        )
+
+
 class FridaPrebuiltExt(build_ext):
     def build_extension(self, ext):
         target = self.get_ext_fullpath(ext.name)
@@ -232,8 +261,10 @@ class FridaPrebuiltExt(build_ext):
                     print(errmsg.format(timeout))
                     raise
 
-            # TODO check the hash digest
             egg_file = BytesIO(egg_data)
+
+            print("checking hash")
+            check_pep503_hash(egg_file, egg_url)
 
             print("extracting prebuilt extension")
             egg_zip = zipfile.ZipFile(egg_file)
