@@ -194,7 +194,7 @@ class FridaPrebuiltExt(build_ext):
                 timeout = 20
                 errmsg = (
                     "unable to download it within {} seconds; "
-                    "please download it mamuallt to {}"
+                    "please download it manually to {}"
                 ).format("{}", egg_path)
 
                 print("downloading package list from", frida_url)
