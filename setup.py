@@ -56,23 +56,27 @@ else:
     frida_extension = os.environ['FRIDA_EXTENSION']
 frida_major_version = int(frida_version.split(".")[0])
 
+index_url_pip_configs = ("global.index-url", "global.extra-index-url")
+
 Tag = namedtuple("Tag", ["tagname", "attrs"])
 ParsedUrlInfo = namedtuple("ParsedUrlInfo",
                            ["url", "filename", "major", "minor", "micro"])
 
 
-def get_index_url_from_pip():
-    cmd = [sys.executable, "-m", "pip", "config", "get", "global.index-url"]
+def get_index_url_from_pip(config_name):
+    assert config_name in index_url_pip_configs
+
+    cmd = [sys.executable, "-m", "pip", "config", "get", config_name]
     try:
         return subprocess.check_output(cmd)
     except subprocess.CalledProcessError as e:
-        print("Warning: Failed to get index-url from pip. ({}: {})".format(
-            type(e).__name__, e))
+        print("Warning: Failed to get {} from pip. ({}: {})".format(
+            config_name, type(e).__name__, e))
         raise
     except OSError as e:
         print(
-            "Warning: Failed to get index-url from pip. (Failed to execute "
-            "{}, {}: {})".format(cmd, type(e).__name__, e)
+            "Warning: Failed to get {} from pip. (Failed to execute "
+            "{}, {}: {})".format(config_name, cmd, type(e).__name__, e)
         )
         raise
 
@@ -85,12 +89,17 @@ def get_index_url():
     index_url = os.environ.get("FRIDA_INDEX_URL")
     if index_url:
         return index_url
-    try:
-        index_url = get_index_url_from_pip()
-    except (subprocess.CalledProcessError, OSError):
-        return DEFAULT_INDEX_URL
-    else:
-        return index_url
+
+    for config_name in index_url_pip_configs:
+        try:
+            index_url = get_index_url_from_pip(config_name)
+        except (subprocess.CalledProcessError, OSError):
+            pass
+        else:
+            return index_url
+
+    print("Using DEFAULT_INDEX_URL: {}".format(DEFAULT_INDEX_URL))
+    return DEFAULT_INDEX_URL
 
 
 # XXX Writing a whole HTML parser from scratch is not possible, and I'm not
