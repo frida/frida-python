@@ -54,18 +54,14 @@ if python_incdir == ''
   endif
 
   result = run_command(python, '-c',
-    'import sys; sys.stdout.write("%d.%d" % (sys.version_info[0], sys.version_info[1]))')
-  if result.returncode() != 0
-    error('Unable to detect Python version: ' + result.stdout() + result.stderr())
-  endif
+    'import sys; sys.stdout.write("%d.%d" % (sys.version_info[0], sys.version_info[1]))',
+    check: true)
   python_version = result.stdout()
   python_name = 'python' + python_version
 
   result = run_command(python, '-c',
-    'from distutils import sysconfig; import sys; sys.stdout.write(sysconfig.get_python_inc())')
-  if result.returncode() != 0
-    error('Unable to detect Python include directory: ' + result.stdout() + result.stderr())
-  endif
+    'from distutils import sysconfig; import sys; sys.stdout.write(sysconfig.get_python_inc())',
+    check: true)
   python_incdir = result.stdout()
 else
   py_major_v = cc.get_define('PY_MAJOR_VERSION',
