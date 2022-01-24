@@ -160,8 +160,10 @@ class FridaPrebuiltExt(build_ext):
             extension_member = [info for info in egg_zip.infolist() if info.filename.endswith(target_extension)][0]
             extension_data = egg_zip.read(extension_member)
             if system == 'Windows' and python_major_version >= 3:
-                extension_data = re.sub(b"python[3-9][0-9].dll",
-                                        "python{0}{1}.dll".format(*python_version).encode('utf-8'), extension_data)
+                trailer = b"\x00" if python_version[1] >= 10 else b"\x00\x00"
+                extension_data = re.sub(b"python[3-9][0-9][0-9]\\.dll\x00",
+                                        "python{0}{1}.dll".format(*python_version).encode('utf-8') + trailer,
+                                        extension_data)
             with open(target, 'wb') as f:
                 f.write(extension_data)
         else:
