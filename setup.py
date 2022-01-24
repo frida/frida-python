@@ -107,7 +107,10 @@ class FridaPrebuiltExt(build_ext):
             try:
                 with open(egg_path, "rb") as cache:
                     egg_data = cache.read()
-            except IOError as e:
+            except:
+                egg_data = None
+
+            if egg_data is None:
                 print("prebuilt extension not found in home directory, will try downloading it")
 
                 print("querying pypi for available prebuilds")
