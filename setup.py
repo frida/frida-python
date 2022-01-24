@@ -42,7 +42,6 @@ DEFAULT_INDEX_URL = "https://pypi.org/simple/"
 
 python_version = sys.version_info[0:2]
 python_major_version = python_version[0]
-PY2 = python_major_version == 2
 
 package_dir = os.path.dirname(os.path.realpath(__file__))
 pkg_info = os.path.join(package_dir, "PKG-INFO")
@@ -203,7 +202,7 @@ class PEP503PageParser(HTMLParser):
         filename_pattern = (
             r"^{}\-{}\-py(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<micro>\d+))?-{}.egg$"
         ).format(*map(re.escape, [name, version, os_version]))
-        if PY2:
+        if python_major_version == 2:
             filename_pattern = filename_pattern.decode("utf-8")
         self._filename_pattern = re.compile(filename_pattern)
 
