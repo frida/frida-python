@@ -97,6 +97,8 @@ class FridaPrebuiltExt(build_ext):
                 else:
                     arch_name = machine
                 os_version = "{}-{}".format(os_name, arch_name)
+            elif system == 'FreeBSD':
+                os_version = "freebsd-" + platform.machine()
             else:
                 raise NotImplementedError("unsupported OS")
 
