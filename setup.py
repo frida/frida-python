@@ -55,7 +55,6 @@ else:
     frida_version = os.environ['FRIDA_VERSION']
     long_description = codecs.open(os.path.join(package_dir, "README.md"), "r", 'utf-8').read()
     frida_extension = os.environ['FRIDA_EXTENSION']
-frida_major_version = int(frida_version.split(".")[0])
 
 index_url_pip_configs = ("global.index-url", "global.extra-index-url")
 
