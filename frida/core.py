@@ -33,7 +33,7 @@ def cancellable(f):
     return wrapper
 
 
-class DeviceManager(object):
+class DeviceManager:
     def __init__(self, impl):
         self._impl = impl
 
@@ -81,7 +81,7 @@ class DeviceManager(object):
         self._impl.off(signal, callback)
 
 
-class Device(object):
+class Device:
     def __init__(self, device):
         self.id = device.id
         self.name = device.name
@@ -198,7 +198,7 @@ class Device(object):
             return self.get_process(target).pid
 
 
-class Bus(object):
+class Bus:
     def __init__(self, impl):
         self._impl = impl
         self._on_message_callbacks = []
@@ -235,7 +235,7 @@ class Bus(object):
                 traceback.print_exc()
 
 
-class Session(object):
+class Session:
     def __init__(self, impl):
         self._impl = impl
 
@@ -293,7 +293,7 @@ class Session(object):
         self._impl.off(signal, callback)
 
 
-class Script(object):
+class Script:
     def __init__(self, impl):
         self.exports = ScriptExports(self)
 
@@ -466,7 +466,7 @@ class RPCException(Exception):
         return self.args[2] if len(self.args) >= 3 else self.args[0]
 
 
-class ScriptExports(object):
+class ScriptExports:
     def __init__(self, script):
         self._script = script
 
@@ -481,7 +481,7 @@ class ScriptExports(object):
         return self._script.list_exports()
 
 
-class PortalMembership(object):
+class PortalMembership:
     def __init__(self, impl):
         self._impl = impl
 
@@ -490,7 +490,7 @@ class PortalMembership(object):
         self._impl.terminate()
 
 
-class EndpointParameters(object):
+class EndpointParameters:
     def __init__(self, address=None, port=None, certificate=None, origin=None, authentication=None, asset_root=None):
         kw = {}
 
@@ -521,7 +521,7 @@ class EndpointParameters(object):
         self._impl = _frida.EndpointParameters(**kw)
 
 
-class PortalService(object):
+class PortalService:
     def __init__(self, cluster_params=EndpointParameters(), control_params=None):
         args = [cluster_params._impl]
         if control_params is not None:
@@ -600,7 +600,7 @@ class PortalService(object):
                 traceback.print_exc()
 
 
-class Compiler(object):
+class Compiler:
     def __init__(self):
         self._impl = _frida.Compiler(get_device_manager()._impl)
 
@@ -622,7 +622,7 @@ class Compiler(object):
         self._impl.off(signal, callback)
 
 
-class IOStream(object):
+class IOStream:
     def __init__(self, impl):
         self._impl = impl
 
@@ -654,7 +654,7 @@ class IOStream(object):
         self._impl.write_all(data)
 
 
-class Cancellable(object):
+class Cancellable:
     def __init__(self):
         self._impl = _Cancellable()
 
@@ -691,7 +691,7 @@ class Cancellable(object):
         self._impl.cancel()
 
 
-class CancellablePollFD(object):
+class CancellablePollFD:
     def __init__(self, cancellable):
         self.handle = cancellable.get_fd()
         self._cancellable = cancellable

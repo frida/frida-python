@@ -4,7 +4,7 @@ import frida
 from frida_tools.application import Reactor
 
 
-class Application(object):
+class Application:
     def __init__(self):
         self._stop_requested = threading.Event()
         self._reactor = Reactor(run_until_return=lambda reactor: self._stop_requested.wait())
