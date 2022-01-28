@@ -1,5 +1,3 @@
-import threading
-
 try:
     import _frida
 except Exception as ex:
