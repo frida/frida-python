@@ -14,7 +14,6 @@ except Exception as ex:
     raise ex
 from . import core
 
-
 __version__ = _frida.__version__
 
 get_device_manager = core.get_device_manager
@@ -70,15 +69,15 @@ def inject_library_blob(target, blob, entrypoint, data, **kwargs):
 
 
 def get_local_device(**kwargs):
-    return get_device_matching(lambda d: d.type == 'local', timeout=0, **kwargs)
+    return get_device_matching(lambda d: d.type == "local", timeout=0, **kwargs)
 
 
 def get_remote_device(**kwargs):
-    return get_device_matching(lambda d: d.type == 'remote', timeout=0, **kwargs)
+    return get_device_matching(lambda d: d.type == "remote", timeout=0, **kwargs)
 
 
 def get_usb_device(timeout=0, **kwargs):
-    return get_device_matching(lambda d: d.type == 'usb', timeout, **kwargs)
+    return get_device_matching(lambda d: d.type == "usb", timeout, **kwargs)
 
 
 def get_device(id, timeout=0, **kwargs):

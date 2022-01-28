@@ -14,6 +14,7 @@ import frida
 def on_uninjected(id):
     print("on_uninjected id=%u" % id)
 
+
 (target, library_path) = sys.argv[1:]
 
 device = frida.get_local_device()

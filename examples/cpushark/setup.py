@@ -5,21 +5,21 @@ Usage:
     python setup.py py2app
 """
 
-from setuptools import setup
 import py2app
+from setuptools import setup
 
 plist = dict(
-    CFBundleShortVersionString='CpuShark v1',
-    CFBundleIconFile='CpuShark.icns',
-    CFBundleGetInfoString='CpuShark v1',
-    CFBundleIdentifier='com.tillitech.CpuShark',
+    CFBundleShortVersionString="CpuShark v1",
+    CFBundleIconFile="CpuShark.icns",
+    CFBundleGetInfoString="CpuShark v1",
+    CFBundleIdentifier="com.tillitech.CpuShark",
     CFBundleDocumentTypes=[],
-    CFBundleName='CpuShark'
+    CFBundleName="CpuShark",
 )
 
 setup(
     app=["CpuShark.py"],
     data_files=["MainMenu.xib", "MainWindow.xib"],
-    options={'py2app': {'plist': plist}},
-    setup_requires=['py2app'],
+    options={"py2app": {"plist": plist}},
+    setup_requires=["py2app"],
 )

@@ -1,10 +1,11 @@
-import frida
-from frida_tools.application import Reactor
 import hashlib
 import hmac
 import json
 from pathlib import Path
 
+from frida_tools.application import Reactor
+
+import frida
 
 ENABLE_CONTROL_INTERFACE = True
 
@@ -13,16 +14,17 @@ class Application:
     def __init__(self):
         self._reactor = Reactor(run_until_return=self._process_input)
 
-        cluster_params = frida.EndpointParameters(address="unix:/Users/oleavr/src/cluster",
-                                                  certificate="/Users/oleavr/src/identity2.pem",
-                                                  authentication=('token', "wow-such-secret"))
+        cluster_params = frida.EndpointParameters(
+            address="unix:/Users/oleavr/src/cluster",
+            certificate="/Users/oleavr/src/identity2.pem",
+            authentication=("token", "wow-such-secret"),
+        )
 
         if ENABLE_CONTROL_INTERFACE:
             www = Path(__file__).parent.resolve() / "web_client" / "dist"
-            control_params = frida.EndpointParameters(address="::1",
-                                                      port=27042,
-                                                      authentication=('callback', self._authenticate),
-                                                      asset_root=www)
+            control_params = frida.EndpointParameters(
+                address="::1", port=27042, authentication=("callback", self._authenticate), asset_root=www
+            )
         else:
             control_params = None
 
@@ -33,15 +35,20 @@ class Application:
         self._nicks = set()
         self._channels = {}
 
-        service.on('node-connected', lambda *args: self._reactor.schedule(lambda: self._on_node_connected(*args)))
-        service.on('node-joined', lambda *args: self._reactor.schedule(lambda: self._on_node_joined(*args)))
-        service.on('node-left', lambda *args: self._reactor.schedule(lambda: self._on_node_left(*args)))
-        service.on('node-disconnected', lambda *args: self._reactor.schedule(lambda: self._on_node_disconnected(*args)))
-        service.on('controller-connected', lambda *args: self._reactor.schedule(lambda: self._on_controller_connected(*args)))
-        service.on('controller-disconnected', lambda *args: self._reactor.schedule(lambda: self._on_controller_disconnected(*args)))
-        service.on('authenticated', lambda *args: self._reactor.schedule(lambda: self._on_authenticated(*args)))
-        service.on('subscribe', lambda *args: self._reactor.schedule(lambda: self._on_subscribe(*args)))
-        service.on('message', lambda *args: self._reactor.schedule(lambda: self._on_message(*args)))
+        service.on("node-connected", lambda *args: self._reactor.schedule(lambda: self._on_node_connected(*args)))
+        service.on("node-joined", lambda *args: self._reactor.schedule(lambda: self._on_node_joined(*args)))
+        service.on("node-left", lambda *args: self._reactor.schedule(lambda: self._on_node_left(*args)))
+        service.on("node-disconnected", lambda *args: self._reactor.schedule(lambda: self._on_node_disconnected(*args)))
+        service.on(
+            "controller-connected", lambda *args: self._reactor.schedule(lambda: self._on_controller_connected(*args))
+        )
+        service.on(
+            "controller-disconnected",
+            lambda *args: self._reactor.schedule(lambda: self._on_controller_disconnected(*args)),
+        )
+        service.on("authenticated", lambda *args: self._reactor.schedule(lambda: self._on_authenticated(*args)))
+        service.on("subscribe", lambda *args: self._reactor.schedule(lambda: self._on_subscribe(*args)))
+        service.on("message", lambda *args: self._reactor.schedule(lambda: self._on_message(*args)))
 
     def run(self):
         self._reactor.schedule(self._start)
@@ -74,8 +81,8 @@ class Application:
     def _authenticate(self, raw_token):
         try:
             token = json.loads(raw_token)
-            nick = str(token['nick'])
-            secret = token['secret'].encode('utf-8')
+            nick = str(token["nick"])
+            secret = token["secret"].encode("utf-8")
         except:
             raise ValueError("invalid request")
 
@@ -85,7 +92,7 @@ class Application:
             raise ValueError("get outta here")
 
         return {
-            'nick': nick,
+            "nick": nick,
         }
 
     def _on_node_connected(self, connection_id, remote_address):
@@ -118,37 +125,30 @@ class Application:
         peer = self._peers.get(connection_id, None)
         if peer is None:
             return
-        peer.nick = self._acquire_nick(session_info['nick'])
+        peer.nick = self._acquire_nick(session_info["nick"])
 
     def _on_subscribe(self, connection_id):
         print("on_subscribe()", connection_id)
-        self._service.post(connection_id, {
-            'type': 'welcome',
-            'channels': list(self._channels.keys())
-        })
+        self._service.post(connection_id, {"type": "welcome", "channels": list(self._channels.keys())})
 
     def _on_message(self, connection_id, message, data):
         peer = self._peers[connection_id]
 
-        mtype = message['type']
-        if mtype == 'join':
-            self._get_channel(message['channel']).add_member(peer)
-        elif mtype == 'part':
-            channel = self._channels.get(message['channel'], None)
+        mtype = message["type"]
+        if mtype == "join":
+            self._get_channel(message["channel"]).add_member(peer)
+        elif mtype == "part":
+            channel = self._channels.get(message["channel"], None)
             if channel is None:
                 return
             channel.remove_member(peer)
-        elif mtype == 'say':
-            channel = self._channels.get(message['channel'], None)
+        elif mtype == "say":
+            channel = self._channels.get(message["channel"], None)
             if channel is None:
                 return
-            channel.post(message['text'], peer)
-        elif mtype == 'announce':
-            self._service.broadcast({
-                'type': 'announce',
-                'sender': peer.nick,
-                'text': message['text']
-            })
+            channel.post(message["text"], peer)
+        elif mtype == "announce":
+            self._service.broadcast({"type": "announce", "sender": peer.nick, "text": message["text"]})
         else:
             print("Unhandled message:", message)
 
@@ -183,10 +183,7 @@ class Peer:
         self.memberships = set()
 
     def to_json(self):
-        return {
-            'nick': self.nick,
-            'address': self.remote_address[0]
-        }
+        return {"nick": self.nick, "address": self.remote_address[0]}
 
 
 class Channel:
@@ -204,19 +201,18 @@ class Channel:
         peer.memberships.add(self)
         self.members.add(peer)
 
-        self._service.narrowcast(self.name, {
-            'type': 'join',
-            'channel': self.name,
-            'user': peer.to_json()
-        })
+        self._service.narrowcast(self.name, {"type": "join", "channel": self.name, "user": peer.to_json()})
         self._service.tag(peer.connection_id, self.name)
 
-        self._service.post(peer.connection_id, {
-            'type': 'membership',
-            'channel': self.name,
-            'members': [peer.to_json() for peer in self.members],
-            'history': self.history
-        })
+        self._service.post(
+            peer.connection_id,
+            {
+                "type": "membership",
+                "channel": self.name,
+                "members": [peer.to_json() for peer in self.members],
+                "history": self.history,
+            },
+        )
 
     def remove_member(self, peer):
         if self not in peer.memberships:
@@ -226,21 +222,13 @@ class Channel:
         self.members.remove(peer)
 
         self._service.untag(peer.connection_id, self.name)
-        self._service.narrowcast(self.name, {
-            'type': 'part',
-            'channel': self.name,
-            'user': peer.to_json()
-        })
+        self._service.narrowcast(self.name, {"type": "part", "channel": self.name, "user": peer.to_json()})
 
     def post(self, text, peer):
         if self not in peer.memberships:
             return
 
-        item = {
-            'type': 'chat',
-            'sender': peer.nick,
-            'text': text
-        }
+        item = {"type": "chat", "sender": peer.nick, "text": text}
 
         self._service.narrowcast(self.name, item)
 
@@ -250,6 +238,6 @@ class Channel:
             history.pop(0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app = Application()
     app.run()

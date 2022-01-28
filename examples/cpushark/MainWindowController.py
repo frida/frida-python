@@ -1,7 +1,9 @@
-import frida
 from Capture import Capture, CaptureState, TargetFunction
 from Cocoa import NSRunCriticalAlertPanel, NSUserDefaults, NSWindowController, objc
 from ProcessList import ProcessList
+
+import frida
+
 
 class MainWindowController(NSWindowController):
     processCombo = objc.IBOutlet()
@@ -26,7 +28,7 @@ class MainWindowController(NSWindowController):
     def windowDidLoad(self):
         NSWindowController.windowDidLoad(self)
 
-        device = [device for device in frida.get_device_manager().enumerate_devices() if device.type == 'local'][0]
+        device = [device for device in frida.get_device_manager().enumerate_devices() if device.type == "local"][0]
         self.processList = ProcessList(device)
         self.capture = Capture(device)
         self.processCombo.setUsesDataSource_(True)
@@ -127,4 +129,3 @@ class MainWindowController(NSWindowController):
 
     def callItemDidChange_(self, item):
         self.callTableView.reloadItem_reloadChildren_(item, True)
-

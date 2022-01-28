@@ -1,5 +1,6 @@
-import frida
 from frida_tools.application import Reactor
+
+import frida
 
 
 class Application:
@@ -19,9 +20,10 @@ class Application:
 
         session = self._device.attach("hello2", persist_timeout=30)
         self._session = session
-        session.on('detached', lambda *args: self._reactor.schedule(lambda: self._on_detached(*args)))
+        session.on("detached", lambda *args: self._reactor.schedule(lambda: self._on_detached(*args)))
 
-        script = session.create_script("""
+        script = session.create_script(
+            """
 let _puts = null;
 
 Interceptor.attach(DebugSymbol.getFunctionByName('f'), {
@@ -46,9 +48,10 @@ function puts(s) {
   }
   _puts(Memory.allocUtf8String(s));
 }
-""")
+"""
+        )
         self._script = script
-        script.on('message', lambda *args: self._reactor.schedule(lambda: self._on_message(*args)))
+        script.on("message", lambda *args: self._reactor.schedule(lambda: self._on_message(*args)))
         script.load()
 
     def _process_input(self, reactor):

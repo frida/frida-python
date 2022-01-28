@@ -1,7 +1,8 @@
 import threading
 
-import frida
 from frida_tools.application import Reactor
+
+import frida
 
 
 class Application:
@@ -27,7 +28,7 @@ class Application:
             "SNAKE": "mushroom-mushroom",
         }
         print(f"✔ spawn(argv={argv})")
-        pid = self._device.spawn(argv, env=env, stdio='pipe')
+        pid = self._device.spawn(argv, env=env, stdio="pipe")
         self._instrument(pid)
 
     def _stop_if_idle(self):
@@ -41,7 +42,8 @@ class Application:
         print("✔ enable_child_gating()")
         session.enable_child_gating()
         print("✔ create_script()")
-        script = session.create_script("""\
+        script = session.create_script(
+            """\
 Interceptor.attach(Module.getExportByName(null, 'open'), {
   onEnter: function (args) {
     send({
@@ -50,7 +52,8 @@ Interceptor.attach(Module.getExportByName(null, 'open'), {
     });
   }
 });
-""")
+"""
+        )
         script.on("message", lambda message, data: self._reactor.schedule(lambda: self._on_message(pid, message)))
         print("✔ load()")
         script.load()

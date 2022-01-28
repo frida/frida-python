@@ -2,6 +2,7 @@ from Cocoa import NSApp
 from Foundation import NSObject
 from MainWindowController import MainWindowController
 
+
 class AppDelegate(NSObject):
     def applicationDidFinishLaunching_(self, notification):
         window = MainWindowController()

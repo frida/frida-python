@@ -1,10 +1,12 @@
 import bisect
-from Foundation import NSAutoreleasePool, NSObject, NSThread
-from PyObjCTools import AppHelper
 import re
 import struct
 
+from Foundation import NSAutoreleasePool, NSObject, NSThread
+from PyObjCTools import AppHelper
+
 PROBE_CALLS = re.compile(r"^\/stalker\/probes\/(.*?)\/calls$")
+
 
 class Capture(NSObject):
     def __new__(cls, device):
@@ -31,7 +33,7 @@ class Capture(NSObject):
     def attachToProcess_triggerPort_(self, process, triggerPort):
         assert self.state == CaptureState.DETACHED
         self._updateState_(CaptureState.ATTACHING)
-        NSThread.detachNewThreadSelector_toTarget_withObject_('_doAttachWithParams:', self, (process.pid, triggerPort))
+        NSThread.detachNewThreadSelector_toTarget_withObject_("_doAttachWithParams:", self, (process.pid, triggerPort))
 
     def detach(self):
         assert self.state == CaptureState.ATTACHED
@@ -40,10 +42,10 @@ class Capture(NSObject):
         self.session = None
         self.script = None
         self._updateState_(CaptureState.DETACHED)
-        NSThread.detachNewThreadSelector_toTarget_withObject_('_doDetachWithParams:', self, (session, script))
+        NSThread.detachNewThreadSelector_toTarget_withObject_("_doDetachWithParams:", self, (session, script))
 
     def _post(self, message):
-        NSThread.detachNewThreadSelector_toTarget_withObject_('_doPostWithParams:', self, (self.script, message))
+        NSThread.detachNewThreadSelector_toTarget_withObject_("_doPostWithParams:", self, (self.script, message))
 
     def _updateState_(self, newState):
         self.state = newState
@@ -57,11 +59,9 @@ class Capture(NSObject):
         error = None
         try:
             session = self.device.attach(pid)
-            session.on('detached', self._onSessionDetached)
-            script = session.create_script(name="cpushark", source=SCRIPT_TEMPLATE % {
-                'trigger_port': triggerPort
-            })
-            script.on('message', self._onScriptMessage)
+            session.on("detached", self._onSessionDetached)
+            script = session.create_script(name="cpushark", source=SCRIPT_TEMPLATE % {"trigger_port": triggerPort})
+            script.on("message", self._onScriptMessage)
             script.load()
         except Exception as e:
             if session is not None:
@@ -113,15 +113,15 @@ class Capture(NSObject):
             self._updateState_(CaptureState.DETACHED)
 
     def _sessionDidReceiveMessage_data_(self, message, data):
-        if message['type'] == 'send':
-            stanza = message['payload']
-            fromAddress = stanza['from']
-            name = stanza['name']
-            if fromAddress == "/process/modules" and name == '+sync':
-                self.modules._sync(stanza['payload'])
-            elif fromAddress == "/stalker/calls" and name == '+add':
-                self.calls._add_(stanza['payload'])
-            elif fromAddress == "/interceptor/functions" and name == '+add':
+        if message["type"] == "send":
+            stanza = message["payload"]
+            fromAddress = stanza["from"]
+            name = stanza["name"]
+            if fromAddress == "/process/modules" and name == "+sync":
+                self.modules._sync(stanza["payload"])
+            elif fromAddress == "/stalker/calls" and name == "+add":
+                self.calls._add_(stanza["payload"])
+            elif fromAddress == "/interceptor/functions" and name == "+add":
                 self.recvTotal += 1
                 self._delegate.captureRecvTotalDidChange()
             else:
@@ -136,10 +136,12 @@ class Capture(NSObject):
     def _onScriptMessage(self, message, data):
         AppHelper.callAfter(self._sessionDidReceiveMessage_data_, message, data)
 
+
 class CaptureState:
     DETACHED = 1
     ATTACHING = 2
     ATTACHED = 3
+
 
 class Modules:
     def __init__(self):
@@ -148,11 +150,11 @@ class Modules:
 
     def _sync(self, payload):
         modules = []
-        for item in payload['items']:
-            modules.append(Module(item['name'], int(item['base'], 16), item['size']))
+        for item in payload["items"]:
+            modules.append(Module(item["name"], int(item["base"], 16), item["size"]))
         modules.sort(lambda x, y: x.address - y.address)
         self._modules = modules
-        self._indices = [ m.address for m in modules ]
+        self._indices = [m.address for m in modules]
 
     def lookup(self, addr):
         idx = bisect.bisect(self._indices, addr)
@@ -163,6 +165,7 @@ class Modules:
             return None
         return m
 
+
 class Module:
     def __init__(self, name, address, size):
         self.name = name
@@ -171,6 +174,7 @@ class Module:
 
     def __repr__(self):
         return "(%d, %d, %s)" % (self.address, self.size, self.name)
+
 
 class Calls(NSObject):
     def __new__(cls, capture):
@@ -192,28 +196,16 @@ class Calls(NSObject):
         self._delegate = delegate
 
     def addProbe_(self, func):
-        self.capture._post({
-            'to': "/stalker/probes",
-            'name': '+add',
-            'payload': {
-                'address': "0x%x" % func.address
-            }
-        })
+        self.capture._post({"to": "/stalker/probes", "name": "+add", "payload": {"address": "0x%x" % func.address}})
         self._probes[func.address] = func
 
     def removeProbe_(self, func):
-        self.capture._post({
-            'to': "/stalker/probes",
-            'name': '+remove',
-            'payload': {
-                'address': "0x%x" % func.address
-            }
-        })
+        self.capture._post({"to": "/stalker/probes", "name": "+remove", "payload": {"address": "0x%x" % func.address}})
         self._probes.pop(func.address, None)
 
     def _add_(self, data):
         modules = self.capture.modules
-        for rawTarget, count in data['summary'].items():
+        for rawTarget, count in data["summary"].items():
             target = int(rawTarget, 16)
             tm = self.getTargetModuleByModule_(modules.lookup(target))
             if tm is not None:
@@ -237,13 +229,13 @@ class Calls(NSObject):
             return x.total - y.total
 
     def _handleStanza_(self, stanza):
-        m = PROBE_CALLS.match(stanza['from'])
+        m = PROBE_CALLS.match(stanza["from"])
         if m is not None:
             func = self._probes.get(int(m.groups()[0], 16), None)
             if func is not None:
                 if len(func.calls) == 3:
                     func.calls.pop(0)
-                func.calls.append(FunctionCall(func, stanza['payload']['args']))
+                func.calls.append(FunctionCall(func, stanza["payload"]["args"]))
                 self._delegate.callItemDidChange_(func)
             return True
         return False
@@ -291,26 +283,27 @@ class Calls(NSObject):
     def outlineView_objectValueForTableColumn_byItem_(self, outlineView, tableColumn, item):
         identifier = tableColumn.identifier()
         if isinstance(item, TargetModule):
-            if identifier == 'name':
+            if identifier == "name":
                 return item.module.name
-            elif identifier == 'total':
+            elif identifier == "total":
                 return item.total
             else:
                 return False
         elif isinstance(item, TargetFunction):
-            if identifier == 'name':
+            if identifier == "name":
                 return item.name
-            elif identifier == 'total':
+            elif identifier == "total":
                 return item.total
             else:
                 return item.hasProbe
         else:
-            if identifier == 'name':
+            if identifier == "name":
                 return item.summary
-            elif identifier == 'total':
+            elif identifier == "total":
                 return ""
             else:
                 return False
+
 
 class TargetModule(NSObject):
     def __new__(cls, module):
@@ -332,6 +325,7 @@ class TargetModule(NSObject):
             self._functionByAddress[address] = f
         return f
 
+
 class TargetFunction(NSObject):
     def __new__(cls, module, offset):
         return cls.alloc().initWithModule_offset_(module, offset)
@@ -347,6 +341,7 @@ class TargetFunction(NSObject):
         self.calls = []
         return self
 
+
 class FunctionCall(NSObject):
     def __new__(cls, func, args):
         return cls.alloc().initWithFunction_args_(func, args)
@@ -357,6 +352,7 @@ class FunctionCall(NSObject):
         self.args = args
         self.summary = f"{func.name}({', '.join(args)})"
         return self
+
 
 SCRIPT_TEMPLATE = """
 var probes = Object.create(null);

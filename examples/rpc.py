@@ -1,8 +1,8 @@
 import frida
 
-
 session = frida.attach("Twitter")
-script = session.create_script("""\
+script = session.create_script(
+    """\
 rpc.exports = {
   hello: function () {
     return 'Hello';
@@ -11,7 +11,8 @@ rpc.exports = {
     oops;
   }
 };
-""")
+"""
+)
 script.load()
 api = script.exports
 print("api.hello() =>", api.hello())

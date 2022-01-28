@@ -3,47 +3,42 @@ import unittest
 
 import setup
 
-
 py_major_version = sys.version_info[0]
 htmls = []
 cases = []
 
 
 html = (
-    '<!DOCTYPE html>\n<html>\n  <head>\n    <title>Links for frida</title>\n '
+    "<!DOCTYPE html>\n<html>\n  <head>\n    <title>Links for frida</title>\n "
     ' </head>\n  <body>\n    <h1>Links for frida</h1>\n    <a href="../../pac'
-    'kages/5d/80/3b140c5998df9d81e40169f188a2347b6c705156a2b556ff308e2f8b7e0a'
-    '/frida-1.4.1-py2.6-macosx-10.9-intel.egg#sha256=eef92210084ef083b34f8972'
+    "kages/5d/80/3b140c5998df9d81e40169f188a2347b6c705156a2b556ff308e2f8b7e0a"
+    "/frida-1.4.1-py2.6-macosx-10.9-intel.egg#sha256=eef92210084ef083b34f8972"
     '078550c6ef45255e444905f95495792c7f709546">frida-1.4.1-py2.6-macosx-10.9-'
     'intel.egg</a><br/>\n<a href="../../packages/4e/ca/ee40ef1d5013300a77152f'
-    'f0687caedc3b5ea1f786bf3e0b778de5fc0b8a/frida-9.1.9.tar.gz#sha256=d215884'
+    "f0687caedc3b5ea1f786bf3e0b778de5fc0b8a/frida-9.1.9.tar.gz#sha256=d215884"
     '4cc20cd3e2f8d2cd95f90449f0c27d051d9868706c1eda5d357eb86d7">frida-9.1.9.t'
-    'ar.gz</a><br/>\n  </body>\n</html>\n<!--SERIAL 11362971-->'
+    "ar.gz</a><br/>\n  </body>\n</html>\n<!--SERIAL 11362971-->"
 )
 htmls.append(html)
-cases.extend([
-    (
-        setup.PEP503PageParser("frida", "15.1.1", "win-amd64"),
-        html,
-        []
-    ),
-    (
-        setup.PEP503PageParser("frida", "1.4.1", "macosx-10.9-intel"),
-        html,
-        [
-            setup.ParsedUrlInfo(
-                url='../../packages/5d/80/3b140c5998df9d81e40169f188a2347b6c705156a2b556ff308e2f8b7e0a/frida-1.4.1-py2.6-macosx-10.9-intel.egg#sha256=eef92210084ef083b34f8972078550c6ef45255e444905f95495792c7f709546',
-                filename='frida-1.4.1-py2.6-macosx-10.9-intel.egg',
-                major=2, minor=6, micro=None
-            )
-        ]
-    ),
-    (
-        setup.PEP503PageParser("frida", "1.4.1", "macosx-11.0-arm64"),
-        html,
-        []
-    ),
-])
+cases.extend(
+    [
+        (setup.PEP503PageParser("frida", "15.1.1", "win-amd64"), html, []),
+        (
+            setup.PEP503PageParser("frida", "1.4.1", "macosx-10.9-intel"),
+            html,
+            [
+                setup.ParsedUrlInfo(
+                    url="../../packages/5d/80/3b140c5998df9d81e40169f188a2347b6c705156a2b556ff308e2f8b7e0a/frida-1.4.1-py2.6-macosx-10.9-intel.egg#sha256=eef92210084ef083b34f8972078550c6ef45255e444905f95495792c7f709546",
+                    filename="frida-1.4.1-py2.6-macosx-10.9-intel.egg",
+                    major=2,
+                    minor=6,
+                    micro=None,
+                )
+            ],
+        ),
+        (setup.PEP503PageParser("frida", "1.4.1", "macosx-11.0-arm64"), html, []),
+    ]
+)
 
 html = (
     '<a href="../../packages/e3/21/da75f6207f76750799d68938707a74d46512e666293eb550247bf5314613/frida-15.0.7-py2.7-linux-i686.egg#sha256=444246bad3b2222efec301e96c2d6ac5da039d41acd655f6d5b6e548637cae09">frida-15.0.7-py2.7-linux-i686.egg</a><br/>'
@@ -80,121 +75,137 @@ html = (
     '<a href="../../packages/e4/0f/9954d94b174ba703b7018ae01c5e37189715a7b1616a2341794ccbefe834/frida-15.0.8.tar.gz#sha256=de2df2924770601ce39cdc992fa3690b4a0891d614a515cad03bc1b94e762ff1">frida-15.0.8.tar.gz</a><br/>'
 )
 htmls.append(html)
-cases.extend([
-    (
-        setup.PEP503PageParser("frida", "15.1.0", "win-amd64"),
-        html,
-        []
-    ),
-    (
-        setup.PEP503PageParser("frida", "15.0.7", "win-amd64"),
-        html,
-        [
-            setup.ParsedUrlInfo(
-                url='../../packages/e0/5c/b45c8f27482d81179eb640726b703f95c624cc4f32ae3ed3f8bc858ae5d9/frida-15.0.7-py2.7-win-amd64.egg#sha256=eb696528b9c19f1895123e731b094363a87a4412d7ea4fcb54ef71841f7b3c1e',
-                filename='frida-15.0.7-py2.7-win-amd64.egg',
-                major=2, minor=7, micro=None
-            ),
-            setup.ParsedUrlInfo(
-                url='../../packages/77/34/6ebaea697f3df72818e60c6494a716c51f7f13b3da323598c1711d21779c/frida-15.0.7-py3.8-win-amd64.egg#sha256=a9964cc6dd4e3ea71c42b1800c79571c670905dc82cd769302b066499fff7bf4',
-                filename='frida-15.0.7-py3.8-win-amd64.egg',
-                major=3, minor=8, micro=None
-            ),
-        ]
-    ),
-    (
-        setup.PEP503PageParser("frida", "15.0.7", "linux-i686"),
-        html,
-        [
-            setup.ParsedUrlInfo(
-                url='../../packages/e3/21/da75f6207f76750799d68938707a74d46512e666293eb550247bf5314613/frida-15.0.7-py2.7-linux-i686.egg#sha256=444246bad3b2222efec301e96c2d6ac5da039d41acd655f6d5b6e548637cae09',
-                filename='frida-15.0.7-py2.7-linux-i686.egg',
-                major=2, minor=7, micro=None
-            ),
-            setup.ParsedUrlInfo(
-                url='../../packages/19/d3/a4a1980005e232399575aeb2ae973d2087a94ec7dbaf6d7a481612979fc7/frida-15.0.7-py3.8-linux-i686.egg#sha256=ed922ec0258e95f39b4004066b72fb48546041d28602e55d44ca12effa80e8bf',
-                filename='frida-15.0.7-py3.8-linux-i686.egg',
-                major=3, minor=8, micro=None
-            ),
-        ]
-    ),
-    (
-        setup.PEP503PageParser("frida", "15.0.8", "linux-x86_64"),
-        html,
-        [
-            setup.ParsedUrlInfo(
-                url='../../packages/64/4a/1e1735a8c2f606c953cccfb9d7086c15d19b5151ebd6e0cbcab2e817d6e2/frida-15.0.8-py2.7-linux-x86_64.egg#sha256=e5b29da8394ef5643fc42877856859d544cd2aba0a874a4a700f2ce4521d9780',
-                filename='frida-15.0.8-py2.7-linux-x86_64.egg',
-                major=2, minor=7, micro=None
-            ),
-            setup.ParsedUrlInfo(
-                url='../../packages/0b/20/11101c2cc053bbe3695c8778ffb239e49c0bc24066257bc3246ef67770d9/frida-15.0.8-py3.8-linux-x86_64.egg#sha256=6b3f42225c22a1f149107f963abe9f7b5f32eb4915fe8fa8286e5657a7b6c789',
-                filename='frida-15.0.8-py3.8-linux-x86_64.egg',
-                major=3, minor=8, micro=None
-            ),
-        ]
-    ),
-    (
-        setup.PEP503PageParser("frida", "15.0.7", "linux-amd64"),
-        html,
-        []
-    ),
-    (
-        setup.PEP503PageParser("frida", "15.0.8", "macosx-11.0-fat64"),
-        html,
-        [
-            setup.ParsedUrlInfo(
-                url='../../packages/d1/20/a65170d6a898541839acb03a16d1dd26499928c937350078765fe1e4beb3/frida-15.0.8-py2.7-macosx-11.0-fat64.egg#sha256=f9e58ff7f6d53640a991d3e77711b0095927103d7bdfef55268b58091938f72e',
-                filename='frida-15.0.8-py2.7-macosx-11.0-fat64.egg',
-                major=2, minor=7, micro=None
-            ),
-        ]
-    ),
-])
+cases.extend(
+    [
+        (setup.PEP503PageParser("frida", "15.1.0", "win-amd64"), html, []),
+        (
+            setup.PEP503PageParser("frida", "15.0.7", "win-amd64"),
+            html,
+            [
+                setup.ParsedUrlInfo(
+                    url="../../packages/e0/5c/b45c8f27482d81179eb640726b703f95c624cc4f32ae3ed3f8bc858ae5d9/frida-15.0.7-py2.7-win-amd64.egg#sha256=eb696528b9c19f1895123e731b094363a87a4412d7ea4fcb54ef71841f7b3c1e",
+                    filename="frida-15.0.7-py2.7-win-amd64.egg",
+                    major=2,
+                    minor=7,
+                    micro=None,
+                ),
+                setup.ParsedUrlInfo(
+                    url="../../packages/77/34/6ebaea697f3df72818e60c6494a716c51f7f13b3da323598c1711d21779c/frida-15.0.7-py3.8-win-amd64.egg#sha256=a9964cc6dd4e3ea71c42b1800c79571c670905dc82cd769302b066499fff7bf4",
+                    filename="frida-15.0.7-py3.8-win-amd64.egg",
+                    major=3,
+                    minor=8,
+                    micro=None,
+                ),
+            ],
+        ),
+        (
+            setup.PEP503PageParser("frida", "15.0.7", "linux-i686"),
+            html,
+            [
+                setup.ParsedUrlInfo(
+                    url="../../packages/e3/21/da75f6207f76750799d68938707a74d46512e666293eb550247bf5314613/frida-15.0.7-py2.7-linux-i686.egg#sha256=444246bad3b2222efec301e96c2d6ac5da039d41acd655f6d5b6e548637cae09",
+                    filename="frida-15.0.7-py2.7-linux-i686.egg",
+                    major=2,
+                    minor=7,
+                    micro=None,
+                ),
+                setup.ParsedUrlInfo(
+                    url="../../packages/19/d3/a4a1980005e232399575aeb2ae973d2087a94ec7dbaf6d7a481612979fc7/frida-15.0.7-py3.8-linux-i686.egg#sha256=ed922ec0258e95f39b4004066b72fb48546041d28602e55d44ca12effa80e8bf",
+                    filename="frida-15.0.7-py3.8-linux-i686.egg",
+                    major=3,
+                    minor=8,
+                    micro=None,
+                ),
+            ],
+        ),
+        (
+            setup.PEP503PageParser("frida", "15.0.8", "linux-x86_64"),
+            html,
+            [
+                setup.ParsedUrlInfo(
+                    url="../../packages/64/4a/1e1735a8c2f606c953cccfb9d7086c15d19b5151ebd6e0cbcab2e817d6e2/frida-15.0.8-py2.7-linux-x86_64.egg#sha256=e5b29da8394ef5643fc42877856859d544cd2aba0a874a4a700f2ce4521d9780",
+                    filename="frida-15.0.8-py2.7-linux-x86_64.egg",
+                    major=2,
+                    minor=7,
+                    micro=None,
+                ),
+                setup.ParsedUrlInfo(
+                    url="../../packages/0b/20/11101c2cc053bbe3695c8778ffb239e49c0bc24066257bc3246ef67770d9/frida-15.0.8-py3.8-linux-x86_64.egg#sha256=6b3f42225c22a1f149107f963abe9f7b5f32eb4915fe8fa8286e5657a7b6c789",
+                    filename="frida-15.0.8-py3.8-linux-x86_64.egg",
+                    major=3,
+                    minor=8,
+                    micro=None,
+                ),
+            ],
+        ),
+        (setup.PEP503PageParser("frida", "15.0.7", "linux-amd64"), html, []),
+        (
+            setup.PEP503PageParser("frida", "15.0.8", "macosx-11.0-fat64"),
+            html,
+            [
+                setup.ParsedUrlInfo(
+                    url="../../packages/d1/20/a65170d6a898541839acb03a16d1dd26499928c937350078765fe1e4beb3/frida-15.0.8-py2.7-macosx-11.0-fat64.egg#sha256=f9e58ff7f6d53640a991d3e77711b0095927103d7bdfef55268b58091938f72e",
+                    filename="frida-15.0.8-py2.7-macosx-11.0-fat64.egg",
+                    major=2,
+                    minor=7,
+                    micro=None,
+                ),
+            ],
+        ),
+    ]
+)
 
 html = (
-    '<h3>frida-15.1.1-py3.8-linux-x86_64.egg</h3>'
+    "<h3>frida-15.1.1-py3.8-linux-x86_64.egg</h3>"
     '<a href="../../packages/e4/c1/82e361bbaa535b334f5b1b432b4573a7871fa973ede'
-    'b3aab9dbb6b3b4cdc/frida-15.1.1-py3.8-linux-x86_64.egg#sha256=505f4ffa34cc'
+    "b3aab9dbb6b3b4cdc/frida-15.1.1-py3.8-linux-x86_64.egg#sha256=505f4ffa34cc"
     '7d68664fcd00d469f5d832e6778800d112aadb8a13692f984b40">frida-15.1.1-py3.8-'
-    'linux-x86_64.egg</a><br/>'
+    "linux-x86_64.egg</a><br/>"
 )
 htmls.append(html)
-cases.extend([
-    (
-        setup.PEP503PageParser("frida", "15.1.1", "linux-x86_64"),
-        html,
-        [
-            setup.ParsedUrlInfo(
-                url='../../packages/e4/c1/82e361bbaa535b334f5b1b432b4573a7871fa973edeb3aab9dbb6b3b4cdc/frida-15.1.1-py3.8-linux-x86_64.egg#sha256=505f4ffa34cc7d68664fcd00d469f5d832e6778800d112aadb8a13692f984b40',
-                filename='frida-15.1.1-py3.8-linux-x86_64.egg',
-                major=3, minor=8, micro=None
-            ),
-        ]
-    ),
-])
+cases.extend(
+    [
+        (
+            setup.PEP503PageParser("frida", "15.1.1", "linux-x86_64"),
+            html,
+            [
+                setup.ParsedUrlInfo(
+                    url="../../packages/e4/c1/82e361bbaa535b334f5b1b432b4573a7871fa973edeb3aab9dbb6b3b4cdc/frida-15.1.1-py3.8-linux-x86_64.egg#sha256=505f4ffa34cc7d68664fcd00d469f5d832e6778800d112aadb8a13692f984b40",
+                    filename="frida-15.1.1-py3.8-linux-x86_64.egg",
+                    major=3,
+                    minor=8,
+                    micro=None,
+                ),
+            ],
+        ),
+    ]
+)
 
 html = (
     '<a role="button" tabindex="0">frida-15.0.1-py3.8-android-aarch64.egg</a>'
     '<a href="../../packages/3e/80/78fa3ed5fd636b606dc06157069b37eb677652cd985'
-    '739cde35a86d7a362/frida-15.0.1-py3.8-android-aarch64.egg#sha256=d44bc3415'
+    "739cde35a86d7a362/frida-15.0.1-py3.8-android-aarch64.egg#sha256=d44bc3415"
     '90dd8cf2623089b54aa16d697536fb016fde0ecd6df5262723c652b">frida-15.0.1-py3'
-    '.8-android-aarch64.egg</a><br/>'
+    ".8-android-aarch64.egg</a><br/>"
 )
 htmls.append(html)
-cases.extend([
-    (
-        setup.PEP503PageParser("frida", "15.0.1", "android-aarch64"),
-        html,
-        [
-            setup.ParsedUrlInfo(
-                url='../../packages/3e/80/78fa3ed5fd636b606dc06157069b37eb677652cd985739cde35a86d7a362/frida-15.0.1-py3.8-android-aarch64.egg#sha256=d44bc341590dd8cf2623089b54aa16d697536fb016fde0ecd6df5262723c652b',
-                filename='frida-15.0.1-py3.8-android-aarch64.egg',
-                major=3, minor=8, micro=None
-            ),
-        ]
-    ),
-])
+cases.extend(
+    [
+        (
+            setup.PEP503PageParser("frida", "15.0.1", "android-aarch64"),
+            html,
+            [
+                setup.ParsedUrlInfo(
+                    url="../../packages/3e/80/78fa3ed5fd636b606dc06157069b37eb677652cd985739cde35a86d7a362/frida-15.0.1-py3.8-android-aarch64.egg#sha256=d44bc341590dd8cf2623089b54aa16d697536fb016fde0ecd6df5262723c652b",
+                    filename="frida-15.0.1-py3.8-android-aarch64.egg",
+                    major=3,
+                    minor=8,
+                    micro=None,
+                ),
+            ],
+        ),
+    ]
+)
 
 
 class TestPEP503PageParser(unittest.TestCase):

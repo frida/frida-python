@@ -1,5 +1,5 @@
 import fnmatch
-from functools import wraps
+import functools
 import json
 import numbers
 import sys
@@ -8,8 +8,8 @@ import traceback
 
 import _frida
 
-
 _device_manager = None
+
 _Cancellable = _frida.Cancellable
 
 
@@ -21,9 +21,9 @@ def get_device_manager():
 
 
 def cancellable(f):
-    @wraps(f)
+    @functools.wraps(f)
     def wrapper(*args, **kwargs):
-        cancellable = kwargs.pop('cancellable', None)
+        cancellable = kwargs.pop("cancellable", None)
         if cancellable is not None:
             with cancellable:
                 return f(*args, **kwargs)
@@ -41,13 +41,13 @@ class DeviceManager:
         return repr(self._impl)
 
     def get_local_device(self, **kwargs):
-        return self.get_device_matching(lambda d: d.type == 'local', timeout=0, **kwargs)
+        return self.get_device_matching(lambda d: d.type == "local", timeout=0, **kwargs)
 
     def get_remote_device(self, **kwargs):
-        return self.get_device_matching(lambda d: d.type == 'remote', timeout=0, **kwargs)
+        return self.get_device_matching(lambda d: d.type == "remote", timeout=0, **kwargs)
 
     def get_usb_device(self, timeout=0, **kwargs):
-        return self.get_device_matching(lambda d: d.type == 'usb', timeout, **kwargs)
+        return self.get_device_matching(lambda d: d.type == "usb", timeout, **kwargs)
 
     def get_device(self, id, timeout=0, **kwargs):
         return self.get_device_matching(lambda d: d.id == id, timeout, **kwargs)
@@ -117,7 +117,11 @@ class Device:
     @cancellable
     def get_process(self, process_name):
         process_name_lc = process_name.lower()
-        matching = [process for process in self._impl.enumerate_processes() if fnmatch.fnmatchcase(process.name.lower(), process_name_lc)]
+        matching = [
+            process
+            for process in self._impl.enumerate_processes()
+            if fnmatch.fnmatchcase(process.name.lower(), process_name_lc)
+        ]
         if len(matching) == 1:
             return matching[0]
         elif len(matching) > 1:
@@ -204,7 +208,7 @@ class Bus:
         self._impl = impl
         self._on_message_callbacks = []
 
-        impl.on('message', self._on_message)
+        impl.on("message", self._on_message)
 
     @cancellable
     def attach(self):
@@ -215,13 +219,13 @@ class Bus:
         self._impl.post(raw_message, **kwargs)
 
     def on(self, signal, callback):
-        if signal == 'message':
+        if signal == "message":
             self._on_message_callbacks.append(callback)
         else:
             self._impl.on(signal, callback)
 
     def off(self, signal, callback):
-        if signal == 'message':
+        if signal == "message":
             self._on_message_callbacks.remove(callback)
         else:
             self._impl.off(signal, callback)
@@ -307,8 +311,8 @@ class Script:
         self._next_request_id = 1
         self._cond = threading.Condition()
 
-        impl.on('destroyed', self._on_destroyed)
-        impl.on('message', self._on_message)
+        impl.on("destroyed", self._on_destroyed)
+        impl.on("message", self._on_message)
 
     def __repr__(self):
         return repr(self._impl)
@@ -342,13 +346,13 @@ class Script:
         self._impl.disable_debugger()
 
     def on(self, signal, callback):
-        if signal == 'message':
+        if signal == "message":
             self._on_message_callbacks.append(callback)
         else:
             self._impl.on(signal, callback)
 
     def off(self, signal, callback):
-        if signal == 'message':
+        if signal == "message":
             self._on_message_callbacks.remove(callback)
         else:
             self._impl.off(signal, callback)
@@ -360,13 +364,13 @@ class Script:
         self._log_handler = handler
 
     def default_log_handler(self, level, text):
-        if level == 'info':
+        if level == "info":
             print(text, file=sys.stdout)
         else:
             print(text, file=sys.stderr)
 
     def list_exports(self):
-        return self._rpc_request('list')
+        return self._rpc_request("list")
 
     @cancellable
     def _rpc_request(self, *args):
@@ -389,7 +393,7 @@ class Script:
             self._pending[request_id] = on_complete
 
         if not self.is_destroyed:
-            message = ['frida:rpc', request_id]
+            message = ["frida:rpc", request_id]
             message.extend(args)
             self.post(message)
 
@@ -412,14 +416,14 @@ class Script:
         return result[1]
 
     def _on_rpc_message(self, request_id, operation, params, data):
-        if operation in ('ok', 'error'):
+        if operation in ("ok", "error"):
             callback = self._pending.pop(request_id, None)
             if callback is None:
                 return
 
             value = None
             error = None
-            if operation == 'ok':
+            if operation == "ok":
                 value = params[0] if data is None else data
             else:
                 error = RPCException(*params[0:3])
@@ -438,18 +442,18 @@ class Script:
             if next_pending is None:
                 break
 
-            next_pending(None, _frida.InvalidOperationError('script has been destroyed'))
+            next_pending(None, _frida.InvalidOperationError("script has been destroyed"))
 
     def _on_message(self, raw_message, data):
         message = json.loads(raw_message)
 
-        mtype = message['type']
-        payload = message.get('payload', None)
-        if mtype == 'log':
-            level = message['level']
+        mtype = message["type"]
+        payload = message.get("payload", None)
+        if mtype == "log":
+            level = message["level"]
             text = payload
             self._log_handler(level, text)
-        elif mtype == 'send' and isinstance(payload, list) and len(payload) > 0 and payload[0] == 'frida:rpc':
+        elif mtype == "send" and isinstance(payload, list) and len(payload) > 0 and payload[0] == "frida:rpc":
             request_id = payload[1]
             operation = payload[2]
             params = payload[3:]
@@ -474,8 +478,10 @@ class ScriptExports:
     def __getattr__(self, name):
         script = self._script
         js_name = _to_camel_case(name)
+
         def method(*args, **kwargs):
-            return script._rpc_request('call', js_name, args, **kwargs)
+            return script._rpc_request("call", js_name, args, **kwargs)
+
         return method
 
     def __dir__(self):
@@ -496,28 +502,28 @@ class EndpointParameters:
         kw = {}
 
         if address is not None:
-            kw['address'] = address
+            kw["address"] = address
 
         if port is not None:
-            kw['port'] = port
+            kw["port"] = port
 
         if certificate is not None:
-            kw['certificate'] = certificate
+            kw["certificate"] = certificate
 
         if origin is not None:
-            kw['origin'] = origin
+            kw["origin"] = origin
 
         if authentication is not None:
             (auth_scheme, auth_data) = authentication
-            if auth_scheme == 'token':
-                kw['auth_token'] = auth_data
-            elif auth_scheme == 'callback':
-                kw['auth_callback'] = make_auth_callback(auth_data)
+            if auth_scheme == "token":
+                kw["auth_token"] = auth_data
+            elif auth_scheme == "callback":
+                kw["auth_callback"] = make_auth_callback(auth_data)
             else:
                 raise ValueError("invalid authentication scheme")
 
         if asset_root is not None:
-            kw['asset_root'] = str(asset_root)
+            kw["asset_root"] = str(asset_root)
 
         self._impl = _frida.EndpointParameters(**kw)
 
@@ -534,8 +540,8 @@ class PortalService:
         self._on_authenticated_callbacks = []
         self._on_message_callbacks = []
 
-        impl.on('authenticated', self._on_authenticated)
-        impl.on('message', self._on_message)
+        impl.on("authenticated", self._on_authenticated)
+        impl.on("message", self._on_message)
 
     @cancellable
     def start(self):
@@ -567,17 +573,17 @@ class PortalService:
         self._impl.untag(connection_id, tag)
 
     def on(self, signal, callback):
-        if signal == 'authenticated':
+        if signal == "authenticated":
             self._on_authenticated_callbacks.append(callback)
-        elif signal == 'message':
+        elif signal == "message":
             self._on_message_callbacks.append(callback)
         else:
             self._impl.on(signal, callback)
 
     def off(self, signal, callback):
-        if signal == 'authenticated':
+        if signal == "authenticated":
             self._on_authenticated_callbacks.remove(callback)
-        elif signal == 'message':
+        elif signal == "message":
             self._on_message_callbacks.remove(callback)
         else:
             self._impl.off(signal, callback)
@@ -721,6 +727,7 @@ def make_auth_callback(callback):
     def authenticate(token):
         session_info = callback(token)
         return json.dumps(session_info)
+
     return authenticate
 
 
@@ -728,7 +735,7 @@ def _to_camel_case(name):
     result = ""
     uppercase_next = False
     for c in name:
-        if c == '_':
+        if c == "_":
             uppercase_next = True
         elif uppercase_next:
             result += c.upper()

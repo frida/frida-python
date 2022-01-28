@@ -1,6 +1,5 @@
 import frida
 
-
 device = frida.get_usb_device()
 
 channel = device.open_channel("tcp:21")

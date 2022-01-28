@@ -1,24 +1,23 @@
-import sys
+import codecs
+import hashlib
 import os
 import platform
 import re
-import zipfile
 import shutil
 import struct
-import codecs
 import subprocess
-import hashlib
+import sys
+import zipfile
 from collections import namedtuple
 from functools import partial
-from io import BytesIO
-from urllib.request import urlopen
-from urllib.parse import urljoin, urlparse, urlunparse
 from html.parser import HTMLParser
+from io import BytesIO
+from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.request import urlopen
 
 from setuptools import setup
 from setuptools.command.build_ext import build_ext
 from setuptools.extension import Extension
-
 
 DEFAULT_INDEX_URL = "https://pypi.org/simple/"
 
@@ -28,20 +27,19 @@ package_dir = os.path.dirname(os.path.realpath(__file__))
 pkg_info = os.path.join(package_dir, "PKG-INFO")
 in_source_package = os.path.isfile(pkg_info)
 if in_source_package:
-    with codecs.open(pkg_info, "r", 'utf-8') as f:
+    with codecs.open(pkg_info, "r", "utf-8") as f:
         version_line = [line.rstrip("\r") for line in f.read().split("\n") if line.startswith("Version: ")][0]
         frida_version = version_line[9:]
     long_description = None
 else:
-    frida_version = os.environ.get('FRIDA_VERSION', None)
-    long_description = codecs.open(os.path.join(package_dir, "README.md"), "r", 'utf-8').read()
-    frida_extension = os.environ.get('FRIDA_EXTENSION', None)
+    frida_version = os.environ.get("FRIDA_VERSION", None)
+    long_description = codecs.open(os.path.join(package_dir, "README.md"), "r", "utf-8").read()
+    frida_extension = os.environ.get("FRIDA_EXTENSION", None)
 
 index_url_pip_configs = ("global.index-url", "global.extra-index-url")
 
 Tag = namedtuple("Tag", ["tagname", "attrs"])
-ParsedUrlInfo = namedtuple("ParsedUrlInfo",
-                           ["url", "filename", "major", "minor", "micro"])
+ParsedUrlInfo = namedtuple("ParsedUrlInfo", ["url", "filename", "major", "minor", "micro"])
 
 
 class FridaPrebuiltExt(build_ext):
@@ -56,31 +54,36 @@ class FridaPrebuiltExt(build_ext):
 
         if in_source_package:
             system = platform.system()
-            arch = struct.calcsize('P') * 8
-            if system == 'Windows':
+            arch = struct.calcsize("P") * 8
+            if system == "Windows":
                 os_version = "win-amd64" if arch == 64 else "win32"
-            elif system == 'Darwin':
-                if platform.machine() == 'x86_64':
+            elif system == "Darwin":
+                if platform.machine() == "x86_64":
                     os_version = "macosx-10.9-x86_64"
                 else:
                     os_version = "macosx-11.0-arm64"
-            elif system == 'Linux':
-                os_name = 'android' if subprocess.check_output(["uname", "-o"]).decode('utf-8').rstrip() == 'Android' else 'linux'
+            elif system == "Linux":
+                os_name = (
+                    "android"
+                    if subprocess.check_output(["uname", "-o"]).decode("utf-8").rstrip() == "Android"
+                    else "linux"
+                )
                 machine = platform.machine()
                 if machine == "" or "86" in machine:
                     arch_name = "x86_64" if arch == 64 else "i686"
-                elif os_name == 'android' and machine.startswith("armv"):
-                    arch_name = 'armv7l'
+                elif os_name == "android" and machine.startswith("armv"):
+                    arch_name = "armv7l"
                 else:
                     arch_name = machine
                 os_version = f"{os_name}-{arch_name}"
-            elif system == 'FreeBSD':
+            elif system == "FreeBSD":
                 os_version = "freebsd-" + platform.machine()
             else:
                 raise NotImplementedError("unsupported OS")
 
             egg_path = os.path.expanduser(
-                f"~{os.sep}frida-{frida_version}-py{python_version[0]}.{python_version[1]}-{os_version}.egg")
+                f"~{os.sep}frida-{frida_version}-py{python_version[0]}.{python_version[1]}-{os_version}.egg"
+            )
             print("looking for prebuilt extension in home directory, i.e.", egg_path)
 
             try:
@@ -111,8 +114,9 @@ class FridaPrebuiltExt(build_ext):
                 parser.feed(links_html)
 
                 if len(parser.urls) == 0:
-                    raise NotImplementedError("could not find prebuilt Frida extension; "
-                                              "prebuilds only provided for Python 3.4+")
+                    raise NotImplementedError(
+                        "could not find prebuilt Frida extension; " "prebuilds only provided for Python 3.4+"
+                    )
 
                 url = parser.urls[0]
                 egg_url = urljoin(frida_url, url.url)
@@ -137,12 +141,14 @@ class FridaPrebuiltExt(build_ext):
             egg_zip = zipfile.ZipFile(egg_file)
             extension_member = [info for info in egg_zip.infolist() if info.filename.endswith(target_extension)][0]
             extension_data = egg_zip.read(extension_member)
-            if system == 'Windows':
+            if system == "Windows":
                 trailer = b"\x00" if python_version[1] >= 10 else b"\x00\x00"
-                extension_data = re.sub(b"python[3-9][0-9][0-9]\\.dll\x00",
-                                        "python{}{}.dll".format(*python_version).encode('utf-8') + trailer,
-                                        extension_data)
-            with open(target, 'wb') as f:
+                extension_data = re.sub(
+                    b"python[3-9][0-9][0-9]\\.dll\x00",
+                    "python{}{}.dll".format(*python_version).encode("utf-8") + trailer,
+                    extension_data,
+                )
+            with open(target, "wb") as f:
                 f.write(extension_data)
         else:
             shutil.copyfile(frida_extension, target)
@@ -172,8 +178,9 @@ def get_index_url():
 def get_index_url_from_pip(config_name):
     assert config_name in index_url_pip_configs
 
-    return subprocess.check_output([sys.executable, "-m", "pip", "config", "get", config_name],
-                                   stderr=subprocess.PIPE).decode("utf-8")
+    return subprocess.check_output(
+        [sys.executable, "-m", "pip", "config", "get", config_name], stderr=subprocess.PIPE
+    ).decode("utf-8")
 
 
 def normalize_url(url):
@@ -181,18 +188,24 @@ def normalize_url(url):
     path = parse_result.path
     if not path.endswith("/"):
         path += "/"
-    return urlunparse((
-        parse_result.scheme, parse_result.netloc, path,
-        parse_result.params, parse_result.query, parse_result.fragment,
-    ))
+    return urlunparse(
+        (
+            parse_result.scheme,
+            parse_result.netloc,
+            path,
+            parse_result.params,
+            parse_result.query,
+            parse_result.fragment,
+        )
+    )
 
 
 class PEP503PageParser(HTMLParser):
     def __init__(self, name, version, os_version):
         HTMLParser.__init__(self)
-        filename_pattern = (
-            r"^{}\-{}\-py(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<micro>\d+))?-{}.egg$"
-        ).format(*map(re.escape, [name, version, os_version]))
+        filename_pattern = (r"^{}\-{}\-py(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<micro>\d+))?-{}.egg$").format(
+            *map(re.escape, [name, version, os_version])
+        )
         self._filename_pattern = re.compile(filename_pattern)
 
     def reset(self):
@@ -213,21 +226,18 @@ class PEP503PageParser(HTMLParser):
                 self._path.pop()
 
     def handle_data(self, data):
-        if not (len(self._path) > 0
-                and self._path[-1].tagname == "a"
-                and self._path[-1].attrs.get("href")):
+        if not (len(self._path) > 0 and self._path[-1].tagname == "a" and self._path[-1].attrs.get("href")):
             return
 
         match = self._filename_pattern.match(data)
         if match is not None:
-            self.urls.append(ParsedUrlInfo(
-                self._path[-1].attrs["href"],
-                data,
-                *map(
-                    lambda g: int(g) if g else None,
-                    map(match.group, ["major", "minor", "micro"])
+            self.urls.append(
+                ParsedUrlInfo(
+                    self._path[-1].attrs["href"],
+                    data,
+                    *map(lambda g: int(g) if g else None, map(match.group, ["major", "minor", "micro"])),
                 )
-            ))
+            )
 
 
 def check_pep503_hash(bytes_io, url):
@@ -286,12 +296,10 @@ if __name__ == "__main__":
             "Programming Language :: Python :: Implementation :: CPython",
             "Programming Language :: JavaScript",
             "Topic :: Software Development :: Debuggers",
-            "Topic :: Software Development :: Libraries :: Python Modules"
+            "Topic :: Software Development :: Libraries :: Python Modules",
         ],
-        packages=['frida'],
-        ext_modules=[Extension('_frida', [])],
-        cmdclass={
-            'build_ext': FridaPrebuiltExt
-        },
-        zip_safe=False
+        packages=["frida"],
+        ext_modules=[Extension("_frida", [])],
+        cmdclass={"build_ext": FridaPrebuiltExt},
+        zip_safe=False,
     )
