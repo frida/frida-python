@@ -146,7 +146,7 @@ class Device(object):
 
     @cancellable
     def spawn(self, program, argv=None, envp=None, env=None, cwd=None, stdio=None, **kwargs):
-        if not isinstance(program, string_types):
+        if not isinstance(program, str):
             argv = program
             program = argv[0]
             if len(argv) == 1:
@@ -738,9 +738,3 @@ def _to_camel_case(name):
         else:
             result += c.lower()
     return result
-
-
-if sys.version_info[0] >= 3:
-    string_types = str,
-else:
-    string_types = basestring,
