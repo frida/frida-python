@@ -46,29 +46,18 @@
 #endif
 
 #define PyUnicode_FromUTF8String(str) PyUnicode_DecodeUTF8 (str, strlen (str), "strict")
-#if PY_MAJOR_VERSION >= 3
-# define MOD_INIT(name) PyMODINIT_FUNC PyInit_##name (void)
-# define MOD_DEF(ob, name, doc, methods) \
+#define MOD_INIT(name) PyMODINIT_FUNC PyInit_##name (void)
+#define MOD_DEF(ob, name, doc, methods) \
   { \
     static struct PyModuleDef moduledef = { \
         PyModuleDef_HEAD_INIT, name, doc, -1, methods, }; \
     ob = PyModule_Create (&moduledef); \
   }
-# define MOD_SUCCESS_VAL(val) val
-# define MOD_ERROR_VAL NULL
-# define PyRepr_FromString PyUnicode_FromString
-# define PyRepr_FromFormat PyUnicode_FromFormat
-# define PYFRIDA_GETARGSPEC_FUNCTION "getfullargspec"
-#else
-# define MOD_INIT(name) PyMODINIT_FUNC init##name (void)
-# define MOD_DEF(ob, name, doc, methods) \
-  ob = Py_InitModule3 (name, methods, doc);
-# define MOD_SUCCESS_VAL(val)
-# define MOD_ERROR_VAL
-# define PyRepr_FromString PyString_FromString
-# define PyRepr_FromFormat PyString_FromFormat
-# define PYFRIDA_GETARGSPEC_FUNCTION "getargspec"
-#endif
+#define MOD_SUCCESS_VAL(val) val
+#define MOD_ERROR_VAL NULL
+#define PyRepr_FromString PyUnicode_FromString
+#define PyRepr_FromFormat PyUnicode_FromFormat
+#define PYFRIDA_GETARGSPEC_FUNCTION "getfullargspec"
 
 #if PY_VERSION_HEX >= 0x03080000
 # define PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET 0
@@ -1938,11 +1927,7 @@ PyGObject_marshal_string (const gchar * str)
 static gboolean
 PyGObject_unmarshal_string (PyObject * value, const gchar ** str)
 {
-#if PY_MAJOR_VERSION >= 3
   *str = PyUnicode_AsUTF8 (value);
-#else
-  *str = PyString_AsString (value);
-#endif
   return *str != NULL;
 }
 
@@ -3273,11 +3258,7 @@ PyDevice_input (PyDevice * self, PyObject * args)
   GBytes * data;
   GError * error = NULL;
 
-#if PY_MAJOR_VERSION >= 3
   if (!PyArg_ParseTuple (args, "ly#", &pid, &data_buffer, &data_size))
-#else
-  if (!PyArg_ParseTuple (args, "ls#", &pid, &data_buffer, &data_size))
-#endif
     return NULL;
 
   data = g_bytes_new (data_buffer, data_size);
@@ -3429,11 +3410,7 @@ PyDevice_inject_library_blob (PyDevice * self, PyObject * args)
   GError * error = NULL;
   guint id;
 
-#if PY_MAJOR_VERSION >= 3
   if (!PyArg_ParseTuple (args, "ly#ss", &pid, &blob_buffer, &blob_size, &entrypoint, &data))
-#else
-  if (!PyArg_ParseTuple (args, "ls#ss", &pid, &blob_buffer, &blob_size, &entrypoint, &data))
-#endif
     return NULL;
 
   blob = g_bytes_new (blob_buffer, blob_size);
@@ -4065,11 +4042,7 @@ PySession_create_script (PySession * self, PyObject * args, PyObject * kw)
   GError * error = NULL;
   FridaScript * handle;
 
-#if PY_MAJOR_VERSION >= 3
   if (!PyArg_ParseTupleAndKeywords (args, kw, "es|esy#z", keywords, "utf-8", &source, "utf-8", &name, &snapshot_data, &snapshot_size, &runtime_value))
-#else
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|ess#z", keywords, "utf-8", &source, "utf-8", &name, &snapshot_data, &snapshot_size, &runtime_value))
-#endif
     return NULL;
 
   options = PySession_parse_script_options (name, snapshot_data, snapshot_size, runtime_value);
@@ -4109,11 +4082,7 @@ PySession_create_script_from_bytes (PySession * self, PyObject * args, PyObject 
   GError * error = NULL;
   FridaScript * handle;
 
-#if PY_MAJOR_VERSION >= 3
   if (!PyArg_ParseTupleAndKeywords (args, kw, "y#|esy#z", keywords, &data, &size, "utf-8", &name, &snapshot_data, &snapshot_size, &runtime_value))
-#else
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "s#|ess#z", keywords, &data, &size, "utf-8", &name, &snapshot_data, &snapshot_size, &runtime_value))
-#endif
     return NULL;
 
   bytes = g_bytes_new (data, size);
@@ -5453,7 +5422,6 @@ PyIOStream_write (PyIOStream * self, PyObject * args)
   GError * error = NULL;
   gssize bytes_written;
 
-#if PY_MAJOR_VERSION >= 3
   if (!PyArg_ParseTuple (args, "y*", &data))
     return NULL;
 
@@ -5462,23 +5430,10 @@ PyIOStream_write (PyIOStream * self, PyObject * args)
     PyErr_SetString (PyExc_TypeError, "expected a contiguous buffer");
     return NULL;
   }
-#else
-  PyObject * data_obj;
-
-  if (!PyArg_ParseTuple (args, "O", &data_obj))
-    return NULL;
-
-  if (PyObject_GetBuffer (data_obj, &data, PyBUF_SIMPLE) != 0)
-    return NULL;
-#endif
 
   Py_BEGIN_ALLOW_THREADS
   bytes_written = g_output_stream_write (self->output, data.buf, data.len, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
-
-#if PY_MAJOR_VERSION < 3
-  PyBuffer_Release (&data);
-#endif
 
   if (error != NULL)
     return PyFrida_raise (error);
@@ -5492,7 +5447,6 @@ PyIOStream_write_all (PyIOStream * self, PyObject * args)
   Py_buffer data;
   GError * error = NULL;
 
-#if PY_MAJOR_VERSION >= 3
   if (!PyArg_ParseTuple (args, "y*", &data))
     return NULL;
 
@@ -5501,23 +5455,10 @@ PyIOStream_write_all (PyIOStream * self, PyObject * args)
     PyErr_SetString (PyExc_TypeError, "expected a contiguous buffer");
     return NULL;
   }
-#else
-  PyObject * data_obj;
-
-  if (!PyArg_ParseTuple (args, "O", &data_obj))
-    return NULL;
-
-  if (PyObject_GetBuffer (data_obj, &data, PyBUF_SIMPLE) != 0)
-    return NULL;
-#endif
 
   Py_BEGIN_ALLOW_THREADS
   g_output_stream_write_all (self->output, data.buf, data.len, NULL, g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
-
-#if PY_MAJOR_VERSION < 3
-  PyBuffer_Release (&data);
-#endif
 
   if (error != NULL)
     return PyFrida_raise (error);
@@ -5773,17 +5714,7 @@ PyFrida_raise (GError * error)
   g_string_append_unichar (message, g_unichar_tolower (g_utf8_get_char (error->message)));
   g_string_append (message, g_utf8_offset_to_pointer (error->message, 1));
 
-#if PY_MAJOR_VERSION >= 3
   PyErr_SetString (exception, message->str);
-#else
-  {
-    PyObject * value;
-
-    value = PyUnicode_FromUTF8String (message->str);
-    PyErr_SetObject (exception, value);
-    Py_DECREF (value);
-  }
-#endif
 
   g_string_free (message, TRUE);
   g_error_free (error);
@@ -5794,11 +5725,7 @@ PyFrida_raise (GError * error)
 static gboolean
 PyFrida_is_string (PyObject * obj)
 {
-#if PY_MAJOR_VERSION >= 3
   return PyUnicode_Check (obj);
-#else
-  return PyString_Check (obj);
-#endif
 }
 
 static gchar *
@@ -5858,10 +5785,6 @@ beach:
 MOD_INIT (_frida)
 {
   PyObject * inspect, * datetime, * module;
-
-#if PY_VERSION_HEX < 0x03070000
-  PyEval_InitThreads ();
-#endif
 
   inspect = PyImport_ImportModule ("inspect");
   inspect_getargspec = PyObject_GetAttrString (inspect, PYFRIDA_GETARGSPEC_FUNCTION);
