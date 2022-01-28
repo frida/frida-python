@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
 import frida
 from pprint import pformat
 from pygments import highlight

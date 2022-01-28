@@ -6,8 +6,6 @@
 # $ python inject_blob.py Twitter example.dylib
 #
 
-from __future__ import unicode_literals, print_function
-
 import sys
 
 import frida

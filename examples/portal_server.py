@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import frida
 from frida_tools.application import Reactor
 import hashlib
