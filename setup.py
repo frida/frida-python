@@ -73,14 +73,14 @@ class FridaPrebuiltExt(build_ext):
                     arch_name = 'armv7l'
                 else:
                     arch_name = machine
-                os_version = "{}-{}".format(os_name, arch_name)
+                os_version = f"{os_name}-{arch_name}"
             elif system == 'FreeBSD':
                 os_version = "freebsd-" + platform.machine()
             else:
                 raise NotImplementedError("unsupported OS")
 
             egg_path = os.path.expanduser(
-                "~{}frida-{}-py{}.{}-{}.egg".format(os.sep, frida_version, python_version[0], python_version[1], os_version))
+                f"~{os.sep}frida-{frida_version}-py{python_version[0]}.{python_version[1]}-{os_version}.egg")
             print("looking for prebuilt extension in home directory, i.e.", egg_path)
 
             try:
@@ -98,10 +98,7 @@ class FridaPrebuiltExt(build_ext):
                 index_url = normalize_url(index_url)
                 frida_url = urljoin(index_url, "frida/")  # slash is necessary here
                 timeout = 20
-                errmsg = (
-                    "unable to download it within {} seconds; "
-                    "please download it manually to {}"
-                ).format("{}", egg_path)
+                errmsg = "unable to download it within {} seconds; " f"please download it manually to {egg_path}"
 
                 print("downloading package list from", frida_url)
                 try:
@@ -168,7 +165,7 @@ def get_index_url():
         else:
             return index_url
 
-    print("using default index URL: {}".format(DEFAULT_INDEX_URL))
+    print(f"using default index URL: {DEFAULT_INDEX_URL}")
     return DEFAULT_INDEX_URL
 
 
@@ -241,9 +238,7 @@ def check_pep503_hash(bytes_io, url):
 
     hashname, hashvalue = fragment.split("=")
     if hashname not in {"md5", "sha1", "sha224", "sha256", "sha348", "sha512"}:
-        raise ValueError("Unsupported hash algorithm: {}, hashvalue={}".format(
-            hashname, hashvalue,
-        ))
+        raise ValueError(f"Unsupported hash algorithm: {hashname}, hashvalue={hashvalue}")
 
     h = hashlib.new(hashname)
     for block in iter(partial(bytes_io.read, 4096), b""):  # iterate until EOF
@@ -254,10 +249,7 @@ def check_pep503_hash(bytes_io, url):
     if digest == hashvalue:
         return
     else:
-        raise ValueError(
-            "`{}` hash checking failed! Expected: {}, but got: {}".format(
-                hashname, hashvalue, digest)
-        )
+        raise ValueError(f"`{hashname}` hash checking failed! Expected: {hashvalue}, but got: {digest}")
 
 
 if __name__ == "__main__":

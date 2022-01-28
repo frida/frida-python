@@ -126,7 +126,7 @@ class Capture(NSObject):
                 self._delegate.captureRecvTotalDidChange()
             else:
                 if not self.calls._handleStanza_(stanza):
-                    print("Woot! Got stanza: %s from=%s" % (stanza['name'], stanza['from']))
+                    print(f"Woot! Got stanza: {stanza['name']} from={stanza['from']}")
         else:
             print("Unhandled message:", message)
 
@@ -355,7 +355,7 @@ class FunctionCall(NSObject):
         self = self.init()
         self.func = func
         self.args = args
-        self.summary = "%s(%s)" % (func.name, ", ".join(args))
+        self.summary = f"{func.name}({', '.join(args)})"
         return self
 
 SCRIPT_TEMPLATE = """

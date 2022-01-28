@@ -17,4 +17,4 @@ for proc in processes:
     params = dict(proc.parameters)
     if 'icons' in params:
         params['icons'] = [trim_icon(icon) for icon in params['icons']]
-    print("Process(pid={}, name=\"{}\", parameters={})".format(proc.pid, proc.name, highlight(pformat(params), PythonLexer(), Terminal256Formatter()).rstrip()))
+    print(f"Process(pid={proc.pid}, name=\"{proc.name}\", parameters={highlight(pformat(params), PythonLexer(), Terminal256Formatter()).rstrip()})")

@@ -17,8 +17,5 @@ for app in apps:
     params = dict(app.parameters)
     if 'icons' in params:
         params['icons'] = [trim_icon(icon) for icon in params['icons']]
-    print("Application(identifier=\"{}\", name=\"{}\", pid={}, parameters={})".format(
-        app.identifier,
-        app.name,
-        app.pid,
-        highlight(pformat(params), PythonLexer(), Terminal256Formatter()).rstrip()))
+    parameters = highlight(pformat(params), PythonLexer(), Terminal256Formatter()).rstrip()
+    print(f"Application(identifier=\"{app.identifier}\", name=\"{app.name}\", pid={app.pid}, parameters={parameters})")

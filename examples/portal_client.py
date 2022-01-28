@@ -51,7 +51,7 @@ class Application:
                     })
                 channel = text[6:]
                 self._channel = channel
-                self._prompt = "{} > ".format(channel)
+                self._prompt = f"{channel} > "
                 self._bus.post({
                     'type': 'join',
                     'channel': channel
@@ -80,19 +80,19 @@ class Application:
             self._print("*** Welcome! Available channels:", repr(message['channels']))
         elif mtype == 'membership':
             self._print("*** Joined", message['channel'])
-            self._print("- Members:\n\t" + "\n\t".join(["{} (connected from {})".format(m['nick'], m['address']) for m in message['members']]))
+            self._print("- Members:\n\t" + "\n\t".join([f"{m['nick']} (connected from {m['address']})" for m in message['members']]))
             for item in message['history']:
-                self._print("<{}> {}".format(item['sender'], item['text']))
+                self._print(f"<{item['sender']}> {item['text']}")
         elif mtype == 'join':
             user = message['user']
-            self._print("👋 {} ({}) joined {}".format(user['nick'], user['address'], message['channel']))
+            self._print(f"👋 {user['nick']} ({user['address']}) joined {message['channel']}")
         elif mtype == 'part':
             user = message['user']
-            self._print("🚪 {} ({}) left {}".format(user['nick'], user['address'], message['channel']))
+            self._print(f"🚪 {user['nick']} ({user['address']}) left {message['channel']}")
         elif mtype == 'chat':
-            self._print("<{}> {}".format(message['sender'], message['text']))
+            self._print(f"<{message['sender']}> {message['text']}")
         elif mtype == 'announce':
-            self._print("📣 <{}> {}".format(message['sender'], message['text']))
+            self._print(f"📣 <{message['sender']}> {message['text']}")
         else:
             self._print("Unhandled message:", message)
 

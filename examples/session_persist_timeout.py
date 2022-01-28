@@ -68,10 +68,10 @@ function puts(s) {
                 print("Unknown command")
 
     def _on_detached(self, reason, crash):
-        print("⚡ detached: reason={}, crash={}".format(reason, crash))
+        print(f"⚡ detached: reason={reason}, crash={crash}")
 
     def _on_message(self, message, data):
-        print("⚡ message: {}".format(message))
+        print(f"⚡ message: {message}")
 
 
 app = Application()

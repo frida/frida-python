@@ -121,9 +121,10 @@ class Device:
         if len(matching) == 1:
             return matching[0]
         elif len(matching) > 1:
-            raise _frida.ProcessNotFoundError("ambiguous name; it matches: %s" % ", ".join(["%s (pid: %d)" % (process.name, process.pid) for process in matching]))
+            matches_list = ", ".join([f"{process.name} (pid: {process.pid})" for process in matching])
+            raise _frida.ProcessNotFoundError(f"ambiguous name; it matches: {matches_list}")
         else:
-            raise _frida.ProcessNotFoundError("unable to find process with name '%s'" % process_name)
+            raise _frida.ProcessNotFoundError(f"unable to find process with name '{process_name}'")
 
     @cancellable
     def enable_spawn_gating(self):

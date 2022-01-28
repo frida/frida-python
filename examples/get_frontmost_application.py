@@ -17,6 +17,6 @@ if app is not None:
     params = dict(app.parameters)
     if 'icons' in params:
         params['icons'] = [trim_icon(icon) for icon in params['icons']]
-    print("{}:".format(app.identifier), highlight(pformat(params), PythonLexer(), Terminal256Formatter()))
+    print(f"{app.identifier}:", highlight(pformat(params), PythonLexer(), Terminal256Formatter()))
 else:
     print("No frontmost application")

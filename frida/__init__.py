@@ -7,7 +7,7 @@ except Exception as ex:
         print("Frida native extension not found")
         print("Please check your PYTHONPATH.")
     else:
-        print("Failed to load the Frida native extension: %s" % ex)
+        print(f"Failed to load the Frida native extension: {ex}")
         print("Please ensure that the extension was compiled correctly")
     print("***")
     print("")
