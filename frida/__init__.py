@@ -6,7 +6,6 @@ import threading
 try:
     import _frida
 except Exception as ex:
-    import sys
     print("")
     print("***")
     if str(ex).startswith("No module named "):
@@ -14,11 +13,7 @@ except Exception as ex:
         print("Please check your PYTHONPATH.")
     else:
         print("Failed to load the Frida native extension: %s" % ex)
-        if sys.version_info[0] == 2:
-            current_python_version = "%d.%d" % sys.version_info[:2]
-        else:
-            current_python_version = "%d.x" % sys.version_info[0]
-        print("Please ensure that the extension was compiled for Python " + current_python_version + ".")
+        print("Please ensure that the extension was compiled correctly")
     print("***")
     print("")
     raise ex
