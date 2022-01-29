@@ -299,6 +299,7 @@ if __name__ == "__main__":
             "Topic :: Software Development :: Libraries :: Python Modules",
         ],
         packages=["frida"],
+        package_data={"frida": ["py.typed"]},
         ext_modules=[Extension("_frida", [])],
         cmdclass={"build_ext": FridaPrebuiltExt},
         zip_safe=False,
