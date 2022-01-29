@@ -54,7 +54,7 @@ class IOStream:
     Frida's own implementation of an input/output stream
     """
 
-    def __init__(self, impl) -> None:
+    def __init__(self, impl: _frida.IOStream) -> None:
         self._impl = impl
 
     def __repr__(self) -> str:
@@ -110,7 +110,7 @@ class IOStream:
 
 
 class PortalMembership:
-    def __init__(self, impl) -> None:
+    def __init__(self, impl: _frida.PortalMembership) -> None:
         self._impl = impl
 
     @cancellable
@@ -376,7 +376,7 @@ class Script:
 
 
 class Session:
-    def __init__(self, impl) -> None:
+    def __init__(self, impl: _frida.Session) -> None:
         self._impl = impl
 
     def __repr__(self) -> str:
@@ -458,6 +458,9 @@ class Session:
 
     @cancellable
     def snapshot_script(self, embed_script: str, warmup_script: Optional[str], runtime: Optional[str] = None) -> bytes:
+        """
+        Evaluate script and snapshot the resulting VM state
+        """
         kwargs = {"warmup_script": warmup_script, "runtime": runtime}
         _filter_missing_kwargs(kwargs)
         return self._impl.snapshot_script(embed_script, **kwargs)
@@ -506,7 +509,7 @@ class Session:
 
 
 class Bus:
-    def __init__(self, impl) -> None:
+    def __init__(self, impl: _frida.Bus) -> None:
         self._impl = impl
         self._on_message_callbacks: List[Callable[..., Any]] = []
 
@@ -565,7 +568,7 @@ class Device:
     Represents a device that Frida connects to
     """
 
-    def __init__(self, device) -> None:
+    def __init__(self, device: _frida.Device) -> None:
         self.id = device.id
         self.name = device.name
         self.icon = device.icon
@@ -806,7 +809,7 @@ class Device:
 
 
 class DeviceManager:
-    def __init__(self, impl) -> None:
+    def __init__(self, impl: _frida.DeviceManager) -> None:
         self._impl = impl
 
     def __repr__(self) -> str:
