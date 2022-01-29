@@ -10,25 +10,10 @@ import subprocess
 import hashlib
 from collections import namedtuple
 from functools import partial
-try:
-    from io import BytesIO
-except:
-    try:
-        from cStringIO import StringIO as BytesIO
-    except:
-        from StringIO import StringIO as BytesIO
-try:
-    from urllib.request import urlopen, Request
-except:
-    from urllib2 import urlopen, Request
-try:
-    from urllib.parse import urljoin, urlparse, urlunparse
-except:
-    from urlparse import urljoin, urlparse, urlunparse
-try:
-    from html.parser import HTMLParser
-except:
-    from HTMLParser import HTMLParser
+from io import BytesIO
+from urllib.request import urlopen
+from urllib.parse import urljoin, urlparse, urlunparse
+from html.parser import HTMLParser
 
 from setuptools import setup
 from setuptools.command.build_ext import build_ext
