@@ -148,11 +148,14 @@ class FridaPrebuiltExt(build_ext):
                 except Exception:
                     print(errmsg.format(timeout))
                     raise
+            else:
+                egg_url = None
 
             egg_file = BytesIO(egg_data)
 
-            print("checking hash")
-            check_pep503_hash(egg_file, egg_url)
+            if egg_url is not None:
+                print("checking hash")
+                check_pep503_hash(egg_file, egg_url)
 
             print("extracting prebuilt extension")
             egg_zip = zipfile.ZipFile(egg_file)
