@@ -25,9 +25,9 @@ try:
 except:
     from urllib2 import urlopen, Request
 try:
-    from urllib.parse import urljoin, urlparse
+    from urllib.parse import urljoin, urlparse, urlunparse
 except:
-    from urlparse import urljoin, urlparse
+    from urlparse import urljoin, urlparse, urlunparse
 try:
     from html.parser import HTMLParser
 except:
@@ -116,6 +116,7 @@ class FridaPrebuiltExt(build_ext):
                 print("querying pypi for available prebuilds")
                 # index_url is a url compatible with PEP 503
                 index_url = get_index_url().strip()
+                index_url = normalize_url(index_url)
                 frida_url = urljoin(index_url, "frida/")  # slash is necessary here
                 timeout = 20
                 errmsg = (
@@ -198,6 +199,17 @@ def get_index_url_from_pip(config_name):
 
     return subprocess.check_output([sys.executable, "-m", "pip", "config", "get", config_name],
                                    stderr=subprocess.PIPE)
+
+
+def normalize_url(url):
+    parse_result = urlparse(url)
+    path = parse_result.path
+    if not path.endswith("/"):
+        path += "/"
+    return urlunparse((
+        parse_result.scheme, parse_result.netloc, path,
+        parse_result.params, parse_result.query, parse_result.fragment,
+    ))
 
 
 class PEP503PageParser(HTMLParser):
