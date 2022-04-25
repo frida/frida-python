@@ -5568,7 +5568,8 @@ PyFrida_get_max_argument_count (PyObject * callable)
 
 beach:
   Py_XDECREF (args);
-  Py_XDECREF (varargs);
+  if (varargs != Py_None)
+    Py_XDECREF (varargs);
   Py_XDECREF (spec);
 
   return result;
