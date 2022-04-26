@@ -18,7 +18,7 @@ else:
         arch = 'armhf'
     else:
         arch = 'x86_64' if sys.maxsize > 2**32 else 'x86'
-    target_program = os.path.join(os.path.dirname(__file__), "unixvictim-linux-" + arch)
+    target_program = os.path.join(os.path.dirname(__file__), "unixvictim-" + system.lower() + "-" + arch)
 
 
 __all__ = ['target_program']
