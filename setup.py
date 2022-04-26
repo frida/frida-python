@@ -198,7 +198,7 @@ def get_index_url_from_pip(config_name):
     assert config_name in index_url_pip_configs
 
     return subprocess.check_output([sys.executable, "-m", "pip", "config", "get", config_name],
-                                   stderr=subprocess.PIPE, encoding="utf-8")
+                                   stderr=subprocess.PIPE).decode("utf-8")
 
 
 def normalize_url(url):
