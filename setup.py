@@ -23,7 +23,6 @@ from setuptools.extension import Extension
 DEFAULT_INDEX_URL = "https://pypi.org/simple/"
 
 python_version = sys.version_info[0:2]
-python_major_version = python_version[0]
 
 package_dir = os.path.dirname(os.path.realpath(__file__))
 pkg_info = os.path.join(package_dir, "PKG-INFO")
@@ -63,8 +62,6 @@ class FridaPrebuiltExt(build_ext):
             elif system == 'Darwin':
                 if platform.machine() == 'x86_64':
                     os_version = "macosx-10.9-x86_64"
-                elif python_major_version == 2:
-                    os_version = "macosx-11.0-fat64"
                 else:
                     os_version = "macosx-11.0-arm64"
             elif system == 'Linux':
@@ -115,13 +112,12 @@ class FridaPrebuiltExt(build_ext):
 
                 parser = PEP503PageParser("frida", frida_version, os_version)
                 parser.feed(links_html)
-                urls = [url for url in parser.urls if url.major == python_major_version]
 
-                if len(urls) == 0:
+                if len(parser.urls) == 0:
                     raise NotImplementedError("could not find prebuilt Frida extension; "
-                                              "prebuilds only provided for Python 2.7 and 3.4+")
+                                              "prebuilds only provided for Python 3.4+")
 
-                url = urls[0]
+                url = parser.urls[0]
                 egg_url = urljoin(frida_url, url.url)
 
                 try:
@@ -144,7 +140,7 @@ class FridaPrebuiltExt(build_ext):
             egg_zip = zipfile.ZipFile(egg_file)
             extension_member = [info for info in egg_zip.infolist() if info.filename.endswith(target_extension)][0]
             extension_data = egg_zip.read(extension_member)
-            if system == 'Windows' and python_major_version >= 3:
+            if system == 'Windows':
                 trailer = b"\x00" if python_version[1] >= 10 else b"\x00\x00"
                 extension_data = re.sub(b"python[3-9][0-9][0-9]\\.dll\x00",
                                         "python{0}{1}.dll".format(*python_version).encode('utf-8') + trailer,
@@ -200,8 +196,6 @@ class PEP503PageParser(HTMLParser):
         filename_pattern = (
             r"^{}\-{}\-py(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<micro>\d+))?-{}.egg$"
         ).format(*map(re.escape, [name, version, os_version]))
-        if python_major_version == 2:
-            filename_pattern = filename_pattern.decode("utf-8")
         self._filename_pattern = re.compile(filename_pattern)
 
     def reset(self):
