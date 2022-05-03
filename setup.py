@@ -101,7 +101,7 @@ class FridaPrebuiltExt(build_ext):
                 raise NotImplementedError("unsupported OS")
 
             egg_path = os.path.expanduser(
-                "~/frida-{}-py{}.{}-{}.egg".format(frida_version, python_version[0], python_version[1], os_version))
+                "~{}frida-{}-py{}.{}-{}.egg".format(os.sep, frida_version, python_version[0], python_version[1], os_version))
             print("looking for prebuilt extension in home directory, i.e.", egg_path)
 
             try:
