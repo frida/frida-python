@@ -27,9 +27,11 @@ from . import core
 
 __version__ = _frida.__version__
 
+get_device_manager = core.get_device_manager
 Relay = _frida.Relay
 PortalService = core.PortalService
 EndpointParameters = core.EndpointParameters
+Compiler = core.Compiler
 FileMonitor = _frida.FileMonitor
 Cancellable = core.Cancellable
 
@@ -104,12 +106,3 @@ def enumerate_devices(**kwargs):
 @core.cancellable
 def shutdown():
     get_device_manager()._impl.close()
-
-
-global _device_manager
-_device_manager = None
-def get_device_manager():
-    global _device_manager
-    if _device_manager is None:
-        _device_manager = core.DeviceManager(_frida.DeviceManager())
-    return _device_manager

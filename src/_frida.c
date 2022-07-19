@@ -129,6 +129,7 @@ typedef struct _PyRelay                        PyRelay;
 typedef struct _PyPortalMembership             PyPortalMembership;
 typedef struct _PyPortalService                PyPortalService;
 typedef struct _PyEndpointParameters           PyEndpointParameters;
+typedef struct _PyCompiler                     PyCompiler;
 typedef struct _PyFileMonitor                  PyFileMonitor;
 typedef struct _PyIOStream                     PyIOStream;
 typedef struct _PyCancellable                  PyCancellable;
@@ -271,6 +272,11 @@ struct _FridaPythonAuthenticationService
   GThreadPool * pool;
 };
 
+struct _PyCompiler
+{
+  PyGObject parent;
+};
+
 struct _PyFileMonitor
 {
   PyGObject parent;
@@ -316,6 +322,7 @@ static PyObject * PyGObject_marshal_enum (gint value, GType type);
 static gboolean PyGObject_unmarshal_enum (const gchar * str, GType type, gpointer value);
 static PyObject * PyGObject_marshal_bytes (GBytes * bytes);
 static PyObject * PyGObject_marshal_bytes_non_nullable (GBytes * bytes);
+static PyObject * PyGObject_marshal_variant (GVariant * variant);
 static gboolean PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant);
 static PyObject * PyGObject_marshal_parameters_dict (GHashTable * dict);
 static PyObject * PyGObject_marshal_socket_address (GSocketAddress * address);
@@ -452,6 +459,12 @@ static void frida_python_authentication_service_authenticate (FridaAuthenticatio
 static gchar * frida_python_authentication_service_authenticate_finish (FridaAuthenticationService * service, GAsyncResult * result,
     GError ** error);
 static void frida_python_authentication_service_do_authenticate (GTask * task, FridaPythonAuthenticationService * self);
+
+static int PyCompiler_init (PyCompiler * self, PyObject * args, PyObject * kw);
+static PyObject * PyCompiler_build (PyCompiler * self, PyObject * args, PyObject * kw);
+static PyObject * PyCompiler_watch (PyCompiler * self, PyObject * args, PyObject * kw);
+static gboolean PyCompiler_set_options (FridaCompilerOptions * options, const gchar * project_root_value, const gchar * source_maps_value,
+    const gchar * compression_value);
 
 static int PyFileMonitor_init (PyFileMonitor * self, PyObject * args, PyObject * kw);
 static PyObject * PyFileMonitor_enable (PyFileMonitor * self);
@@ -655,6 +668,13 @@ static PyMethodDef PyPortalService_methods[] =
 static PyMemberDef PyPortalService_members[] =
 {
   { "device", T_OBJECT_EX, G_STRUCT_OFFSET (PyPortalService, device), READONLY, "Device for in-process control." },
+  { NULL }
+};
+
+static PyMethodDef PyCompiler_methods[] =
+{
+  { "build", (PyCFunction) PyCompiler_build, METH_VARARGS | METH_KEYWORDS, "Build an agent." },
+  { "watch", (PyCFunction) PyCompiler_watch, METH_VARARGS | METH_KEYWORDS, "Continuously build an agent." },
   { NULL }
 };
 
@@ -1321,6 +1341,48 @@ static PyTypeObject PyEndpointParametersType =
 
 PYFRIDA_DEFINE_TYPE (EndpointParameters, NULL, g_object_unref);
 
+static PyTypeObject PyCompilerType =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "_frida.Compiler",                            /* tp_name           */
+  sizeof (PyCompiler),                          /* tp_basicsize      */
+  0,                                            /* tp_itemsize       */
+  NULL,                                         /* tp_dealloc        */
+  PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET,   /* tp_{print,vco}    */
+  NULL,                                         /* tp_getattr        */
+  NULL,                                         /* tp_setattr        */
+  NULL,                                         /* tp_compare        */
+  NULL,                                         /* tp_repr           */
+  NULL,                                         /* tp_as_number      */
+  NULL,                                         /* tp_as_sequence    */
+  NULL,                                         /* tp_as_mapping     */
+  NULL,                                         /* tp_hash           */
+  NULL,                                         /* tp_call           */
+  NULL,                                         /* tp_str            */
+  NULL,                                         /* tp_getattro       */
+  NULL,                                         /* tp_setattro       */
+  NULL,                                         /* tp_as_buffer      */
+  Py_TPFLAGS_DEFAULT,                           /* tp_flags          */
+  "Frida File Monitor",                         /* tp_doc            */
+  NULL,                                         /* tp_traverse       */
+  NULL,                                         /* tp_clear          */
+  NULL,                                         /* tp_richcompare    */
+  0,                                            /* tp_weaklistoffset */
+  NULL,                                         /* tp_iter           */
+  NULL,                                         /* tp_iternext       */
+  PyCompiler_methods,                           /* tp_methods        */
+  NULL,                                         /* tp_members        */
+  NULL,                                         /* tp_getset         */
+  &PyGObjectType,                               /* tp_base           */
+  NULL,                                         /* tp_dict           */
+  NULL,                                         /* tp_descr_get      */
+  NULL,                                         /* tp_descr_set      */
+  0,                                            /* tp_dictoffset     */
+  (initproc) PyCompiler_init,                   /* tp_init           */
+};
+
+PYFRIDA_DEFINE_TYPE (Compiler, NULL, frida_unref);
+
 static PyTypeObject PyFileMonitorType =
 {
   PyVarObject_HEAD_INIT (NULL, 0)
@@ -1832,6 +1894,9 @@ PyGObject_marshal_value (const GValue * value)
 
     case G_TYPE_STRING:
       return PyGObject_marshal_string (g_value_get_string (value));
+
+    case G_TYPE_VARIANT:
+      return PyGObject_marshal_variant (g_value_get_variant (value));
 
     default:
       if (G_TYPE_IS_ENUM (type))
@@ -4994,6 +5059,130 @@ frida_python_authentication_service_do_authenticate (GTask * task, FridaPythonAu
 
 
 static int
+PyCompiler_init (PyCompiler * self, PyObject * args, PyObject * kw)
+{
+  PyDeviceManager * manager;
+
+  if (PyGObjectType.tp_init ((PyObject *) self, args, kw) < 0)
+    return -1;
+
+  if (!PyArg_ParseTuple (args, "O!", &PYFRIDA_TYPE (DeviceManager), &manager))
+    return -1;
+
+  PyGObject_take_handle (&self->parent, frida_compiler_new (PY_GOBJECT_HANDLE (manager)), &PYFRIDA_TYPE_SPEC (Compiler));
+
+  return 0;
+}
+
+static PyObject *
+PyCompiler_build (PyCompiler * self, PyObject * args, PyObject * kw)
+{
+  PyObject * result;
+  static char * keywords[] = { "entrypoint", "project_root", "source_maps", "compression", NULL };
+  const char * entrypoint;
+  const char * project_root = NULL;
+  const char * source_maps = NULL;
+  const char * compression = NULL;
+  FridaBuildOptions * options;
+  GError * error = NULL;
+  gchar * bundle;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|sss", keywords, &entrypoint, &project_root, &source_maps, &compression))
+    return NULL;
+
+  options = frida_build_options_new ();
+  if (!PyCompiler_set_options (FRIDA_COMPILER_OPTIONS (options), project_root, source_maps, compression))
+    goto invalid_option_value;
+
+  Py_BEGIN_ALLOW_THREADS
+  bundle = frida_compiler_build_sync (PY_GOBJECT_HANDLE (self), entrypoint, options, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  g_object_unref (options);
+
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  result = PyUnicode_FromUTF8String (bundle);
+  g_free (bundle);
+
+  return result;
+
+invalid_option_value:
+  {
+    g_object_unref (options);
+    return NULL;
+  }
+}
+
+static PyObject *
+PyCompiler_watch (PyCompiler * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "entrypoint", "project_root", "source_maps", "compression", NULL };
+  const char * entrypoint;
+  const char * project_root = NULL;
+  const char * source_maps = NULL;
+  const char * compression = NULL;
+  FridaWatchOptions * options;
+  GError * error = NULL;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|sss", keywords, &entrypoint, &project_root, &source_maps, &compression))
+    return NULL;
+
+  options = frida_watch_options_new ();
+  if (!PyCompiler_set_options (FRIDA_COMPILER_OPTIONS (options), project_root, source_maps, compression))
+    goto invalid_option_value;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_compiler_watch_sync (PY_GOBJECT_HANDLE (self), entrypoint, options, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  g_object_unref (options);
+
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+
+invalid_option_value:
+  {
+    g_object_unref (options);
+    return NULL;
+  }
+}
+
+static gboolean
+PyCompiler_set_options (FridaCompilerOptions * options, const gchar * project_root_value, const gchar * source_maps_value,
+    const gchar * compression_value)
+{
+  if (project_root_value != NULL)
+    frida_compiler_options_set_project_root (options, project_root_value);
+
+  if (source_maps_value != NULL)
+  {
+    FridaSourceMaps source_maps;
+
+    if (!PyGObject_unmarshal_enum (source_maps_value, FRIDA_TYPE_SOURCE_MAPS, &source_maps))
+      return FALSE;
+
+    frida_compiler_options_set_source_maps (options, source_maps);
+  }
+
+  if (compression_value != NULL)
+  {
+    FridaJsCompression compression;
+
+    if (!PyGObject_unmarshal_enum (compression_value, FRIDA_TYPE_JS_COMPRESSION, &compression))
+      return FALSE;
+
+    frida_compiler_options_set_compression (options, compression);
+  }
+
+  return TRUE;
+}
+
+
+static int
 PyFileMonitor_init (PyFileMonitor * self, PyObject * args, PyObject * kw)
 {
   const char * path;
@@ -5613,6 +5802,7 @@ MOD_INIT (_frida)
   PYFRIDA_REGISTER_TYPE (PortalMembership, FRIDA_TYPE_PORTAL_MEMBERSHIP);
   PYFRIDA_REGISTER_TYPE (PortalService, FRIDA_TYPE_PORTAL_SERVICE);
   PYFRIDA_REGISTER_TYPE (EndpointParameters, FRIDA_TYPE_ENDPOINT_PARAMETERS);
+  PYFRIDA_REGISTER_TYPE (Compiler, FRIDA_TYPE_COMPILER);
   PYFRIDA_REGISTER_TYPE (FileMonitor, FRIDA_TYPE_FILE_MONITOR);
   PYFRIDA_REGISTER_TYPE (IOStream, G_TYPE_IO_STREAM);
   PYFRIDA_REGISTER_TYPE (Cancellable, G_TYPE_CANCELLABLE);
