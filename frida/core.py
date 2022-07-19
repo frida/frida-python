@@ -12,7 +12,15 @@ import traceback
 import _frida
 
 
+_device_manager = None
 _Cancellable = _frida.Cancellable
+
+
+def get_device_manager():
+    global _device_manager
+    if _device_manager is None:
+        _device_manager = DeviceManager(_frida.DeviceManager())
+    return _device_manager
 
 
 def cancellable(f):
@@ -589,6 +597,28 @@ class PortalService(object):
                 callback(connection_id, message, data)
             except:
                 traceback.print_exc()
+
+
+class Compiler(object):
+    def __init__(self):
+        self._impl = _frida.Compiler(get_device_manager()._impl)
+
+    def __repr__(self):
+        return repr(self._impl)
+
+    @cancellable
+    def build(self, *args, **kwargs):
+        return self._impl.build(*args, **kwargs)
+
+    @cancellable
+    def watch(self, *args, **kwargs):
+        return self._impl.watch(*args, **kwargs)
+
+    def on(self, signal, callback):
+        self._impl.on(signal, callback)
+
+    def off(self, signal, callback):
+        self._impl.off(signal, callback)
 
 
 class IOStream(object):
