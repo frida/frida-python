@@ -414,8 +414,6 @@ static PyObject * PySession_create_script (PySession * self, PyObject * args, Py
 static PyObject * PySession_create_script_from_bytes (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_compile_script (PySession * self, PyObject * args, PyObject * kw);
 static FridaScriptOptions * PySession_parse_script_options (const gchar * name, const gchar * runtime_value);
-static PyObject * PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw);
-static PyObject * PySession_disable_debugger (PySession * self);
 static PyObject * PySession_setup_peer_connection (PySession * self, PyObject * args, PyObject * kw);
 static FridaPeerOptions * PySession_parse_peer_options (const gchar * stun_server, PyObject * relays);
 static PyObject * PySession_join_portal (PySession * self, PyObject * args, PyObject * kw);
@@ -427,6 +425,8 @@ static PyObject * PyScript_load (PyScript * self);
 static PyObject * PyScript_unload (PyScript * self);
 static PyObject * PyScript_eternalize (PyScript * self);
 static PyObject * PyScript_post (PyScript * self, PyObject * args, PyObject * kw);
+static PyObject * PyScript_enable_debugger (PyScript * self, PyObject * args, PyObject * kw);
+static PyObject * PyScript_disable_debugger (PyScript * self);
 
 static int PyRelay_init (PyRelay * self, PyObject * args, PyObject * kw);
 static void PyRelay_init_from_handle (PyRelay * self, FridaRelay * handle);
@@ -613,8 +613,6 @@ static PyMethodDef PySession_methods[] =
   { "create_script", (PyCFunction) PySession_create_script, METH_VARARGS | METH_KEYWORDS, "Create a new script." },
   { "create_script_from_bytes", (PyCFunction) PySession_create_script_from_bytes, METH_VARARGS | METH_KEYWORDS, "Create a new script from bytecode." },
   { "compile_script", (PyCFunction) PySession_compile_script, METH_VARARGS | METH_KEYWORDS, "Compile script source code to bytecode." },
-  { "enable_debugger", (PyCFunction) PySession_enable_debugger, METH_VARARGS | METH_KEYWORDS, "Enable the Node.js compatible script debugger." },
-  { "disable_debugger", (PyCFunction) PySession_disable_debugger, METH_NOARGS, "Disable the Node.js compatible script debugger." },
   { "setup_peer_connection", (PyCFunction) PySession_setup_peer_connection, METH_VARARGS | METH_KEYWORDS, "Set up a peer connection with the target process." },
   { "join_portal", (PyCFunction) PySession_join_portal, METH_VARARGS | METH_KEYWORDS, "Join a portal." },
   { NULL }
@@ -633,6 +631,8 @@ static PyMethodDef PyScript_methods[] =
   { "unload", (PyCFunction) PyScript_unload, METH_NOARGS, "Unload the script." },
   { "eternalize", (PyCFunction) PyScript_eternalize, METH_NOARGS, "Eternalize the script." },
   { "post", (PyCFunction) PyScript_post, METH_VARARGS | METH_KEYWORDS, "Post a JSON-encoded message to the script." },
+  { "enable_debugger", (PyCFunction) PyScript_enable_debugger, METH_VARARGS | METH_KEYWORDS, "Enable the Node.js compatible script debugger." },
+  { "disable_debugger", (PyCFunction) PyScript_disable_debugger, METH_NOARGS, "Disable the Node.js compatible script debugger." },
   { NULL }
 };
 
@@ -4200,39 +4200,6 @@ invalid_argument:
 }
 
 static PyObject *
-PySession_enable_debugger (PySession * self, PyObject * args, PyObject * kw)
-{
-  static char * keywords[] = { "port", NULL };
-  unsigned short int port = 0;
-  GError * error = NULL;
-
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "|H", keywords, &port))
-    return NULL;
-
-  Py_BEGIN_ALLOW_THREADS
-  frida_session_enable_debugger_sync (PY_GOBJECT_HANDLE (self), port, g_cancellable_get_current (), &error);
-  Py_END_ALLOW_THREADS
-  if (error != NULL)
-    return PyFrida_raise (error);
-
-  Py_RETURN_NONE;
-}
-
-static PyObject *
-PySession_disable_debugger (PySession * self)
-{
-  GError * error = NULL;
-
-  Py_BEGIN_ALLOW_THREADS
-  frida_session_disable_debugger_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
-  Py_END_ALLOW_THREADS
-  if (error != NULL)
-    return PyFrida_raise (error);
-
-  Py_RETURN_NONE;
-}
-
-static PyObject *
 PySession_setup_peer_connection (PySession * self, PyObject * args, PyObject * kw)
 {
   gboolean success = FALSE;
@@ -4497,6 +4464,39 @@ PyScript_post (PyScript * self, PyObject * args, PyObject * kw)
 
   g_bytes_unref (data);
   PyMem_Free (message);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyScript_enable_debugger (PyScript * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "port", NULL };
+  unsigned short int port = 0;
+  GError * error = NULL;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "|H", keywords, &port))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_script_enable_debugger_sync (PY_GOBJECT_HANDLE (self), port, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyScript_disable_debugger (PyScript * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_script_disable_debugger_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
 
   Py_RETURN_NONE;
 }
