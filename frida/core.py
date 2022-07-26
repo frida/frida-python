@@ -278,14 +278,6 @@ class Session(object):
         return self._impl.compile_script(*args, **kwargs)
 
     @cancellable
-    def enable_debugger(self, *args, **kwargs):
-        self._impl.enable_debugger(*args, **kwargs)
-
-    @cancellable
-    def disable_debugger(self):
-        self._impl.disable_debugger()
-
-    @cancellable
     def setup_peer_connection(self, *args, **kwargs):
         self._impl.setup_peer_connection(*args, **kwargs)
 
@@ -338,6 +330,14 @@ class Script(object):
     def post(self, message, **kwargs):
         raw_message = json.dumps(message)
         self._impl.post(raw_message, **kwargs)
+
+    @cancellable
+    def enable_debugger(self, *args, **kwargs):
+        self._impl.enable_debugger(*args, **kwargs)
+
+    @cancellable
+    def disable_debugger(self):
+        self._impl.disable_debugger()
 
     def on(self, signal, callback):
         if signal == 'message':
