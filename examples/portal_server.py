@@ -80,7 +80,7 @@ class Application:
             raise ValueError("invalid request")
 
         provided = hashlib.sha1(secret).digest()
-        expected = hashlib.sha1("knock-knock".encode('utf-8')).digest()
+        expected = hashlib.sha1(b"knock-knock").digest()
         if not hmac.compare_digest(provided, expected):
             raise ValueError("get outta here")
 
