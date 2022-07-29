@@ -785,7 +785,7 @@ class Device:
         Get the message bus of the device
         """
 
-        return Bus(self._impl.get_bus())
+        return self.bus
 
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
