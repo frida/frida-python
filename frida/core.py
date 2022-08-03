@@ -278,6 +278,10 @@ class Session(object):
         return self._impl.compile_script(*args, **kwargs)
 
     @cancellable
+    def snapshot_script(self, *args, **kwargs):
+        return self._impl.snapshot_script(*args, **kwargs)
+
+    @cancellable
     def setup_peer_connection(self, *args, **kwargs):
         self._impl.setup_peer_connection(*args, **kwargs)
 

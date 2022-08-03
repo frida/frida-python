@@ -413,7 +413,11 @@ static PyObject * PySession_disable_child_gating (PySession * self);
 static PyObject * PySession_create_script (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_create_script_from_bytes (PySession * self, PyObject * args, PyObject * kw);
 static PyObject * PySession_compile_script (PySession * self, PyObject * args, PyObject * kw);
-static FridaScriptOptions * PySession_parse_script_options (const gchar * name, const gchar * runtime_value);
+static PyObject * PySession_snapshot_script (PySession * self, PyObject * args, PyObject * kw);
+static FridaScriptOptions * PySession_parse_script_options (const gchar * name, gconstpointer snapshot_data, gsize snapshot_size,
+    const gchar * runtime_value);
+static PyObject * PySession_snapshot_script (PySession * self, PyObject * args, PyObject * kw);
+static FridaSnapshotOptions * PySession_parse_snapshot_options (const gchar * warmup_script, const gchar * runtime_value);
 static PyObject * PySession_setup_peer_connection (PySession * self, PyObject * args, PyObject * kw);
 static FridaPeerOptions * PySession_parse_peer_options (const gchar * stun_server, PyObject * relays);
 static PyObject * PySession_join_portal (PySession * self, PyObject * args, PyObject * kw);
@@ -613,6 +617,7 @@ static PyMethodDef PySession_methods[] =
   { "create_script", (PyCFunction) PySession_create_script, METH_VARARGS | METH_KEYWORDS, "Create a new script." },
   { "create_script_from_bytes", (PyCFunction) PySession_create_script_from_bytes, METH_VARARGS | METH_KEYWORDS, "Create a new script from bytecode." },
   { "compile_script", (PyCFunction) PySession_compile_script, METH_VARARGS | METH_KEYWORDS, "Compile script source code to bytecode." },
+  { "snapshot_script", (PyCFunction) PySession_snapshot_script, METH_VARARGS | METH_KEYWORDS, "Evaluate script and snapshot the resulting VM state." },
   { "setup_peer_connection", (PyCFunction) PySession_setup_peer_connection, METH_VARARGS | METH_KEYWORDS, "Set up a peer connection with the target process." },
   { "join_portal", (PyCFunction) PySession_join_portal, METH_VARARGS | METH_KEYWORDS, "Join a portal." },
   { NULL }
@@ -4050,18 +4055,24 @@ static PyObject *
 PySession_create_script (PySession * self, PyObject * args, PyObject * kw)
 {
   PyObject * result = NULL;
-  static char * keywords[] = { "source", "name", "runtime", NULL };
+  static char * keywords[] = { "source", "name", "snapshot", "runtime", NULL };
   char * source;
   char * name = NULL;
+  gconstpointer snapshot_data = NULL;
+  Py_ssize_t snapshot_size = 0;
   const char * runtime_value = NULL;
   FridaScriptOptions * options;
   GError * error = NULL;
   FridaScript * handle;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|esz", keywords, "utf-8", &source, "utf-8", &name, &runtime_value))
+#if PY_MAJOR_VERSION >= 3
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|esy#z", keywords, "utf-8", &source, "utf-8", &name, &snapshot_data, &snapshot_size, &runtime_value))
+#else
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|ess#z", keywords, "utf-8", &source, "utf-8", &name, &snapshot_data, &snapshot_size, &runtime_value))
+#endif
     return NULL;
 
-  options = PySession_parse_script_options (name, runtime_value);
+  options = PySession_parse_script_options (name, snapshot_data, snapshot_size, runtime_value);
   if (options == NULL)
     goto beach;
 
@@ -4086,26 +4097,28 @@ static PyObject *
 PySession_create_script_from_bytes (PySession * self, PyObject * args, PyObject * kw)
 {
   PyObject * result = NULL;
-  static char * keywords[] = { "data", "name", "runtime", NULL };
+  static char * keywords[] = { "data", "name", "snapshot", "runtime", NULL };
   guint8 * data;
   Py_ssize_t size;
   char * name = NULL;
+  gconstpointer snapshot_data = NULL;
+  Py_ssize_t snapshot_size = 0;
   const char * runtime_value = NULL;
   GBytes * bytes;
   FridaScriptOptions * options;
   GError * error = NULL;
   FridaScript * handle;
 
- #if PY_MAJOR_VERSION >= 3
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "y#|esz", keywords, &data, &size, "utf-8", &name, &runtime_value))
- #else
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "s#|esz", keywords, &data, &size, "utf-8", &name, &runtime_value))
- #endif
+#if PY_MAJOR_VERSION >= 3
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "y#|esy#z", keywords, &data, &size, "utf-8", &name, &snapshot_data, &snapshot_size, &runtime_value))
+#else
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s#|ess#z", keywords, &data, &size, "utf-8", &name, &snapshot_data, &snapshot_size, &runtime_value))
+#endif
     return NULL;
 
   bytes = g_bytes_new (data, size);
 
-  options = PySession_parse_script_options (name, runtime_value);
+  options = PySession_parse_script_options (name, snapshot_data, snapshot_size, runtime_value);
   if (options == NULL)
     goto beach;
 
@@ -4141,7 +4154,7 @@ PySession_compile_script (PySession * self, PyObject * args, PyObject * kw)
   if (!PyArg_ParseTupleAndKeywords (args, kw, "es|esz", keywords, "utf-8", &source, "utf-8", &name, &runtime_value))
     return NULL;
 
-  options = PySession_parse_script_options (name, runtime_value);
+  options = PySession_parse_script_options (name, NULL, 0, runtime_value);
   if (options == NULL)
     goto beach;
 
@@ -4170,7 +4183,7 @@ beach:
 }
 
 static FridaScriptOptions *
-PySession_parse_script_options (const gchar * name, const gchar * runtime_value)
+PySession_parse_script_options (const gchar * name, gconstpointer snapshot_data, gsize snapshot_size, const gchar * runtime_value)
 {
   FridaScriptOptions * options;
 
@@ -4178,6 +4191,13 @@ PySession_parse_script_options (const gchar * name, const gchar * runtime_value)
 
   if (name != NULL)
     frida_script_options_set_name (options, name);
+
+  if (snapshot_data != NULL)
+  {
+    GBytes * snapshot = g_bytes_new (snapshot_data, snapshot_size);
+    frida_script_options_set_snapshot (options, snapshot);
+    g_bytes_unref (snapshot);
+  }
 
   if (runtime_value != NULL)
   {
@@ -4187,6 +4207,79 @@ PySession_parse_script_options (const gchar * name, const gchar * runtime_value)
       goto invalid_argument;
 
     frida_script_options_set_runtime (options, runtime);
+  }
+
+  return options;
+
+invalid_argument:
+  {
+    g_object_unref (options);
+
+    return NULL;
+  }
+}
+
+static PyObject *
+PySession_snapshot_script (PySession * self, PyObject * args, PyObject * kw)
+{
+  PyObject * result = NULL;
+  static char * keywords[] = { "embed_script", "warmup_script", "runtime", NULL };
+  char * embed_script;
+  char * warmup_script = NULL;
+  const char * runtime_value = NULL;
+  FridaSnapshotOptions * options;
+  GError * error = NULL;
+  GBytes * bytes;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "es|esz", keywords, "utf-8", &embed_script, "utf-8", &warmup_script, &runtime_value))
+    return NULL;
+
+  options = PySession_parse_snapshot_options (warmup_script, runtime_value);
+  if (options == NULL)
+    goto beach;
+
+  Py_BEGIN_ALLOW_THREADS
+  bytes = frida_session_snapshot_script_sync (PY_GOBJECT_HANDLE (self), embed_script, options, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  if (error == NULL)
+  {
+    result = PyGObject_marshal_bytes_non_nullable (bytes);
+
+    g_bytes_unref (bytes);
+  }
+  else
+  {
+    result = PyFrida_raise (error);
+  }
+
+beach:
+  g_clear_object (&options);
+
+  PyMem_Free (warmup_script);
+  PyMem_Free (embed_script);
+
+  return result;
+}
+
+static FridaSnapshotOptions *
+PySession_parse_snapshot_options (const gchar * warmup_script, const gchar * runtime_value)
+{
+  FridaSnapshotOptions * options;
+
+  options = frida_snapshot_options_new ();
+
+  if (warmup_script != NULL)
+    frida_snapshot_options_set_warmup_script (options, warmup_script);
+
+  if (runtime_value != NULL)
+  {
+    FridaScriptRuntime runtime;
+
+    if (!PyGObject_unmarshal_enum (runtime_value, FRIDA_TYPE_SCRIPT_RUNTIME, &runtime))
+      goto invalid_argument;
+
+    frida_snapshot_options_set_runtime (options, runtime);
   }
 
   return options;
