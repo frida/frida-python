@@ -63,7 +63,7 @@ class Capture(NSObject):
             })
             script.on('message', self._onScriptMessage)
             script.load()
-        except Exception, e:
+        except Exception as e:
             if session is not None:
                 try:
                     session.detach()
@@ -93,7 +93,7 @@ class Capture(NSObject):
         pool = NSAutoreleasePool.alloc().init()
         try:
             script.post(message)
-        except Exception, e:
+        except Exception as e:
             print "Failed to post to script:", e
         del pool
 
