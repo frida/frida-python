@@ -213,7 +213,7 @@ class PEP503PageParser(HTMLParser):
         self._path.append(Tag(tag, dict(attrs)))
 
     def handle_endtag(self, tag):
-        if tag == u"a":
+        if tag == "a":
             while True:
                 if self._path.pop().tagname == tag:
                     break
@@ -223,7 +223,7 @@ class PEP503PageParser(HTMLParser):
 
     def handle_data(self, data):
         if not (len(self._path) > 0
-                and self._path[-1].tagname == u"a"
+                and self._path[-1].tagname == "a"
                 and self._path[-1].attrs.get("href")):
             return
 
