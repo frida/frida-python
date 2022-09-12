@@ -143,7 +143,7 @@ class FridaPrebuiltExt(build_ext):
             if system == 'Windows':
                 trailer = b"\x00" if python_version[1] >= 10 else b"\x00\x00"
                 extension_data = re.sub(b"python[3-9][0-9][0-9]\\.dll\x00",
-                                        "python{0}{1}.dll".format(*python_version).encode('utf-8') + trailer,
+                                        "python{}{}.dll".format(*python_version).encode('utf-8') + trailer,
                                         extension_data)
             with open(target, 'wb') as f:
                 f.write(extension_data)
