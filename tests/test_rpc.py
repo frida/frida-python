@@ -1,6 +1,5 @@
 import platform
 import subprocess
-import sys
 import threading
 import time
 import unittest
@@ -11,6 +10,9 @@ from .data import target_program
 
 
 class TestRpc(unittest.TestCase):
+    target: subprocess.Popen
+    session: frida.core.Session
+
     @classmethod
     def setUp(cls):
         system = platform.system()
@@ -51,7 +53,7 @@ rpc.exports = {
         self.assertEqual(script.exports.add(2, 3), 5)
         self.assertEqual(script.exports.sub(5, 3), 2)
         self.assertRaises(Exception, lambda: script.exports.add(1, -2))
-        self.assertListEqual([x for x in iterbytes(script.exports.speak())], [0x59, 0x6F])
+        self.assertListEqual([x for x in iter(script.exports.speak())], [0x59, 0x6F])
 
     def test_post_failure(self):
         script = self.session.create_script(
@@ -147,22 +149,10 @@ rpc.exports = {
         self.assertEqual(script._pending, {})
 
     def assertRaisesScriptDestroyed(self, operation):
-        self.assertRaisesMatching(frida.InvalidOperationError, "script has been destroyed", operation)
+        self.assertRaisesRegex(frida.InvalidOperationError, "script has been destroyed", operation)
 
     def assertRaisesOperationCancelled(self, operation):
-        self.assertRaisesMatching(frida.OperationCancelledError, "operation was cancelled", operation)
-
-    def assertRaisesMatching(self, exception, regex, operation):
-        m = self.assertRaisesRegex if sys.version_info[0] >= 3 else self.assertRaisesRegexp
-        m(exception, regex, operation)
-
-
-if sys.version_info[0] >= 3:
-    iterbytes = lambda x: iter(x)
-else:
-
-    def iterbytes(data):
-        return (ord(char) for char in data)
+        self.assertRaisesRegex(frida.OperationCancelledError, "operation was cancelled", operation)
 
 
 if __name__ == "__main__":
