@@ -94,7 +94,7 @@ class Capture(NSObject):
         try:
             script.post(message)
         except Exception as e:
-            print "Failed to post to script:", e
+            print("Failed to post to script:", e)
         del pool
 
     def _attachDidCompleteWithSession_script_error_(self, session, script, error):
@@ -126,9 +126,9 @@ class Capture(NSObject):
                 self._delegate.captureRecvTotalDidChange()
             else:
                 if not self.calls._handleStanza_(stanza):
-                    print "Woot! Got stanza: %s from=%s" % (stanza['name'], stanza['from'])
+                    print("Woot! Got stanza: %s from=%s" % (stanza['name'], stanza['from']))
         else:
-            print "Unhandled message:", message
+            print("Unhandled message:", message)
 
     def _onSessionDetached(self):
         AppHelper.callAfter(self._sessionDidDetach)
