@@ -1,4 +1,5 @@
-from Foundation import NSObject, NSNotFound
+from Foundation import NSNotFound, NSObject
+
 
 class ProcessList(NSObject):
     def __new__(cls, device):
@@ -30,4 +31,3 @@ class ProcessList(NSObject):
 
     def comboBox_indexOfItemWithStringValue_(self, comboBox, value):
         return self._processIndexByName.get(value.lower(), NSNotFound)
-

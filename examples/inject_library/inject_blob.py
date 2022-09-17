@@ -6,8 +6,6 @@
 # $ python inject_blob.py Twitter example.dylib
 #
 
-from __future__ import unicode_literals, print_function
-
 import sys
 
 import frida
@@ -15,6 +13,7 @@ import frida
 
 def on_uninjected(id):
     print("on_uninjected id=%u" % id)
+
 
 (target, library_path) = sys.argv[1:]
 

@@ -1,13 +1,11 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import threading
 
-import frida
 from frida_tools.application import Reactor
 
+import frida
 
-class Application(object):
+
+class Application:
     def __init__(self):
         self._stop_requested = threading.Event()
         self._reactor = Reactor(run_until_return=lambda reactor: self._stop_requested.wait())
@@ -29,8 +27,8 @@ class Application(object):
             "BADGER": "badger-badger-badger",
             "SNAKE": "mushroom-mushroom",
         }
-        print("✔ spawn(argv={})".format(argv))
-        pid = self._device.spawn(argv, env=env, stdio='pipe')
+        print(f"✔ spawn(argv={argv})")
+        pid = self._device.spawn(argv, env=env, stdio="pipe")
         self._instrument(pid)
 
     def _stop_if_idle(self):
@@ -38,13 +36,14 @@ class Application(object):
             self._stop_requested.set()
 
     def _instrument(self, pid):
-        print("✔ attach(pid={})".format(pid))
+        print(f"✔ attach(pid={pid})")
         session = self._device.attach(pid)
         session.on("detached", lambda reason: self._reactor.schedule(lambda: self._on_detached(pid, session, reason)))
         print("✔ enable_child_gating()")
         session.enable_child_gating()
         print("✔ create_script()")
-        script = session.create_script("""\
+        script = session.create_script(
+            """\
 Interceptor.attach(Module.getExportByName(null, 'open'), {
   onEnter: function (args) {
     send({
@@ -53,31 +52,32 @@ Interceptor.attach(Module.getExportByName(null, 'open'), {
     });
   }
 });
-""")
+"""
+        )
         script.on("message", lambda message, data: self._reactor.schedule(lambda: self._on_message(pid, message)))
         print("✔ load()")
         script.load()
-        print("✔ resume(pid={})".format(pid))
+        print(f"✔ resume(pid={pid})")
         self._device.resume(pid)
         self._sessions.add(session)
 
     def _on_child_added(self, child):
-        print("⚡ child_added: {}".format(child))
+        print(f"⚡ child_added: {child}")
         self._instrument(child.pid)
 
     def _on_child_removed(self, child):
-        print("⚡ child_removed: {}".format(child))
+        print(f"⚡ child_removed: {child}")
 
     def _on_output(self, pid, fd, data):
-        print("⚡ output: pid={}, fd={}, data={}".format(pid, fd, repr(data)))
+        print(f"⚡ output: pid={pid}, fd={fd}, data={repr(data)}")
 
     def _on_detached(self, pid, session, reason):
-        print("⚡ detached: pid={}, reason='{}'".format(pid, reason))
+        print(f"⚡ detached: pid={pid}, reason='{reason}'")
         self._sessions.remove(session)
         self._reactor.schedule(self._stop_if_idle, delay=0.5)
 
     def _on_message(self, pid, message):
-        print("⚡ message: pid={}, payload={}".format(pid, message["payload"]))
+        print(f"⚡ message: pid={pid}, payload={message['payload']}")
 
 
 app = Application()

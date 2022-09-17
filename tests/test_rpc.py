@@ -1,14 +1,8 @@
-# -*- coding: utf-8 -*-
-
 import platform
 import subprocess
-import sys
 import threading
 import time
-try:
-    import unittest2 as unittest
-except:
-    import unittest
+import unittest
 
 import frida
 
@@ -16,6 +10,9 @@ from .data import target_program
 
 
 class TestRpc(unittest.TestCase):
+    target: subprocess.Popen
+    session: frida.core.Session
+
     @classmethod
     def setUp(cls):
         system = platform.system()
@@ -32,7 +29,9 @@ class TestRpc(unittest.TestCase):
         cls.target.wait()
 
     def test_basics(self):
-        script = self.session.create_script(name="test-rpc", source="""\
+        script = self.session.create_script(
+            name="test-rpc",
+            source="""\
 rpc.exports = {
     add: function (a, b) {
         var result = a + b;
@@ -48,21 +47,24 @@ rpc.exports = {
         return Memory.readByteArray(buf, 2);
     }
 };
-""")
+""",
+        )
         script.load()
         self.assertEqual(script.exports.add(2, 3), 5)
         self.assertEqual(script.exports.sub(5, 3), 2)
         self.assertRaises(Exception, lambda: script.exports.add(1, -2))
-        self.assertListEqual([x for x in iterbytes(script.exports.speak())],
-            [0x59, 0x6f])
+        self.assertListEqual([x for x in iter(script.exports.speak())], [0x59, 0x6F])
 
     def test_post_failure(self):
-        script = self.session.create_script(name="test-rpc", source="""\
+        script = self.session.create_script(
+            name="test-rpc",
+            source="""\
 rpc.exports = {
     init: function () {
     },
 };
-""")
+""",
+        )
         script.load()
         agent = script.exports
 
@@ -71,13 +73,16 @@ rpc.exports = {
         self.assertEqual(script._pending, {})
 
     def test_unload_mid_request(self):
-        script = self.session.create_script(name="test-rpc", source="""\
+        script = self.session.create_script(
+            name="test-rpc",
+            source="""\
 rpc.exports = {
     waitForever: function () {
         return new Promise(function () {});
     },
 };
-""")
+""",
+        )
         script.load()
         agent = script.exports
 
@@ -90,13 +95,16 @@ rpc.exports = {
         self.assertEqual(script._pending, {})
 
     def test_detach_mid_request(self):
-        script = self.session.create_script(name="test-rpc", source="""\
+        script = self.session.create_script(
+            name="test-rpc",
+            source="""\
 rpc.exports = {
     waitForever: function () {
         return new Promise(function () {});
     },
 };
-""")
+""",
+        )
         script.load()
         agent = script.exports
 
@@ -109,13 +117,16 @@ rpc.exports = {
         self.assertEqual(script._pending, {})
 
     def test_cancellation_mid_request(self):
-        script = self.session.create_script(name="test-rpc", source="""\
+        script = self.session.create_script(
+            name="test-rpc",
+            source="""\
 rpc.exports = {
     waitForever: function () {
         return new Promise(function () {});
     },
 };
-""")
+""",
+        )
         script.load()
         agent = script.exports
 
@@ -131,28 +142,18 @@ rpc.exports = {
         def call_wait_forever_with_cancellable():
             with cancellable:
                 agent.wait_forever()
+
         cancellable = frida.Cancellable()
         threading.Thread(target=cancel_after_100ms).start()
         self.assertRaisesOperationCancelled(call_wait_forever_with_cancellable)
         self.assertEqual(script._pending, {})
 
     def assertRaisesScriptDestroyed(self, operation):
-        self.assertRaisesMatching(frida.InvalidOperationError, "script has been destroyed", operation)
+        self.assertRaisesRegex(frida.InvalidOperationError, "script has been destroyed", operation)
 
     def assertRaisesOperationCancelled(self, operation):
-        self.assertRaisesMatching(frida.OperationCancelledError, "operation was cancelled", operation)
-
-    def assertRaisesMatching(self, exception, regex, operation):
-        m = self.assertRaisesRegex if sys.version_info[0] >= 3 else self.assertRaisesRegexp
-        m(exception, regex, operation)
+        self.assertRaisesRegex(frida.OperationCancelledError, "operation was cancelled", operation)
 
 
-if sys.version_info[0] >= 3:
-    iterbytes = lambda x: iter(x)
-else:
-    def iterbytes(data):
-        return (ord(char) for char in data)
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
