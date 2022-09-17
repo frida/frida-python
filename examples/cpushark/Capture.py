@@ -1,6 +1,5 @@
 import bisect
 import re
-import struct
 
 from Foundation import NSAutoreleasePool, NSObject, NSThread
 from PyObjCTools import AppHelper

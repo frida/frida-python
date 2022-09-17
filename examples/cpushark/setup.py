@@ -5,7 +5,6 @@ Usage:
     python setup.py py2app
 """
 
-import py2app
 from setuptools import setup
 
 plist = dict(
