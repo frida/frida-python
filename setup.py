@@ -59,7 +59,7 @@ if __name__ == "__main__":
             "Topic :: Software Development :: Libraries :: Python Modules",
         ],
         packages=["frida", "_frida"],
-        package_data={"frida": ["py.typed"], "_frida": ["py.typed"]},
+        package_data={"frida": ["py.typed"], "_frida": ["py.typed", "__init__.pyi"]},
         ext_modules=[Extension("_frida", [])],
         cmdclass={"build_ext": FridaPrebuiltExt},
         zip_safe=False,
