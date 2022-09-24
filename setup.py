@@ -8,7 +8,7 @@ from setuptools.extension import Extension
 
 package_dir = os.path.dirname(os.path.realpath(__file__))
 
-frida_version = os.environ.get("FRIDA_VERSION", None)
+frida_version = os.environ.get("FRIDA_VERSION", "0.0.0")
 long_description = codecs.open(os.path.join(package_dir, "README.md"), "r", "utf-8").read()
 frida_extension = os.environ.get("FRIDA_EXTENSION", None)
 
@@ -32,7 +32,7 @@ if __name__ == "__main__":
         author="Frida Developers",
         author_email="oleavr@frida.re",
         url="https://frida.re",
-        install_requires=["setuptools"],
+        install_requires=["setuptools", "typing_extensions; python_version<'3.8'"],
         python_requires=">=3.7",
         license="wxWindows Library Licence, Version 3.1",
         keywords="frida debugger dynamic instrumentation inject javascript windows macos linux ios iphone ipad android qnx",

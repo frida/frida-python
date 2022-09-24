@@ -1,3 +1,4 @@
+import dataclasses
 import fnmatch
 import functools
 import json
@@ -5,7 +6,27 @@ import sys
 import threading
 import traceback
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, TypeVar, Union
+from typing import (
+    Any,
+    AnyStr,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    overload,
+)
+
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 import _frida
 
@@ -14,6 +35,14 @@ _device_manager = None
 _Cancellable = _frida.Cancellable
 
 ProcessTarget = Union[int, str]
+Spawn = _frida.Spawn
+
+
+@dataclasses.dataclass
+class RPCResult:
+    finished: bool = False
+    value: Any = None
+    error: Optional[Exception] = None
 
 
 def get_device_manager() -> "DeviceManager":
@@ -27,7 +56,7 @@ def get_device_manager() -> "DeviceManager":
     return _device_manager
 
 
-def _filter_missing_kwargs(d: Dict[str, Any]) -> None:
+def _filter_missing_kwargs(d: MutableMapping[Any, Any]) -> None:
     for key in list(d.keys()):
         if d[key] is None:
             d.pop(key)
@@ -196,7 +225,7 @@ class Script:
 
         self._impl.eternalize()
 
-    def post(self, message: Any, data: Optional[str] = None) -> None:
+    def post(self, message: Any, data: Optional[AnyStr] = None) -> None:
         """
         Post a JSON-encoded message to the script
         """
@@ -224,6 +253,14 @@ class Script:
 
         self._impl.disable_debugger()
 
+    @overload
+    def on(self, signal: Literal["message"], callback: Callable[[Mapping[Any, Any], Any], Any]) -> None:
+        ...
+
+    @overload
+    def on(self, signal: str, callback: Callable[..., Any]) -> None:
+        ...
+
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -233,6 +270,14 @@ class Script:
             self._on_message_callbacks.append(callback)
         else:
             self._impl.on(signal, callback)
+
+    @overload
+    def off(self, signal: Literal["message"], callback: Callable[[Mapping[Any, Any], Any], Any]) -> None:
+        ...
+
+    @overload
+    def off(self, signal: str, callback: Callable[..., Any]) -> None:
+        ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -283,13 +328,13 @@ class Script:
 
     @cancellable
     def _rpc_request(self, *args: Any) -> Any:
-        result = [False, None, None]
+        result = RPCResult()
 
         def on_complete(value: Any, error: Union[None, RPCException | _frida.InvalidOperationError]) -> None:
             with self._cond:
-                result[0] = True
-                result[1] = value
-                result[2] = error
+                result.finished = True
+                result.value = value
+                result.error = error
                 self._cond.notify_all()
 
         def on_cancelled() -> None:
@@ -310,7 +355,7 @@ class Script:
             cancel_handler = cancellable.connect(on_cancelled)
             try:
                 with self._cond:
-                    while not result[0]:
+                    while not result.finished:
                         self._cond.wait()
             finally:
                 cancellable.disconnect(cancel_handler)
@@ -319,10 +364,10 @@ class Script:
         else:
             self._on_destroyed()
 
-        if result[2] is not None:
-            raise result[2]
+        if result.error is not None:
+            raise result.error
 
-        return result[1]
+        return result.value
 
     def _on_rpc_message(self, request_id: int, operation: str, params, data) -> None:
         if operation in ("ok", "error"):
@@ -432,7 +477,7 @@ class Session:
 
         kwargs = {"name": name, "snapshot": snapshot, "runtime": runtime}
         _filter_missing_kwargs(kwargs)
-        return Script(self._impl.create_script(source, **kwargs))
+        return Script(self._impl.create_script(source, **kwargs))  # type: ignore
 
     @cancellable
     def create_script_from_bytes(
@@ -444,7 +489,7 @@ class Session:
 
         kwargs = {"name": name, "snapshot": snapshot, "runtime": runtime}
         _filter_missing_kwargs(kwargs)
-        return Script(self._impl.create_script_from_bytes(data, **kwargs))
+        return Script(self._impl.create_script_from_bytes(data, **kwargs))  # type: ignore
 
     @cancellable
     def compile_script(self, source: str, name: Optional[str] = None, runtime: Optional[str] = None) -> bytes:
@@ -475,7 +520,7 @@ class Session:
 
         kwargs = {"stun_server": stun_server, "relays": relays}
         _filter_missing_kwargs(kwargs)
-        self._impl.setup_peer_connection(**kwargs)
+        self._impl.setup_peer_connection(**kwargs)  # type: ignore
 
     @cancellable
     def join_portal(
@@ -569,6 +614,7 @@ class Device:
     """
 
     def __init__(self, device: _frida.Device) -> None:
+        assert device.bus is not None
         self.id = device.id
         self.name = device.name
         self.icon = device.icon
@@ -616,7 +662,7 @@ class Device:
 
         kwargs = {"identifiers": identifiers, "scope": scope}
         _filter_missing_kwargs(kwargs)
-        return self._impl.enumerate_applications(**kwargs)
+        return self._impl.enumerate_applications(**kwargs)  # type: ignore
 
     @cancellable
     def enumerate_processes(
@@ -628,7 +674,7 @@ class Device:
 
         kwargs = {"pids": pids, "scope": scope}
         _filter_missing_kwargs(kwargs)
-        return self._impl.enumerate_processes(**kwargs)
+        return self._impl.enumerate_processes(**kwargs)  # type: ignore
 
     @cancellable
     def get_process(self, process_name: str) -> _frida.Process:
@@ -751,7 +797,7 @@ class Device:
 
         kwargs = {"realm": realm, "persist_timeout": persist_timeout}
         _filter_missing_kwargs(kwargs)
-        return Session(self._impl.attach(self._pid_of(target), **kwargs))
+        return Session(self._impl.attach(self._pid_of(target), **kwargs))  # type: ignore
 
     @cancellable
     def inject_library_file(self, target: ProcessTarget, path: str, entrypoint: str, data: str) -> int:

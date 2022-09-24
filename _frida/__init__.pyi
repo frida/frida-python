@@ -1,4 +1,4 @@
-from typing import Any, Callable, ClassVar, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 # Exceptions
 class AddressInUseError(Exception): ...
