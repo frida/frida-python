@@ -22,7 +22,7 @@
 #define PY_SSIZE_T_CLEAN
 
 /*
- * Don't propogate _DEBUG state to pyconfig as it incorrectly attempts to load
+ * Don't propagate _DEBUG state to pyconfig as it incorrectly attempts to load
  * debug libraries that don't normally ship with Python (e.g. 2.x). Debuggers
  * wishing to spelunk the Python core can override this workaround by defining
  * _FRIDA_ENABLE_PYDEBUG.
