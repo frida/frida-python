@@ -6,7 +6,7 @@
 
 #include <frida-core.h>
 #include <string.h>
-#ifdef G_OS_UNIX
+#if defined (G_OS_UNIX) && !defined (G_TYPE_UNIX_SOCKET_ADDRESS_TYPE)
 # include <gio/gunixsocketaddress.h>
 #endif
 
