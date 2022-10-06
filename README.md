@@ -1,16 +1,16 @@
 # frida-python
 
-Python bindings for [Frida](http://www.frida.re).
+Python bindings for [Frida](https://frida.re).
 
 # Some tips during development
 
-To build and test your own egg, do something along the following lines:
+To build and test your own wheel, do something along the following lines:
 
 ```
-set FRIDA_VERSION=12.0.0.10.gd7c36fc # from C:\src\frida\build\tmp-windows\frida-version.h
-set FRIDA_EXTENSION=C:\src\frida\build\frida-windows\Win32-Debug\lib\python2.7\site-packages\_frida.pyd
+set FRIDA_VERSION=16.0.1-dev.7 # from C:\src\frida\build\tmp-windows\frida-version.h
+set FRIDA_EXTENSION=C:\src\frida\build\frida-windows\x64-Release\lib\python3.10\site-packages\_frida.pyd
 cd C:\src\frida\frida-python\
-python setup.py bdist_egg
+pip wheel .
 pip uninstall frida
-easy_install dist\frida-12.0.0.10.gd7c36fc-py2.7-win32.egg
+pip install frida-16.0.1.dev7-cp34-abi3-win_amd64.whl
 ```
