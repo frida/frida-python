@@ -60,7 +60,7 @@ if __name__ == "__main__":
         ],
         packages=["frida", "_frida"],
         package_data={"frida": ["py.typed"], "_frida": ["py.typed", "__init__.pyi"]},
-        ext_modules=[Extension("_frida", [])],
+        ext_modules=[Extension("_frida", [], py_limited_api=True)],
         cmdclass={"build_ext": FridaPrebuiltExt},
         zip_safe=False,
     )
