@@ -1,4 +1,4 @@
-FRIDA_PYTHON {
+{
   global:
     PyInit__frida;
 
