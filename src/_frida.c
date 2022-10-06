@@ -325,7 +325,7 @@ static PyObject * PyGObject_new_take_handle (gpointer handle, const PyGObjectTyp
 static PyObject * PyGObject_try_get_from_handle (gpointer handle);
 static int PyGObject_init (PyGObject * self);
 static void PyGObject_dealloc (PyGObject * self);
-static void PyGObject_take_handle (PyGObject * self, gpointer handle, const PyGObjectType * spec);
+static void PyGObject_take_handle (PyGObject * self, gpointer handle, const PyGObjectType * type);
 static gpointer PyGObject_steal_handle (PyGObject * self);
 static PyObject * PyGObject_on (PyGObject * self, PyObject * args);
 static PyObject * PyGObject_off (PyGObject * self, PyObject * args);
