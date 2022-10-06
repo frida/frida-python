@@ -1,6 +1,6 @@
 extra_link_args = []
 if host_os_family == 'darwin'
-  extra_link_args += ['-Wl,-exported_symbol,_' + python_plugin_export_name]
+  extra_link_args += ['-Wl,-exported_symbol,_PyInit__frida']
 elif host_os_family != 'windows'
   extra_link_args += ['-Wl,--version-script,' + join_paths(meson.current_source_dir(), '_frida.version')]
 endif
