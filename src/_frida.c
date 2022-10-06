@@ -4753,7 +4753,7 @@ PyIOStream_read (PyIOStream * self, PyObject * args)
 
   if (error == NULL)
   {
-    if (bytes_read == count)
+    if ((unsigned long) bytes_read == count)
     {
       result = buffer;
     }
