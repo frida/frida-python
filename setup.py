@@ -1,4 +1,3 @@
-import codecs
 import os
 import shutil
 
@@ -9,7 +8,8 @@ from setuptools.extension import Extension
 package_dir = os.path.dirname(os.path.realpath(__file__))
 
 frida_version = os.environ.get("FRIDA_VERSION", "0.0.0")
-long_description = codecs.open(os.path.join(package_dir, "README.md"), "r", "utf-8").read()
+with open(os.path.join(package_dir, "README.md"), "r", encoding="utf-8") as f:
+    long_description = f.read()
 frida_extension = os.environ.get("FRIDA_EXTENSION", None)
 
 
