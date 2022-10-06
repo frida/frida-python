@@ -78,12 +78,6 @@ endif
 
 python_site_packages = join_paths(get_option('libdir'), python_name, 'site-packages')
 
-if python_version.version_compare('>3')
-  python_plugin_export_name = 'PyInit__frida'
-else
-  python_plugin_export_name = 'init_frida'
-endif
-
 cdata = configuration_data()
 
 cdata.set('HAVE_' + host_os_family.to_upper(), 1)
