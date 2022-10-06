@@ -330,7 +330,7 @@ class Script:
     def _rpc_request(self, *args: Any) -> Any:
         result = RPCResult()
 
-        def on_complete(value: Any, error: Union[None, RPCException | _frida.InvalidOperationError]) -> None:
+        def on_complete(value: Any, error: Union[None, Union[RPCException, _frida.InvalidOperationError]]) -> None:
             with self._cond:
                 result.finished = True
                 result.value = value
