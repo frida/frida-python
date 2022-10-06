@@ -19,7 +19,7 @@
 # undef _POSIX_C_SOURCE
 #endif
 
-#define Py_LIMITED_API 0x03040000
+#define Py_LIMITED_API 0x03070000
 #define PY_SSIZE_T_CLEAN
 
 /*
