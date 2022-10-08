@@ -63,6 +63,16 @@ else:
                 "-Wl,-exported_symbol,_PyInit__frida",
                 "-Wl,-dead_strip",
             ]
+            if "_PYTHON_HOST_PLATFORM" not in os.environ:
+                if platform.machine() == "arm64":
+                    host_arch = "arm64"
+                    macos_req = "11.0"
+                else:
+                    host_arch = "x86_64"
+                    macos_req = "10.9"
+                os.environ["_PYTHON_HOST_PLATFORM"] = f"macosx-{macos_req}-{host_arch}"
+                os.environ["ARCHFLAGS"] = f"-arch {host_arch}"
+                os.environ["MACOSX_DEPLOYMENT_TARGET"] = macos_req
         else:
             version_script = os.path.join(package_dir, "src", "_frida.version")
             if not os.path.exists(version_script):
