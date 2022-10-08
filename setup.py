@@ -7,8 +7,14 @@ from setuptools.command.build_ext import build_ext
 from setuptools.extension import Extension
 
 package_dir = os.path.dirname(os.path.realpath(__file__))
-
-frida_version = os.environ.get("FRIDA_VERSION", "0.0.0")
+pkg_info = os.path.join(package_dir, "PKG-INFO")
+in_source_package = os.path.isfile(pkg_info)
+if in_source_package:
+    with open(pkg_info, "r", encoding="utf-8") as f:
+        version_line = [line for line in f if line.startswith("Version: ")][0].strip()
+    frida_version = version_line[9:]
+else:
+    frida_version = os.environ.get("FRIDA_VERSION", "0.0.0")
 with open(os.path.join(package_dir, "README.md"), "r", encoding="utf-8") as f:
     long_description = f.read()
 frida_extension = os.environ.get("FRIDA_EXTENSION", None)
