@@ -86,6 +86,10 @@ if host_os != host_os_family
 endif
 
 frida_core_dep = dependency('frida-core-1.0')
+os_deps = []
+if host_os_family != 'windows'
+  os_deps += dependency('gio-unix-2.0')
+endif
 
 configure_file(input: 'config.h.in',
   output: 'config.h',

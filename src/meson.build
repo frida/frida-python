@@ -11,7 +11,7 @@ extension = shared_module('_frida', '_frida.c',
   c_args: frida_component_cflags,
   include_directories: include_directories(python_incdir),
   link_args: extra_link_args,
-  dependencies: [frida_core_dep],
+  dependencies: [frida_core_dep] + os_deps,
   install: true,
   install_dir: python_site_packages,
 )
