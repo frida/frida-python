@@ -24,9 +24,14 @@ from typing import (
 )
 
 if sys.version_info >= (3, 8):
-    from typing import Literal
+    from typing import Literal, TypedDict
 else:
-    from typing_extensions import Literal
+    from typing_extensions import Literal, TypedDict
+
+if sys.version_info >= (3, 11):
+    from typing import NotRequired
+else:
+    from typing_extensions import NotRequired
 
 import _frida
 
@@ -174,13 +179,32 @@ class ScriptExports:
         return self._script.list_exports()
 
 
+class ScriptErrorMessage(TypedDict):
+    type: Literal["error"]
+    description: str
+    stack: NotRequired[str]
+    fileName: NotRequired[str]
+    lineNumber: NotRequired[int]
+    columnNumber: NotRequired[int]
+
+
+class ScriptPayloadMessage(TypedDict):
+    type: Literal["send"]
+    payload: NotRequired[Any]
+
+
+ScriptMessage = Union[ScriptPayloadMessage, ScriptErrorMessage]
+ScriptMessageCallback = Callable[[ScriptMessage, Optional[bytes]], None]
+ScriptDestroyedCallback = Callable[[], None]
+
+
 class Script:
     def __init__(self, impl: _frida.Script) -> None:
         self.exports = ScriptExports(self)
 
         self._impl = impl
 
-        self._on_message_callbacks: List[Callable[..., Any]] = []
+        self._on_message_callbacks: List[ScriptMessageCallback] = []
         self._log_handler: Callable[[str, str], None] = self.default_log_handler
 
         self._pending: Dict[int, Callable[..., Any]] = {}
@@ -254,7 +278,11 @@ class Script:
         self._impl.disable_debugger()
 
     @overload
-    def on(self, signal: Literal["message"], callback: Callable[[Mapping[Any, Any], Any], Any]) -> None:
+    def on(self, signal: Literal["destroyed"], callback: ScriptDestroyedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["message"], callback: ScriptMessageCallback) -> None:
         ...
 
     @overload
@@ -272,7 +300,11 @@ class Script:
             self._impl.on(signal, callback)
 
     @overload
-    def off(self, signal: Literal["message"], callback: Callable[[Mapping[Any, Any], Any], Any]) -> None:
+    def off(self, signal: Literal["destroyed"], callback: ScriptDestroyedCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["message"], callback: ScriptMessageCallback) -> None:
         ...
 
     @overload
@@ -398,7 +430,7 @@ class Script:
 
             next_pending(None, _frida.InvalidOperationError("script has been destroyed"))
 
-    def _on_message(self, raw_message: str, data: Any) -> None:
+    def _on_message(self, raw_message: str, data: Optional[bytes]) -> None:
         message = json.loads(raw_message)
 
         mtype = message["type"]
@@ -418,6 +450,17 @@ class Script:
                     callback(message, data)
                 except:
                     traceback.print_exc()
+
+
+SessionDetachedCallback = Callable[
+    [
+        Literal[
+            "application-requested", "process-replaced", "process-terminated", "connection-terminated", "device-lost"
+        ],
+        Optional[_frida.Crash],
+    ],
+    None,
+]
 
 
 class Session:
@@ -538,6 +581,18 @@ class Session:
         _filter_missing_kwargs(kwargs)
         return PortalMembership(self._impl.join_portal(address, **kwargs))
 
+    @overload
+    def on(
+        self,
+        signal: Literal["detached"],
+        callback: SessionDetachedCallback,
+    ) -> None:
+        ...
+
+    @overload
+    def on(self, signal: str, callback: Callable[..., Any]) -> None:
+        ...
+
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -545,12 +600,28 @@ class Session:
 
         self._impl.on(signal, callback)
 
+    @overload
+    def off(
+        self,
+        signal: Literal["detached"],
+        callback: SessionDetachedCallback,
+    ) -> None:
+        ...
+
+    @overload
+    def off(self, signal: str, callback: Callable[..., Any]) -> None:
+        ...
+
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Remove a signal handler
         """
 
         self._impl.off(signal, callback)
+
+
+BusDetachedCallback = Callable[[], None]
+BusMessageCallback = Callable[[Mapping[Any, Any], Optional[bytes]], None]
 
 
 class Bus:
@@ -578,6 +649,18 @@ class Bus:
         _filter_missing_kwargs(kwargs)
         self._impl.post(raw_message, **kwargs)
 
+    @overload
+    def on(self, signal: Literal["detached"], callback: BusDetachedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["message"], callback: BusMessageCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: str, callback: Callable[..., Any]) -> None:
+        ...
+
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -587,6 +670,18 @@ class Bus:
             self._on_message_callbacks.append(callback)
         else:
             self._impl.on(signal, callback)
+
+    @overload
+    def off(self, signal: Literal["detached"], callback: BusDetachedCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["message"], callback: BusMessageCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: str, callback: Callable[..., Any]) -> None:
+        ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -606,6 +701,16 @@ class Bus:
                 callback(message, data)
             except:
                 traceback.print_exc()
+
+
+DeviceSpawnAddedCallback = Callable[[_frida.Spawn], None]
+DeviceSpawnRemovedCallback = Callable[[_frida.Spawn], None]
+DeviceChildAddedCallback = Callable[[_frida.Child], None]
+DeviceChildRemovedCallback = Callable[[_frida.Child], None]
+DeviceProcessCrashedCallback = Callable[[_frida.Crash], None]
+DeviceOutputCallback = Callable[[int, int, bytes], None]
+DeviceUninjectedCallback = Callable[[int], None]
+DeviceLostCallback = Callable[[], None]
 
 
 class Device:
@@ -833,12 +938,84 @@ class Device:
 
         return self.bus
 
+    @overload
+    def on(self, signal: Literal["spawn-added"], callback: DeviceSpawnAddedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["spawn-removed"], callback: DeviceSpawnRemovedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["child-added"], callback: DeviceChildAddedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["child-removed"], callback: DeviceChildRemovedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["process-crashed"], callback: DeviceProcessCrashedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["output"], callback: DeviceOutputCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["uninjected"], callback: DeviceUninjectedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["lost"], callback: DeviceLostCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: str, callback: Callable[..., Any]) -> None:
+        ...
+
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
         """
 
         self._impl.on(signal, callback)
+
+    @overload
+    def off(self, signal: Literal["spawn-added"], callback: DeviceSpawnAddedCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["spawn-removed"], callback: DeviceSpawnRemovedCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["child-added"], callback: DeviceChildAddedCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["child-removed"], callback: DeviceChildRemovedCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["process-crashed"], callback: DeviceProcessCrashedCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["output"], callback: DeviceOutputCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["uninjected"], callback: DeviceUninjectedCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["lost"], callback: DeviceLostCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: str, callback: Callable[..., Any]) -> None:
+        ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -852,6 +1029,11 @@ class Device:
             return self.get_process(target).pid
         else:
             return target
+
+
+DeviceManagerAddedCallback = Callable[[_frida.Device], None]
+DeviceManagerRemovedCallback = Callable[[_frida.Device], None]
+DeviceManagerChangedCallback = Callable[[], None]
 
 
 class DeviceManager:
@@ -943,12 +1125,44 @@ class DeviceManager:
 
         self._impl.remove_remote_device(address=address)
 
+    @overload
+    def on(self, signal: Literal["added"], callback: DeviceManagerAddedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["removed"], callback: DeviceManagerRemovedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["changed"], callback: DeviceManagerChangedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: str, callback: Callable[..., Any]) -> None:
+        ...
+
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
         """
 
         self._impl.on(signal, callback)
+
+    @overload
+    def off(self, signal: Literal["added"], callback: DeviceManagerAddedCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["removed"], callback: DeviceManagerRemovedCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["changed"], callback: DeviceManagerChangedCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: str, callback: Callable[..., Any]) -> None:
+        ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -998,6 +1212,17 @@ class EndpointParameters:
         self._impl = _frida.EndpointParameters(**kwargs)
 
 
+PortalServiceNodeJoinedCallback = Callable[[int, _frida.Application], None]
+PortalServiceNodeLeftCallback = Callable[[int, _frida.Application], None]
+PortalServiceNodeConnectedCallback = Callable[[int, Tuple[str, int]], None]
+PortalServiceNodeDisconnectedCallback = Callable[[int, Tuple[str, int]], None]
+PortalServiceControllerConnectedCallback = Callable[[int, Tuple[str, int]], None]
+PortalServiceControllerDisconnectedCallback = Callable[[int, Tuple[str, int]], None]
+PortalServiceAuthenticatedCallback = Callable[[int, Mapping[Any, Any]], None]
+PortalServiceSubscribeCallback = Callable[[int], None]
+PortalServiceMessageCallback = Callable[[int, Mapping[Any, Any], Optional[bytes]], None]
+
+
 class PortalService:
     def __init__(
         self,
@@ -1011,8 +1236,8 @@ class PortalService:
 
         self.device = impl.device
         self._impl = impl
-        self._on_authenticated_callbacks: List[Callable[[int, Dict[str, Any]], Any]] = []
-        self._on_message_callbacks: List[Callable[[int, Dict[str, Any], Any], Any]] = []
+        self._on_authenticated_callbacks: List[PortalServiceAuthenticatedCallback] = []
+        self._on_message_callbacks: List[PortalServiceMessageCallback] = []
 
         impl.on("authenticated", self._on_authenticated)
         impl.on("message", self._on_message)
@@ -1087,6 +1312,48 @@ class PortalService:
 
         self._impl.untag(connection_id, tag)
 
+    @overload
+    def on(self, signal: Literal["node-joined"], callback: PortalServiceNodeJoinedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["node-left"], callback: PortalServiceNodeLeftCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["controller-connected"], callback: PortalServiceControllerConnectedCallback) -> None:
+        ...
+
+    @overload
+    def on(
+        self, signal: Literal["controller-disconnected"], callback: PortalServiceControllerDisconnectedCallback
+    ) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["node-connected"], callback: PortalServiceNodeConnectedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["node-disconnected"], callback: PortalServiceNodeDisconnectedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["authenticated"], callback: PortalServiceAuthenticatedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["subscribe"], callback: PortalServiceSubscribeCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["message"], callback: PortalServiceMessageCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: str, callback: Callable[..., Any]) -> None:
+        ...
+
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -1120,7 +1387,7 @@ class PortalService:
             except:
                 traceback.print_exc()
 
-    def _on_message(self, connection_id: int, raw_message: str, data: Any) -> None:
+    def _on_message(self, connection_id: int, raw_message: str, data: Optional[bytes]) -> None:
         message = json.loads(raw_message)
 
         for callback in self._on_message_callbacks[:]:
@@ -1128,6 +1395,25 @@ class PortalService:
                 callback(connection_id, message, data)
             except:
                 traceback.print_exc()
+
+
+class CompilerDiagnosticFile(TypedDict):
+    path: str
+    line: int
+    character: int
+
+
+class CompilerDiagnostic(TypedDict):
+    category: str
+    code: int
+    file: NotRequired[CompilerDiagnosticFile]
+    text: str
+
+
+CompilerStartingCallback = Callable[[], None]
+CompilerFinishedCallback = Callable[[], None]
+CompilerOutputCallback = Callable[[str], None]
+CompilerDiagnosticsCallback = Callable[[List[CompilerDiagnostic]], None]
 
 
 class Compiler:
@@ -1161,8 +1447,48 @@ class Compiler:
         _filter_missing_kwargs(kwargs)
         return self._impl.watch(entrypoint, **kwargs)
 
+    @overload
+    def on(self, signal: Literal["starting"], callback: CompilerStartingCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["finished"], callback: CompilerFinishedCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["output"], callback: CompilerOutputCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: Literal["diagnostics"], callback: CompilerDiagnosticsCallback) -> None:
+        ...
+
+    @overload
+    def on(self, signal: str, callback: Callable[..., Any]) -> None:
+        ...
+
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         self._impl.on(signal, callback)
+
+    @overload
+    def off(self, signal: Literal["starting"], callback: CompilerStartingCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["finished"], callback: CompilerFinishedCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["output"], callback: CompilerOutputCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: Literal["diagnostics"], callback: CompilerDiagnosticsCallback) -> None:
+        ...
+
+    @overload
+    def off(self, signal: str, callback: Callable[..., Any]) -> None:
+        ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         self._impl.off(signal, callback)
