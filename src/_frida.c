@@ -955,7 +955,7 @@ PyGObject_steal_handle (PyGObject * self)
   for (entry = self->signal_closures; entry != NULL; entry = entry->next)
   {
     PyGObjectSignalClosure * closure = entry->data;
-    guint num_matches;
+    G_GNUC_UNUSED guint num_matches;
 
     num_matches = g_signal_handlers_disconnect_matched (handle, G_SIGNAL_MATCH_CLOSURE, closure->signal_id, 0, &closure->parent, NULL, NULL);
     g_assert (num_matches == 1);
@@ -1017,7 +1017,7 @@ PyGObject_off (PyGObject * self, PyObject * args)
   PyObject * callback;
   GSList * entry;
   GClosure * closure;
-  guint num_matches;
+  G_GNUC_UNUSED guint num_matches;
 
   if (!PyGObject_parse_signal_method_args (args, G_OBJECT_TYPE (self->handle), &signal_id, &callback))
     return NULL;
