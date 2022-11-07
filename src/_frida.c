@@ -6,9 +6,6 @@
 
 #include <frida-core.h>
 #include <string.h>
-#if defined (G_OS_UNIX) && !defined (G_TYPE_UNIX_SOCKET_ADDRESS)
-# include <gio/gunixsocketaddress.h>
-#endif
 
 #ifdef _MSC_VER
 # pragma warning (push)
@@ -1788,7 +1785,6 @@ PyGObject_marshal_socket_address (GSocketAddress * address)
 
     g_free (host);
   }
-#ifdef G_OS_UNIX
   else if (G_IS_UNIX_SOCKET_ADDRESS (address))
   {
     GUnixSocketAddress * sa = G_UNIX_SOCKET_ADDRESS (address);
@@ -1821,7 +1817,6 @@ PyGObject_marshal_socket_address (GSocketAddress * address)
       }
     }
   }
-#endif
 
   if (result == NULL)
     result = PyGObject_new_take_handle (g_object_ref (address), PYFRIDA_TYPE (GObject));
