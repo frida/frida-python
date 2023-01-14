@@ -401,7 +401,7 @@ class Script:
 
         return result.value
 
-    def _on_rpc_message(self, request_id: int, operation: str, params, data) -> None:
+    def _on_rpc_message(self, request_id: int, operation: str, params: List[Any], data: Optional[bytes]) -> None:
         if operation in ("ok", "error"):
             callback = self._pending.pop(request_id, None)
             if callback is None:
