@@ -552,7 +552,7 @@ class Script:
         else:
             for callback in self._on_message_callbacks[:]:
                 try:
-                    callback(message, data)
+                    callback(self, message, data)
                 except:
                     traceback.print_exc()
 
