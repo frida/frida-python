@@ -14,6 +14,6 @@ rpc.exports = {
 """
 )
 script.load()
-api = script.exports
+api = script.exports_sync
 print("api.hello() =>", api.hello())
 api.fail_please()
