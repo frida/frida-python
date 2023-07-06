@@ -15,5 +15,5 @@ rpc.exports = {
 session = frida.attach("Twitter")
 script = session.create_script_from_bytes(bytecode)
 script.load()
-api = script.exports
+api = script.exports_sync
 print("api.list_threads() =>", api.list_threads())
