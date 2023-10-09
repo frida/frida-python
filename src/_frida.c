@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2022 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+ * Copyright (C) 2013-2023 Ole André Vadla Ravnås <oleavr@nowsecure.com>
  *
  * Licence: wxWindows Library Licence, Version 3.1
  */
@@ -389,6 +389,7 @@ static FridaSessionOptions * PyDevice_parse_session_options (const gchar * realm
 static PyObject * PyDevice_inject_library_file (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_inject_library_blob (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_open_channel (PyDevice * self, PyObject * args);
+static PyObject * PyDevice_unpair (PyDevice * self);
 
 static PyObject * PyApplication_new_take_handle (FridaApplication * handle);
 static int PyApplication_init (PyApplication * self, PyObject * args, PyObject * kw);
@@ -565,6 +566,7 @@ static PyMethodDef PyDevice_methods[] =
   { "inject_library_file", (PyCFunction) PyDevice_inject_library_file, METH_VARARGS, "Inject a library file to a PID." },
   { "inject_library_blob", (PyCFunction) PyDevice_inject_library_blob, METH_VARARGS, "Inject a library blob to a PID." },
   { "open_channel", (PyCFunction) PyDevice_open_channel, METH_VARARGS, "Open a device-specific communication channel." },
+  { "unpair", (PyCFunction) PyDevice_unpair, METH_NOARGS, "Unpair device." },
   { NULL }
 };
 
@@ -2833,6 +2835,20 @@ PyDevice_open_channel (PyDevice * self, PyObject * args)
     return PyFrida_raise (error);
 
   return PyIOStream_new_take_handle (stream);
+}
+
+static PyObject *
+PyDevice_unpair (PyDevice * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_device_unpair_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
 }
 
 

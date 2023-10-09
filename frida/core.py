@@ -1036,6 +1036,14 @@ class Device:
         return IOStream(self._impl.open_channel(address))
 
     @cancellable
+    def unpair(self) -> None:
+        """
+        Unpair device
+        """
+
+        self._impl.unpair()
+
+    @cancellable
     def get_bus(self) -> Bus:
         """
         Get the message bus of the device

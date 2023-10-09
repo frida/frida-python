@@ -299,6 +299,11 @@ class Device(Object):
         Open a device-specific communication channel.
         """
         ...
+    def unpair(self) -> None:
+        """
+        Unpair device.
+        """
+        ...
     def query_system_parameters(self) -> Dict[str, Any]:
         """
         Returns a dictionary of information about the host system.
