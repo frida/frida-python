@@ -2,4 +2,5 @@
 *.user
 /*.egg-info/
 /build/
+/deps/
 /dist/
