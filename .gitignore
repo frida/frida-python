@@ -4,3 +4,6 @@
 /build/
 /deps/
 /dist/
+/subprojects/frida-core/
+/subprojects/frida-gum.wrap
+/subprojects/frida-gum/
