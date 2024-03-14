@@ -97,3 +97,10 @@ configure_file(input: 'config.h.in',
 
 subdir('src')
 subdir('frida')
+
+test('frida-python', import('python').find_installation(),
+  args: ['-m', 'unittest', 'discover'],
+  workdir: meson.current_source_dir(),
+  env: {'PYTHONPATH': meson.current_build_dir() / 'src'},
+  timeout: 30,
+)
