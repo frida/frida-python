@@ -43,16 +43,13 @@ if cc.has_header('android/api-level.h')
   host_os = 'android'
 endif
 
+python = get_option('python')
+if python == ''
+  python = import('python').find_installation()
+endif
+
 python_incdir = get_option('python_incdir')
 if python_incdir == ''
-  python = get_option('python')
-  if python == ''
-    python = find_program('python3', required: false)
-    if not python.found()
-      python = find_program('python')
-    endif
-  endif
-
   result = run_command(python, '-c',
     'import sys; sys.stdout.write(f"{sys.version_info[0]}.{sys.version_info[1]}")',
     check: true)
@@ -98,7 +95,7 @@ configure_file(input: 'config.h.in',
 subdir('src')
 subdir('frida')
 
-test('frida-python', import('python').find_installation(),
+test('frida-python', python,
   args: ['-m', 'unittest', 'discover'],
   workdir: meson.current_source_dir(),
   env: {'PYTHONPATH': meson.current_build_dir() / 'src'},
