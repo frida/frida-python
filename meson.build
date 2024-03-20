@@ -43,10 +43,7 @@ if cc.has_header('android/api-level.h')
   host_os = 'android'
 endif
 
-python = get_option('python')
-if python == ''
-  python = import('python').find_installation()
-endif
+python = import('python').find_installation()
 
 python_incdir = get_option('python_incdir')
 if python_incdir == ''
