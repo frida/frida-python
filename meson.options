@@ -1,5 +1,0 @@
-option('python_incdir',
-  type: 'string',
-  value: '',
-  description: 'Python headers directory to build against'
-)

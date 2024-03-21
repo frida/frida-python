@@ -16,7 +16,6 @@
 # undef _POSIX_C_SOURCE
 #endif
 
-#define Py_LIMITED_API 0x03070000
 #define PY_SSIZE_T_CLEAN
 
 /*
@@ -39,8 +38,11 @@
 #ifdef _MSC_VER
 # pragma warning (pop)
 #endif
-#ifdef HAVE_MACOS
-# include <crt_externs.h>
+#ifdef __APPLE__
+# include <TargetConditionals.h>
+# if TARGET_OS_OSX
+#  include <crt_externs.h>
+# endif
 #endif
 
 #define PyUnicode_FromUTF8String(str) PyUnicode_DecodeUTF8 (str, strlen (str), "strict")

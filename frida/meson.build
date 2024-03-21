@@ -3,4 +3,4 @@ frida_sources = [
   'core.py',
 ]
 
-install_data(frida_sources, install_dir: join_paths(python_site_packages, 'frida'))
+python.install_sources(frida_sources, subdir: 'frida', pure: false)
