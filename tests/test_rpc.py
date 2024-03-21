@@ -48,10 +48,11 @@ rpc.exports = {
 """,
         )
         script.load()
-        self.assertEqual(script.exports.add(2, 3), 5)
-        self.assertEqual(script.exports.sub(5, 3), 2)
-        self.assertRaises(Exception, lambda: script.exports.add(1, -2))
-        self.assertListEqual([x for x in iter(script.exports.speak())], [0x59, 0x6F])
+        agent = script.exports_sync
+        self.assertEqual(agent.add(2, 3), 5)
+        self.assertEqual(agent.sub(5, 3), 2)
+        self.assertRaises(Exception, lambda: agent.add(1, -2))
+        self.assertListEqual([x for x in iter(agent.speak())], [0x59, 0x6F])
 
     def test_post_failure(self):
         script = self.session.create_script(
@@ -64,7 +65,7 @@ rpc.exports = {
 """,
         )
         script.load()
-        agent = script.exports
+        agent = script.exports_sync
 
         self.session.detach()
         self.assertRaisesScriptDestroyed(lambda: agent.init())
@@ -82,7 +83,7 @@ rpc.exports = {
 """,
         )
         script.load()
-        agent = script.exports
+        agent = script.exports_sync
 
         def unload_script_after_100ms():
             time.sleep(0.1)
@@ -104,7 +105,7 @@ rpc.exports = {
 """,
         )
         script.load()
-        agent = script.exports
+        agent = script.exports_sync
 
         def terminate_target_after_100ms():
             time.sleep(0.1)
@@ -126,7 +127,7 @@ rpc.exports = {
 """,
         )
         script.load()
-        agent = script.exports
+        agent = script.exports_sync
 
         def cancel_after_100ms():
             time.sleep(0.1)
