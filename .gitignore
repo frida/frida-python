@@ -1,9 +1,6 @@
 *.pyc
-*.user
 /*.egg-info/
 /build/
 /deps/
 /dist/
-/subprojects/frida-core/
-/subprojects/frida-gum.wrap
-/subprojects/frida-gum/
+/subprojects/*
