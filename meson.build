@@ -1,4 +1,6 @@
-project('frida-python', 'c', version: '1.0.0')
+project('frida-python', 'c',
+  version: '0.0.0',
+)
 
 python = import('python').find_installation()
 
