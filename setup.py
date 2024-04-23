@@ -33,15 +33,15 @@ def detect_version() -> str:
 
 
 def enumerate_releng_locations() -> Iterator[Path]:
-    local_releng = PACKAGE_DIR / "releng"
-    if releng_location_exists(local_releng):
-        yield local_releng
-
     source_root = os.environ.get("MESON_SOURCE_ROOT")
     if source_root is not None:
         parent_releng = Path(source_root) / "releng"
         if releng_location_exists(parent_releng):
             yield parent_releng
+
+    local_releng = PACKAGE_DIR / "releng"
+    if releng_location_exists(local_releng):
+        yield local_releng
 
 
 def releng_location_exists(location: Path) -> bool:
