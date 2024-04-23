@@ -1,5 +1,7 @@
 project('frida-python', 'c',
-  version: '0.0.0',
+  version: run_command(find_program('python3'), files('scripts' / 'version.py'),
+    capture: true,
+    check: true).stdout().strip(),
 )
 
 python = import('python').find_installation()
@@ -17,7 +19,9 @@ if ndebug == 'true' or (ndebug == 'if-release' and not get_option('debug'))
 endif
 
 python_dep = python.dependency()
-frida_core_dep = dependency('frida-core-1.0')
+frida_core_dep = dependency('frida-core-1.0', default_options: [
+  'frida_version=' + meson.project_version(),
+])
 
 os_deps = []
 host_os_family = host_machine.system()
