@@ -7,7 +7,7 @@ def detect():
     pkg_info = root_dir / "PKG-INFO"
     in_source_package = pkg_info.exists()
     if in_source_package:
-        version_line = [line for line in pkg_info.read_text(encoding="utf-8")
+        version_line = [line for line in pkg_info.read_text(encoding="utf-8").split("\n")
                         if line.startswith("Version: ")][0].strip()
         version = version_line[9:]
     else:
