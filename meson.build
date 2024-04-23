@@ -2,6 +2,7 @@ project('frida-python', 'c',
   version: run_command(find_program('python3'), files('scripts' / 'version.py'),
     capture: true,
     check: true).stdout().strip(),
+  meson_version: '>=1.3.0',
 )
 
 python = import('python').find_installation()
