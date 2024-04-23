@@ -4,6 +4,7 @@ import platform
 import shutil
 import subprocess
 import sys
+from typing import Iterator
 
 from setuptools import setup
 from setuptools.command.build_ext import build_ext
@@ -13,7 +14,7 @@ from setuptools.extension import Extension
 PACKAGE_DIR = Path(__file__).resolve().parent
 
 
-def detect_version():
+def detect_version() -> str:
     pkg_info = PACKAGE_DIR / "PKG-INFO"
     in_source_package = pkg_info.exists()
     if in_source_package:
@@ -21,10 +22,30 @@ def detect_version():
                         if line.startswith("Version: ")][0].strip()
         version = version_line[9:]
     else:
-        sys.path.insert(0, os.environ.get("MESON_SOURCE_ROOT", str(PACKAGE_DIR)))
-        from releng.frida_version import detect
-        version = detect(PACKAGE_DIR).name.replace("-dev.", ".dev")
+        releng_location = next(enumerate_releng_locations(), None)
+        if releng_location is not None:
+            sys.path.insert(0, str(releng_location.parent))
+            from releng.frida_version import detect
+            version = detect(PACKAGE_DIR).name.replace("-dev.", ".dev")
+        else:
+            version = "0.0.0"
     return version
+
+
+def enumerate_releng_locations() -> Iterator[Path]:
+    local_releng = PACKAGE_DIR / "releng"
+    if releng_location_exists(local_releng):
+        yield local_releng
+
+    source_root = os.environ.get("MESON_SOURCE_ROOT")
+    if source_root is not None:
+        parent_releng = Path(source_root) / "releng"
+        if releng_location_exists(parent_releng):
+            yield parent_releng
+
+
+def releng_location_exists(location: Path) -> bool:
+    return (location / "frida_version.py").exists()
 
 
 class FridaPrebuiltExt(build_ext):
