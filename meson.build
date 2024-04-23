@@ -1,5 +1,5 @@
 project('frida-python', 'c',
-  version: run_command(find_program('python3'), files('scripts' / 'version.py'),
+  version: run_command(find_program('python3'), files('setup.py'), '-V',
     capture: true,
     check: true).stdout().strip(),
   meson_version: '>=1.3.0',
@@ -21,7 +21,7 @@ endif
 
 python_dep = python.dependency()
 frida_core_dep = dependency('frida-core-1.0', default_options: [
-  'frida_version=' + meson.project_version(),
+  'frida_version=' + meson.project_version().replace('.dev', '-dev.'),
 ])
 
 os_deps = []

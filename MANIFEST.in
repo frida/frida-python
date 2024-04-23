@@ -1,0 +1,18 @@
+include meson.build
+include frida/meson.build
+graft src/
+include subprojects/frida-core.wrap
+
+include BSDmakefile
+include Makefile
+include configure
+include configure.bat
+include make.bat
+include releng/*.py
+include releng/*.toml
+graft releng/devkit-assets/
+include releng/meson/meson.py
+graft releng/meson/mesonbuild/
+graft releng/tomlkit/tomlkit/
+
+global-exclude *.pyc

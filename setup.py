@@ -1,101 +1,57 @@
 import os
+from pathlib import Path
 import platform
 import shutil
+import subprocess
+import sys
 
 from setuptools import setup
 from setuptools.command.build_ext import build_ext
 from setuptools.extension import Extension
 
-package_dir = os.path.dirname(os.path.realpath(__file__))
-pkg_info = os.path.join(package_dir, "PKG-INFO")
-in_source_package = os.path.isfile(pkg_info)
-if in_source_package:
-    with open(pkg_info, "r", encoding="utf-8") as f:
-        version_line = [line for line in f if line.startswith("Version: ")][0].strip()
-    frida_version = version_line[9:]
-else:
-    frida_version = os.environ.get("FRIDA_VERSION", "0.0.0")
-with open(os.path.join(package_dir, "README.md"), "r", encoding="utf-8") as f:
-    long_description = f.read()
-frida_extension = os.environ.get("FRIDA_EXTENSION", None)
+
+PACKAGE_DIR = Path(__file__).resolve().parent
+
+
+def detect_version():
+    pkg_info = PACKAGE_DIR / "PKG-INFO"
+    in_source_package = pkg_info.exists()
+    if in_source_package:
+        version_line = [line for line in pkg_info.read_text(encoding="utf-8").split("\n")
+                        if line.startswith("Version: ")][0].strip()
+        version = version_line[9:]
+    else:
+        sys.path.insert(0, str(PACKAGE_DIR))
+        from releng.frida_version import detect
+        version = detect(PACKAGE_DIR).name.replace("-dev.", ".dev")
+    return version
 
 
 class FridaPrebuiltExt(build_ext):
     def build_extension(self, ext):
         target = self.get_ext_fullpath(ext.name)
-        target_dir = os.path.dirname(target)
-        os.makedirs(target_dir, exist_ok=True)
-
-        shutil.copyfile(frida_extension, target)
+        Path(target).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(frida_extension, target)
 
 
-class FridaMissingDevkitBuildExt(build_ext):
+class FridaDemandBuiltExt(build_ext):
     def build_extension(self, ext):
-        raise RuntimeError(
-            "Need frida-core devkit to build from source.\n"
-            "Download one from https://github.com/frida/frida/releases, "
-            "extract it to a directory,\n"
-            "and then add an environment variable named FRIDA_CORE_DEVKIT "
-            "pointing at the directory."
-        )
+        make = PACKAGE_DIR / "make.bat" if platform.system() == "Windows" else "make"
+        subprocess.run([make], check=True)
+
+        outputs = [entry for entry in (PACKAGE_DIR / "build" / "src").glob("_frida.*") if entry.is_file()]
+        assert len(outputs) == 1
+        target = self.get_ext_fullpath(ext.name)
+        Path(target).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(outputs[0], target)
 
 
-include_dirs = []
-library_dirs = []
-libraries = []
-extra_link_args = []
+frida_version = detect_version()
+long_description = (PACKAGE_DIR / "README.md").read_text(encoding="utf-8")
+frida_extension = os.environ.get("FRIDA_EXTENSION", None)
 
 cmdclass = {}
-if frida_extension is not None:
-    cmdclass["build_ext"] = FridaPrebuiltExt
-else:
-    devkit_dir = os.environ.get("FRIDA_CORE_DEVKIT", None)
-    if devkit_dir is not None:
-        include_dirs += [devkit_dir]
-        library_dirs += [devkit_dir]
-        libraries += ["frida-core"]
-
-        system = platform.system()
-        if system == "Windows":
-            pass
-        elif system == "Darwin":
-            extra_link_args += [
-                "-Wl,-exported_symbol,_PyInit__frida",
-                "-Wl,-dead_strip",
-            ]
-            if "_PYTHON_HOST_PLATFORM" not in os.environ:
-                if platform.machine() == "arm64":
-                    host_arch = "arm64"
-                    macos_req = "11.0"
-                else:
-                    host_arch = "x86_64"
-                    macos_req = "10.9"
-                os.environ["_PYTHON_HOST_PLATFORM"] = f"macosx-{macos_req}-{host_arch}"
-                os.environ["ARCHFLAGS"] = f"-arch {host_arch}"
-                os.environ["MACOSX_DEPLOYMENT_TARGET"] = macos_req
-        else:
-            version_script = os.path.join(package_dir, "src", "_frida.version")
-            if not os.path.exists(version_script):
-                with open(version_script, "w", encoding="utf-8") as f:
-                    f.write(
-                        "\n".join(
-                            [
-                                "{",
-                                "  global:",
-                                "    PyInit__frida;",
-                                "",
-                                "  local:",
-                                "    *;",
-                                "};",
-                            ]
-                        )
-                    )
-            extra_link_args += [
-                f"-Wl,--version-script,{version_script}",
-                "-Wl,--gc-sections",
-            ]
-    else:
-        cmdclass["build_ext"] = FridaMissingDevkitBuildExt
+cmdclass["build_ext"] = FridaPrebuiltExt if frida_extension is not None else FridaDemandBuiltExt
 
 
 if __name__ == "__main__":
@@ -140,10 +96,6 @@ if __name__ == "__main__":
             Extension(
                 name="_frida",
                 sources=["src/_frida.c"],
-                include_dirs=include_dirs,
-                library_dirs=library_dirs,
-                libraries=libraries,
-                extra_link_args=extra_link_args,
                 py_limited_api=True,
             )
         ],
