@@ -21,7 +21,7 @@ def detect_version():
                         if line.startswith("Version: ")][0].strip()
         version = version_line[9:]
     else:
-        sys.path.insert(0, str(PACKAGE_DIR))
+        sys.path.insert(0, os.environ.get("MESON_SOURCE_ROOT", str(PACKAGE_DIR)))
         from releng.frida_version import detect
         version = detect(PACKAGE_DIR).name.replace("-dev.", ".dev")
     return version
