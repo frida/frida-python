@@ -30,7 +30,6 @@ if host_os_family != 'windows'
   os_deps += dependency('gio-unix-2.0')
 endif
 
-subdir('src')
 subdir('frida')
 
 test('frida-python', python,

@@ -51,12 +51,12 @@ def main():
             "Topic :: Software Development :: Debuggers",
             "Topic :: Software Development :: Libraries :: Python Modules",
         ],
-        packages=["frida", "_frida"],
-        package_data={"frida": ["py.typed"], "_frida": ["py.typed", "__init__.pyi"]},
+        packages=["frida", "frida._frida"],
+        package_data={"frida": ["py.typed"], "frida._frida": ["py.typed", "__init__.pyi"]},
         ext_modules=[
             Extension(
-                name="_frida",
-                sources=["src/_frida.c"],
+                name="frida._frida",
+                sources=["frida/_frida/extension.c"],
                 py_limited_api=True,
             )
         ],

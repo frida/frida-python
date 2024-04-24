@@ -1,7 +1,7 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 try:
-    import _frida
+    from . import _frida
 except Exception as ex:
     print("")
     print("***")

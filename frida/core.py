@@ -38,7 +38,7 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import NotRequired
 
-import _frida
+from . import _frida
 
 _device_manager = None
 
