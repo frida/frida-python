@@ -16,5 +16,3 @@ graft releng/devkit-assets/
 include releng/meson/meson.py
 graft releng/meson/mesonbuild/
 graft releng/tomlkit/tomlkit/
-
-global-exclude *.pyc
