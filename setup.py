@@ -71,17 +71,20 @@ def detect_version() -> str:
         version_line = [
             line for line in pkg_info.read_text(encoding="utf-8").split("\n") if line.startswith("Version: ")
         ][0].strip()
-        version = version_line[9:]
-    else:
-        releng_location = next(enumerate_releng_locations(), None)
-        if releng_location is not None:
-            sys.path.insert(0, str(releng_location.parent))
-            from releng.frida_version import detect
+        return version_line[9:]
 
-            version = detect(SOURCE_ROOT).name.replace("-dev.", ".dev")
-        else:
-            version = "0.0.0"
-    return version
+    version = os.environ.get("FRIDA_VERSION")
+    if version is not None:
+        return version
+
+    releng_location = next(enumerate_releng_locations(), None)
+    if releng_location is not None:
+        sys.path.insert(0, str(releng_location.parent))
+        from releng.frida_version import detect
+
+        return detect(SOURCE_ROOT).name.replace("-dev.", ".dev")
+
+    return "0.0.0"
 
 
 def compute_long_description() -> str:
