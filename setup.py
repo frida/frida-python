@@ -119,7 +119,7 @@ class FridaDemandBuiltExt(build_ext):
         make = SOURCE_ROOT / "make.bat" if platform.system() == "Windows" else "make"
         subprocess.run([make], check=True)
 
-        outputs = [entry for entry in (SOURCE_ROOT / "build" / "src").glob("_frida.*") if entry.is_file()]
+        outputs = [entry for entry in (SOURCE_ROOT / "build" / "frida" / "_frida").glob("_frida.*") if entry.is_file()]
         assert len(outputs) == 1
         target = self.get_ext_fullpath(ext.name)
         Path(target).parent.mkdir(parents=True, exist_ok=True)
