@@ -50,7 +50,7 @@ def main():
             "Topic :: Software Development :: Debuggers",
             "Topic :: Software Development :: Libraries :: Python Modules",
         ],
-        packages=["frida", "frida._frida"],
+        packages=["frida"],
         package_data={"frida": ["py.typed"], "frida._frida": ["py.typed", "__init__.pyi"]},
         ext_modules=[
             Extension(
