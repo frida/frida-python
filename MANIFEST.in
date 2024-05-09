@@ -1,6 +1,8 @@
 include meson.build
 include frida/meson.build
-graft src/
+include frida/_frida/extension.c
+include frida/_frida/extension.version
+include frida/_frida/meson.build
 include subprojects/frida-core.wrap
 
 include BSDmakefile
