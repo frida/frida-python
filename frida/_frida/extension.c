@@ -1654,7 +1654,15 @@ PyGObject_marshal_variant (GVariant * variant)
 
     for (i = 0; (child = g_variant_iter_next_value (&iter)) != NULL; i++)
     {
+      if (g_variant_is_of_type (child, G_VARIANT_TYPE_VARIANT))
+      {
+        GVariant * inner = g_variant_get_variant (child);
+        g_variant_unref (child);
+        child = inner;
+      }
+
       PyList_SetItem (list, i, PyGObject_marshal_variant (child));
+
       g_variant_unref (child);
     }
 
