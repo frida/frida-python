@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013-2023 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+ * Copyright (C) 2024 Håvard Sørbø <havard@hsorbo.no>
  *
  * Licence: wxWindows Library Licence, Version 3.1
  */
@@ -350,6 +351,8 @@ static PyObject * PyGObject_marshal_bytes (GBytes * bytes);
 static PyObject * PyGObject_marshal_bytes_non_nullable (GBytes * bytes);
 static PyObject * PyGObject_marshal_variant (GVariant * variant);
 static gboolean PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant);
+static gboolean PyGObject_unmarshal_variant_from_mapping (PyObject * mapping, GVariant ** variant);
+static gboolean PyGObject_unmarshal_variant_from_sequence (PyObject * sequence, GVariant ** variant);
 static PyObject * PyGObject_marshal_parameters_dict (GHashTable * dict);
 static PyObject * PyGObject_marshal_socket_address (GSocketAddress * address);
 static gboolean PyGObject_unmarshal_certificate (const gchar * str, GTlsCertificate ** certificate);
@@ -1671,53 +1674,141 @@ PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant)
     PyGObject_unmarshal_string (value, &str);
 
     *variant = g_variant_new_take_string (str);
-  }
-  else if (PyBool_Check (value))
-  {
-    *variant = g_variant_new_boolean (value == Py_True);
-  }
-#if PY_MAJOR_VERSION < 3
-  else if (PyUnicode_Check (value))
-  {
-    PyObject * value_utf8;
 
-    value_utf8 = PyUnicode_AsUTF8String (value);
-    if (value_utf8 == NULL)
-      goto propagate_error;
-
-    *variant = g_variant_new_string (PyBytes_AsString (value_utf8));
-
-    Py_DECREF (value_utf8);
+    return TRUE;
   }
-  else if (PyInt_Check (value))
-  {
-    *variant = g_variant_new_int64 (PyInt_AS_LONG (value));
-  }
-#endif
-  else if (PyLong_Check (value))
+
+  if (PyLong_Check (value))
   {
     PY_LONG_LONG l;
 
     l = PyLong_AsLongLong (value);
     if (l == -1 && PyErr_Occurred ())
-      goto propagate_error;
+      return FALSE;
 
     *variant = g_variant_new_int64 (l);
+
+    return TRUE;
   }
-  else
+
+  if (PyBool_Check (value))
   {
-    goto unsupported_type;
+    *variant = g_variant_new_boolean (value == Py_True);
+
+    return TRUE;
   }
+
+  if (PyBytes_Check (value))
+  {
+    char * buffer;
+    Py_ssize_t length;
+    gpointer copy;
+
+    PyBytes_AsStringAndSize (value, &buffer, &length);
+
+    copy = g_memdup2 (buffer, length);
+    *variant = g_variant_new_from_data (G_VARIANT_TYPE_BYTESTRING, copy, length, TRUE, g_free, copy);
+
+    return TRUE;
+  }
+
+  if (PySequence_Check (value))
+    return PyGObject_unmarshal_variant_from_sequence (value, variant);
+
+  if (PyMapping_Check (value))
+    return PyGObject_unmarshal_variant_from_mapping (value, variant);
+
+  PyErr_SetString (PyExc_TypeError, "unsupported type");
+  return FALSE;
+}
+
+static gboolean
+PyGObject_unmarshal_variant_from_mapping (PyObject * mapping, GVariant ** variant)
+{
+  GVariantBuilder builder;
+  PyObject * items = NULL;
+  Py_ssize_t n, i;
+
+  g_variant_builder_init (&builder, G_VARIANT_TYPE_VARDICT);
+
+  items = PyMapping_Items (mapping);
+  if (items == NULL)
+    goto propagate_error;
+
+  n = PyList_Size (items);
+
+  for (i = 0; i != n; i++)
+  {
+    PyObject * pair, * key, * val, * key_bytes;
+    GVariant * raw_value;
+
+    pair = PyList_GetItem (items, i);
+    key = PyTuple_GetItem (pair, 0);
+    val = PyTuple_GetItem (pair, 1);
+
+    if (!PyGObject_unmarshal_variant (val, &raw_value))
+      goto propagate_error;
+
+    key_bytes = PyUnicode_AsUTF8String (key);
+
+    g_variant_builder_add (&builder, "{sv}", PyBytes_AsString (key_bytes), raw_value);
+
+    Py_DECREF (key_bytes);
+  }
+
+  Py_DecRef (items);
+
+  *variant = g_variant_builder_end (&builder);
 
   return TRUE;
 
-unsupported_type:
-  {
-    PyErr_SetString (PyExc_TypeError, "unsupported type");
-    goto propagate_error;
-  }
 propagate_error:
   {
+    Py_XDECREF (items);
+    g_variant_builder_clear (&builder);
+
+    return FALSE;
+  }
+}
+
+static gboolean
+PyGObject_unmarshal_variant_from_sequence (PyObject * sequence, GVariant ** variant)
+{
+  GVariantBuilder builder;
+  Py_ssize_t n, i;
+  PyObject * val = NULL;
+
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("av"));
+
+  n = PySequence_Length (sequence);
+  if (n == -1)
+    goto propagate_error;
+
+  for (i = 0; i != n; i++)
+  {
+    GVariant * raw_value;
+
+    val = PySequence_GetItem (sequence, i);
+    if (val == NULL)
+      goto propagate_error;
+
+    if (!PyGObject_unmarshal_variant (val, &raw_value))
+      goto propagate_error;
+
+    g_variant_builder_add (&builder, "v", raw_value);
+
+    Py_DECREF (val);
+  }
+
+  *variant = g_variant_builder_end (&builder);
+
+  return TRUE;
+
+propagate_error:
+  {
+    Py_XDECREF (val);
+    g_variant_builder_clear (&builder);
+
     return FALSE;
   }
 }
