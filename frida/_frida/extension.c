@@ -1606,6 +1606,8 @@ PyGObject_marshal_variant (GVariant * variant)
       return PyGObject_marshal_string (g_variant_get_string (variant, NULL));
     case G_VARIANT_CLASS_INT64:
       return PyLong_FromLongLong (g_variant_get_int64 (variant));
+    case G_VARIANT_CLASS_DOUBLE:
+      return PyFloat_FromDouble (g_variant_get_double (variant));
     case G_VARIANT_CLASS_BOOLEAN:
       return PyBool_FromLong (g_variant_get_boolean (variant));
     case G_VARIANT_CLASS_ARRAY:
@@ -1712,6 +1714,13 @@ PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant)
       return FALSE;
 
     *variant = g_variant_new_int64 (l);
+
+    return TRUE;
+  }
+
+  if (PyFloat_Check (value))
+  {
+    *variant = g_variant_new_double (PyFloat_AsDouble (value));
 
     return TRUE;
   }
