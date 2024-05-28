@@ -350,6 +350,9 @@ static gboolean PyGObject_unmarshal_enum (const gchar * str, GType type, gpointe
 static PyObject * PyGObject_marshal_bytes (GBytes * bytes);
 static PyObject * PyGObject_marshal_bytes_non_nullable (GBytes * bytes);
 static PyObject * PyGObject_marshal_variant (GVariant * variant);
+static PyObject * PyGObject_marshal_variant_byte_array (GVariant * variant);
+static PyObject * PyGObject_marshal_variant_dict (GVariant * variant);
+static PyObject * PyGObject_marshal_variant_array (GVariant * variant);
 static gboolean PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant);
 static gboolean PyGObject_unmarshal_variant_from_mapping (PyObject * mapping, GVariant ** variant);
 static gboolean PyGObject_unmarshal_variant_from_sequence (PyObject * sequence, GVariant ** variant);
@@ -1597,79 +1600,93 @@ PyGObject_marshal_bytes_non_nullable (GBytes * bytes)
 static PyObject *
 PyGObject_marshal_variant (GVariant * variant)
 {
-  if (g_variant_is_of_type (variant, G_VARIANT_TYPE_STRING))
-    return PyGObject_marshal_string (g_variant_get_string (variant, NULL));
-
-  if (g_variant_is_of_type (variant, G_VARIANT_TYPE_INT64))
-    return PyLong_FromLongLong (g_variant_get_int64 (variant));
-
-  if (g_variant_is_of_type (variant, G_VARIANT_TYPE_BOOLEAN))
-    return PyBool_FromLong (g_variant_get_boolean (variant));
-
-  if (g_variant_is_of_type (variant, G_VARIANT_TYPE ("ay")))
+  switch (g_variant_classify (variant))
   {
-    gconstpointer elements;
-    gsize n_elements;
+    case G_VARIANT_CLASS_STRING:
+      return PyGObject_marshal_string (g_variant_get_string (variant, NULL));
+    case G_VARIANT_CLASS_INT64:
+      return PyLong_FromLongLong (g_variant_get_int64 (variant));
+    case G_VARIANT_CLASS_BOOLEAN:
+      return PyBool_FromLong (g_variant_get_boolean (variant));
+    case G_VARIANT_CLASS_ARRAY:
+      if (g_variant_is_of_type (variant, G_VARIANT_TYPE ("ay")))
+        return PyGObject_marshal_variant_byte_array (variant);
 
-    elements = g_variant_get_fixed_array (variant, &n_elements, sizeof (guint8));
+      if (g_variant_is_of_type (variant, G_VARIANT_TYPE_VARDICT))
+        return PyGObject_marshal_variant_dict (variant);
 
-    return PyBytes_FromStringAndSize (elements, n_elements);
-  }
-
-  if (g_variant_is_of_type (variant, G_VARIANT_TYPE_VARDICT))
-  {
-    PyObject * dict;
-    GVariantIter iter;
-    gchar * key;
-    GVariant * raw_value;
-
-    dict = PyDict_New ();
-
-    g_variant_iter_init (&iter, variant);
-
-    while (g_variant_iter_next (&iter, "{sv}", &key, &raw_value))
-    {
-      PyObject * value = PyGObject_marshal_variant (raw_value);
-
-      PyDict_SetItemString (dict, key, value);
-
-      Py_DECREF (value);
-      g_variant_unref (raw_value);
-      g_free (key);
-    }
-
-    return dict;
-  }
-
-  if (g_variant_is_of_type (variant, G_VARIANT_TYPE_ARRAY))
-  {
-    GVariantIter iter;
-    PyObject * list;
-    guint i;
-    GVariant * child;
-
-    g_variant_iter_init (&iter, variant);
-
-    list = PyList_New (g_variant_iter_n_children (&iter));
-
-    for (i = 0; (child = g_variant_iter_next_value (&iter)) != NULL; i++)
-    {
-      if (g_variant_is_of_type (child, G_VARIANT_TYPE_VARIANT))
-      {
-        GVariant * inner = g_variant_get_variant (child);
-        g_variant_unref (child);
-        child = inner;
-      }
-
-      PyList_SetItem (list, i, PyGObject_marshal_variant (child));
-
-      g_variant_unref (child);
-    }
-
-    return list;
+      return PyGObject_marshal_variant_array (variant);
+    default:
+      break;
   }
 
   Py_RETURN_NONE;
+}
+
+static PyObject *
+PyGObject_marshal_variant_byte_array (GVariant * variant)
+{
+  gconstpointer elements;
+  gsize n_elements;
+
+  elements = g_variant_get_fixed_array (variant, &n_elements, sizeof (guint8));
+
+  return PyBytes_FromStringAndSize (elements, n_elements);
+}
+
+static PyObject *
+PyGObject_marshal_variant_dict (GVariant * variant)
+{
+  PyObject * dict;
+  GVariantIter iter;
+  gchar * key;
+  GVariant * raw_value;
+
+  dict = PyDict_New ();
+
+  g_variant_iter_init (&iter, variant);
+
+  while (g_variant_iter_next (&iter, "{sv}", &key, &raw_value))
+  {
+    PyObject * value = PyGObject_marshal_variant (raw_value);
+
+    PyDict_SetItemString (dict, key, value);
+
+    Py_DECREF (value);
+    g_variant_unref (raw_value);
+    g_free (key);
+  }
+
+  return dict;
+}
+
+static PyObject *
+PyGObject_marshal_variant_array (GVariant * variant)
+{
+  GVariantIter iter;
+  PyObject * list;
+  guint i;
+  GVariant * child;
+
+  g_variant_iter_init (&iter, variant);
+
+  list = PyList_New (g_variant_iter_n_children (&iter));
+
+  for (i = 0; (child = g_variant_iter_next_value (&iter)) != NULL; i++)
+  {
+    if (g_variant_is_of_type (child, G_VARIANT_TYPE_VARIANT))
+    {
+      GVariant * inner = g_variant_get_variant (child);
+      g_variant_unref (child);
+      child = inner;
+    }
+
+    PyList_SetItem (list, i, PyGObject_marshal_variant (child));
+
+    g_variant_unref (child);
+  }
+
+  return list;
 }
 
 static gboolean
