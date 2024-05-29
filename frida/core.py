@@ -792,6 +792,70 @@ class Bus:
                 traceback.print_exc()
 
 
+ServiceCloseCallback = Callable[[], None]
+ServiceMessageCallback = Callable[[Any], None]
+
+
+class Service:
+    def __init__(self, impl: _frida.Service) -> None:
+        self._impl = impl
+
+    @cancellable
+    def activate(self) -> None:
+        """
+        Activate the service
+        """
+
+        self._impl.activate()
+
+    @cancellable
+    def cancel(self) -> None:
+        """
+        Cancel the service
+        """
+
+        self._impl.cancel()
+
+    def request(self, parameters: Any) -> Any:
+        """
+        Perform a request
+        """
+
+        return self._impl.request(parameters)
+
+    @overload
+    def on(self, signal: Literal["close"], callback: ServiceCloseCallback) -> None: ...
+
+    @overload
+    def on(self, signal: Literal["message"], callback: ServiceMessageCallback) -> None: ...
+
+    @overload
+    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
+
+    def on(self, signal: str, callback: Callable[..., Any]) -> None:
+        """
+        Add a signal handler
+        """
+
+        self._impl.on(signal, callback)
+
+    @overload
+    def off(self, signal: Literal["close"], callback: ServiceCloseCallback) -> None: ...
+
+    @overload
+    def off(self, signal: Literal["message"], callback: ServiceMessageCallback) -> None: ...
+
+    @overload
+    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
+
+    def off(self, signal: str, callback: Callable[..., Any]) -> None:
+        """
+        Remove a signal handler
+        """
+
+        self._impl.off(signal, callback)
+
+
 DeviceSpawnAddedCallback = Callable[[_frida.Spawn], None]
 DeviceSpawnRemovedCallback = Callable[[_frida.Spawn], None]
 DeviceChildAddedCallback = Callable[[_frida.Child], None]
@@ -1018,6 +1082,14 @@ class Device:
         """
 
         return IOStream(self._impl.open_channel(address))
+
+    @cancellable
+    def open_service(self, address: str) -> Service:
+        """
+        Open a device-specific service
+        """
+
+        return Service(self._impl.open_service(address))
 
     @cancellable
     def unpair(self) -> None:

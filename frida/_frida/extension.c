@@ -149,6 +149,7 @@ typedef struct _PySpawn                        PySpawn;
 typedef struct _PyChild                        PyChild;
 typedef struct _PyCrash                        PyCrash;
 typedef struct _PyBus                          PyBus;
+typedef struct _PyService                      PyService;
 typedef struct _PySession                      PySession;
 typedef struct _PyScript                       PyScript;
 typedef struct _PyRelay                        PyRelay;
@@ -252,6 +253,11 @@ struct _PyCrash
 };
 
 struct _PyBus
+{
+  PyGObject parent;
+};
+
+struct _PyService
 {
   PyGObject parent;
 };
@@ -397,6 +403,7 @@ static FridaSessionOptions * PyDevice_parse_session_options (const gchar * realm
 static PyObject * PyDevice_inject_library_file (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_inject_library_blob (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_open_channel (PyDevice * self, PyObject * args);
+static PyObject * PyDevice_open_service (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_unpair (PyDevice * self);
 
 static PyObject * PyApplication_new_take_handle (FridaApplication * handle);
@@ -433,6 +440,11 @@ static PyObject * PyCrash_repr (PyCrash * self);
 static PyObject * PyBus_new_take_handle (FridaBus * handle);
 static PyObject * PyBus_attach (PySession * self);
 static PyObject * PyBus_post (PyScript * self, PyObject * args, PyObject * kw);
+
+static PyObject * PyService_new_take_handle (FridaService * handle);
+static PyObject * PyService_activate (PyService * self);
+static PyObject * PyService_cancel (PyService * self);
+static PyObject * PyService_request (PyService * self, PyObject * args);
 
 static PyObject * PySession_new_take_handle (FridaSession * handle);
 static int PySession_init (PySession * self, PyObject * args, PyObject * kw);
@@ -574,6 +586,7 @@ static PyMethodDef PyDevice_methods[] =
   { "inject_library_file", (PyCFunction) PyDevice_inject_library_file, METH_VARARGS, "Inject a library file to a PID." },
   { "inject_library_blob", (PyCFunction) PyDevice_inject_library_blob, METH_VARARGS, "Inject a library blob to a PID." },
   { "open_channel", (PyCFunction) PyDevice_open_channel, METH_VARARGS, "Open a device-specific communication channel." },
+  { "open_service", (PyCFunction) PyDevice_open_service, METH_VARARGS, "Open a device-specific service." },
   { "unpair", (PyCFunction) PyDevice_unpair, METH_NOARGS, "Unpair device." },
   { NULL }
 };
@@ -638,6 +651,14 @@ static PyMethodDef PyBus_methods[] =
 {
   { "attach", (PyCFunction) PyBus_attach, METH_NOARGS, "Attach to the bus." },
   { "post", (PyCFunction) PyBus_post, METH_VARARGS | METH_KEYWORDS, "Post a JSON-encoded message to the bus." },
+  { NULL }
+};
+
+static PyMethodDef PyService_methods[] =
+{
+  { "activate", (PyCFunction) PyService_activate, METH_NOARGS, "Activate the service." },
+  { "cancel", (PyCFunction) PyService_cancel, METH_NOARGS, "Cancel the service." },
+  { "request", (PyCFunction) PyService_request, METH_VARARGS, "Perform a request." },
   { NULL }
 };
 
@@ -816,6 +837,11 @@ PYFRIDA_DEFINE_TYPE ("_frida.Crash", Crash, GObject, PyCrash_init_from_handle, g
 PYFRIDA_DEFINE_TYPE ("_frida.Bus", Bus, GObject, NULL, g_object_unref,
   { Py_tp_doc, "Frida Message Bus" },
   { Py_tp_methods, PyBus_methods },
+);
+
+PYFRIDA_DEFINE_TYPE ("_frida.Service", Service, GObject, NULL, g_object_unref,
+  { Py_tp_doc, "Frida Service" },
+  { Py_tp_methods, PyService_methods },
 );
 
 PYFRIDA_DEFINE_TYPE ("_frida.Session", Session, GObject, PySession_init_from_handle, frida_unref,
@@ -2967,6 +2993,25 @@ PyDevice_open_channel (PyDevice * self, PyObject * args)
 }
 
 static PyObject *
+PyDevice_open_service (PyDevice * self, PyObject * args)
+{
+  const char * address;
+  GError * error = NULL;
+  FridaService * service;
+
+  if (!PyArg_ParseTuple (args, "s", &address))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  service = frida_device_open_service_sync (PY_GOBJECT_HANDLE (self), address, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  return PyService_new_take_handle (service);
+}
+
+static PyObject *
 PyDevice_unpair (PyDevice * self)
 {
   GError * error = NULL;
@@ -3462,6 +3507,69 @@ PyBus_post (PyScript * self, PyObject * args, PyObject * kw)
   PyMem_Free (message);
 
   Py_RETURN_NONE;
+}
+
+
+static PyObject *
+PyService_new_take_handle (FridaService * handle)
+{
+  return PyGObject_new_take_handle (handle, PYFRIDA_TYPE (Service));
+}
+
+static PyObject *
+PyService_activate (PyService * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_service_activate_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyService_cancel (PyService * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_service_cancel_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+PyService_request (PyService * self, PyObject * args)
+{
+  PyObject * result, * params;
+  GVariant * raw_params, * raw_result;
+  GError * error = NULL;
+
+  if (!PyArg_ParseTuple (args, "O", &params))
+    return NULL;
+
+  if (!PyGObject_unmarshal_variant (params, &raw_params))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  raw_result = frida_service_request_sync (PY_GOBJECT_HANDLE (self), raw_params, g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+
+  g_variant_unref (raw_params);
+
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  result = PyGObject_marshal_variant (raw_result);
+  g_variant_unref (raw_result);
+
+  return result;
 }
 
 
@@ -5334,6 +5442,7 @@ MOD_INIT (_frida)
   PYFRIDA_REGISTER_TYPE (Child, FRIDA_TYPE_CHILD);
   PYFRIDA_REGISTER_TYPE (Crash, FRIDA_TYPE_CRASH);
   PYFRIDA_REGISTER_TYPE (Bus, FRIDA_TYPE_BUS);
+  PYFRIDA_REGISTER_TYPE (Service, FRIDA_TYPE_SERVICE);
   PYFRIDA_REGISTER_TYPE (Session, FRIDA_TYPE_SESSION);
   PYFRIDA_REGISTER_TYPE (Script, FRIDA_TYPE_SCRIPT);
   PYFRIDA_REGISTER_TYPE (Relay, FRIDA_TYPE_RELAY);
