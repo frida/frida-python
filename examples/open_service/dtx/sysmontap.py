@@ -1,5 +1,6 @@
-import frida
 import time
+
+import frida
 
 
 def on_message(message):

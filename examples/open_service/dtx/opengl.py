@@ -1,5 +1,6 @@
-import frida
 import sys
+
+import frida
 
 
 def on_message(message):

@@ -1,5 +1,6 @@
-import frida
 import sys
+
+import frida
 
 if len(sys.argv) != 2:
     print(f"Usage: {sys.argv[0]} outfile.png", file=sys.stderr)
