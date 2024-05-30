@@ -342,6 +342,12 @@ class Device(Object):
         """
         ...
 
+    def open_service(self, address: str) -> Service:
+        """
+        Open a device-specific service.
+        """
+        ...
+
     def unpair(self) -> None:
         """
         Unpair device.
@@ -626,6 +632,25 @@ class Script(Object):
     def disable_debugger(self) -> None:
         """
         Disable the Node.js compatible script debugger
+        """
+        ...
+
+class Service(Object):
+    def activate(self) -> None:
+        """
+        Activate the service.
+        """
+        ...
+
+    def cancel(self) -> None:
+        """
+        Cancel the service.
+        """
+        ...
+
+    def request(self, parameters: Any) -> Any:
+        """
+        Perform a request.
         """
         ...
 
