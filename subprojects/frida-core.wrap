@@ -1,6 +1,6 @@
 [wrap-git]
 url = https://github.com/frida/frida-core.git
-revision = 41c31ba0a0dc97e479cc3657e443e9dd8a685874
+revision = 7fe3a005436fd1a260e3b24755c8fc3824eee00e
 depth = 1
 
 [provide]
