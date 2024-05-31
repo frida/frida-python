@@ -31,19 +31,26 @@ class TestRpc(unittest.TestCase):
             name="test-rpc",
             source="""\
 rpc.exports = {
-    add: function (a, b) {
-        var result = a + b;
+    add(a, b) {
+        const result = a + b;
         if (result < 0)
-          throw new Error("No");
+            throw new Error("No");
         return result;
     },
-    sub: function (a, b) {
+    sub(a, b) {
         return a - b;
     },
-    speak: function () {
-        var buf = Memory.allocUtf8String("Yo");
+    speak() {
+        const buf = Memory.allocUtf8String("Yo");
         return Memory.readByteArray(buf, 2);
-    }
+    },
+    speakWithMetadata() {
+        const buf = Memory.allocUtf8String("Yo");
+        return ['soft', Memory.readByteArray(buf, 2)];
+    },
+    processData(val, data) {
+        return { val, dump: hexdump(data, { header: false }) };
+    },
 };
 """,
         )
@@ -52,7 +59,13 @@ rpc.exports = {
         self.assertEqual(agent.add(2, 3), 5)
         self.assertEqual(agent.sub(5, 3), 2)
         self.assertRaises(Exception, lambda: agent.add(1, -2))
-        self.assertListEqual([x for x in iter(agent.speak())], [0x59, 0x6F])
+        self.assertEqual(agent.speak(), b"\x59\x6f")
+        meta, data = agent.speak_with_metadata()
+        self.assertEqual(meta, "soft")
+        self.assertEqual(data, b"\x59\x6f")
+        result = agent.process_data(1337, b"\x13\x37")
+        self.assertEqual(result["val"], 1337)
+        self.assertEqual(result["dump"], "00000000  13 37                                            .7")
 
     def test_post_failure(self):
         script = self.session.create_script(

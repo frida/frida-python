@@ -176,7 +176,8 @@ class ScriptExportsSync:
         js_name = _to_camel_case(name)
 
         def method(*args: Any, **kwargs: Any) -> Any:
-            return script._rpc_request("call", js_name, args, **kwargs)
+            request, data = make_rpc_call_request(js_name, args)
+            return script._rpc_request(request, data, **kwargs)
 
         return method
 
@@ -202,12 +203,23 @@ class ScriptExportsAsync:
         js_name = _to_camel_case(name)
 
         async def method(*args: Any, **kwargs: Any) -> Any:
-            return await script._rpc_request_async("call", js_name, args, **kwargs)
+            request, data = make_rpc_call_request(js_name, args)
+            return await script._rpc_request_async(request, data, **kwargs)
 
         return method
 
     def __dir__(self) -> List[str]:
         return self._script.list_exports_sync()
+
+
+def make_rpc_call_request(js_name: str, args: List[Any]) -> List[Any]:
+    if args and isinstance(args[-1], bytes):
+        raw_args = args[:-1]
+        data = args[-1]
+    else:
+        raw_args = args
+        data = None
+    return (["call", js_name, raw_args], data)
 
 
 class ScriptErrorMessage(TypedDict):
@@ -404,7 +416,7 @@ class Script:
         Asynchronously list all the exported attributes from the script's rpc
         """
 
-        result = await self._rpc_request_async("list")
+        result = await self._rpc_request_async(["list"])
         assert isinstance(result, list)
         return result
 
@@ -413,7 +425,7 @@ class Script:
         List all the exported attributes from the script's rpc
         """
 
-        result = self._rpc_request("list")
+        result = self._rpc_request(["list"])
         assert isinstance(result, list)
         return result
 
@@ -429,7 +441,7 @@ class Script:
         )
         return self.list_exports_sync()
 
-    def _rpc_request_async(self, *args: Any) -> asyncio.Future[Any]:
+    def _rpc_request_async(self, args: Any, data: Optional[bytes] = None) -> asyncio.Future[Any]:
         loop = asyncio.get_event_loop()
         future: asyncio.Future[Any] = asyncio.Future()
 
@@ -442,14 +454,14 @@ class Script:
         request_id = self._append_pending(on_complete)
 
         if not self.is_destroyed:
-            self._send_rpc_call(request_id, *args)
+            self._send_rpc_call(request_id, args, data)
         else:
             self._on_destroyed()
 
         return future
 
     @cancellable
-    def _rpc_request(self, *args: Any) -> Any:
+    def _rpc_request(self, args: Any, data: Optional[bytes] = None) -> Any:
         result = RPCResult()
 
         def on_complete(value: Any, error: Optional[Union[RPCException, _frida.InvalidOperationError]]) -> None:
@@ -466,7 +478,7 @@ class Script:
         request_id = self._append_pending(on_complete)
 
         if not self.is_destroyed:
-            self._send_rpc_call(request_id, *args)
+            self._send_rpc_call(request_id, args, data)
 
             cancellable = Cancellable.get_current()
             cancel_handler = cancellable.connect(on_cancelled)
@@ -495,10 +507,8 @@ class Script:
             self._pending[request_id] = callback
         return request_id
 
-    def _send_rpc_call(self, request_id: int, *args: Any) -> None:
-        message = ["frida:rpc", request_id]
-        message.extend(args)
-        self.post(message)
+    def _send_rpc_call(self, request_id: int, args: Any, data: Optional[bytes]) -> None:
+        self.post(["frida:rpc", request_id, *args], data)
 
     def _on_rpc_message(self, request_id: int, operation: str, params: List[Any], data: Optional[Any]) -> None:
         if operation in ("ok", "error"):
@@ -509,7 +519,10 @@ class Script:
             value = None
             error = None
             if operation == "ok":
-                value = params[0] if data is None else data
+                if data is not None:
+                    value = (params[1], data) if len(params) > 1 else data
+                else:
+                    value = params[0]
             else:
                 error = RPCException(*params[0:3])
 
