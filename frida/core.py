@@ -212,7 +212,7 @@ class ScriptExportsAsync:
         return self._script.list_exports_sync()
 
 
-def make_rpc_call_request(js_name: str, args: List[Any]) -> List[Any]:
+def make_rpc_call_request(js_name: str, args: Sequence[Any]) -> Tuple[List[Any], Optional[bytes]]:
     if args and isinstance(args[-1], bytes):
         raw_args = args[:-1]
         data = args[-1]
