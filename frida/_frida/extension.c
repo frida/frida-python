@@ -1732,6 +1732,13 @@ PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant)
     return TRUE;
   }
 
+  if (PyBool_Check (value))
+  {
+    *variant = g_variant_new_boolean (value == Py_True);
+
+    return TRUE;
+  }
+
   if (PyLong_Check (value))
   {
     PY_LONG_LONG l;
@@ -1748,13 +1755,6 @@ PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant)
   if (PyFloat_Check (value))
   {
     *variant = g_variant_new_double (PyFloat_AsDouble (value));
-
-    return TRUE;
-  }
-
-  if (PyBool_Check (value))
-  {
-    *variant = g_variant_new_boolean (value == Py_True);
 
     return TRUE;
   }
