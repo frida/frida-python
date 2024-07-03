@@ -1835,11 +1835,14 @@ propagate_error:
 static gboolean
 PyGObject_unmarshal_variant_from_sequence (PyObject * sequence, GVariant ** variant)
 {
+  gboolean is_tuple;
   GVariantBuilder builder;
   Py_ssize_t n, i;
   PyObject * val = NULL;
 
-  g_variant_builder_init (&builder, G_VARIANT_TYPE ("av"));
+  is_tuple = PyTuple_Check (sequence);
+
+  g_variant_builder_init (&builder, is_tuple ? G_VARIANT_TYPE_TUPLE : G_VARIANT_TYPE ("av"));
 
   n = PySequence_Length (sequence);
   if (n == -1)
@@ -1856,7 +1859,10 @@ PyGObject_unmarshal_variant_from_sequence (PyObject * sequence, GVariant ** vari
     if (!PyGObject_unmarshal_variant (val, &raw_value))
       goto propagate_error;
 
-    g_variant_builder_add (&builder, "v", raw_value);
+    if (is_tuple)
+      g_variant_builder_add_value (&builder, raw_value);
+    else
+      g_variant_builder_add (&builder, "v", raw_value);
 
     Py_DECREF (val);
   }
