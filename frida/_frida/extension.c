@@ -546,7 +546,6 @@ static void PyCancellable_destroy_callback (PyObject * callback);
 static PyObject * PyCancellable_cancel (PyCancellable * self);
 
 static PyObject * PyFrida_raise (GError * error);
-static gboolean PyFrida_is_string (PyObject * obj);
 static gchar * PyFrida_repr (PyObject * obj);
 static guint PyFrida_get_max_argument_count (PyObject * callable);
 
@@ -1722,7 +1721,7 @@ PyGObject_marshal_variant_array (GVariant * variant)
 static gboolean
 PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant)
 {
-  if (PyFrida_is_string (value))
+  if (PyUnicode_Check (value))
   {
     gchar * str;
 
@@ -5349,12 +5348,6 @@ PyFrida_raise (GError * error)
   g_error_free (error);
 
   return NULL;
-}
-
-static gboolean
-PyFrida_is_string (PyObject * obj)
-{
-  return PyUnicode_Check (obj);
 }
 
 static gchar *
