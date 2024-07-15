@@ -46,20 +46,6 @@
 # endif
 #endif
 
-#define PyUnicode_FromUTF8String(str) PyUnicode_DecodeUTF8 (str, strlen (str), "strict")
-#define MOD_INIT(name) PyMODINIT_FUNC PyInit_##name (void)
-#define MOD_DEF(ob, name, doc, methods) \
-  { \
-    static struct PyModuleDef moduledef = { \
-        PyModuleDef_HEAD_INIT, name, doc, -1, methods, }; \
-    ob = PyModule_Create (&moduledef); \
-  }
-#define MOD_SUCCESS_VAL(val) val
-#define MOD_ERROR_VAL NULL
-#define PyRepr_FromString PyUnicode_FromString
-#define PyRepr_FromFormat PyUnicode_FromFormat
-#define PYFRIDA_GETARGSPEC_FUNCTION "getfullargspec"
-
 #if PY_VERSION_HEX >= 0x03080000
 # define PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET 0
 #else
@@ -123,7 +109,7 @@
 #define PY_GOBJECT_HANDLE(o) (PY_GOBJECT (o)->handle)
 #define PY_GOBJECT_SIGNAL_CLOSURE(o) ((PyGObjectSignalClosure *) (o))
 
-#define FRIDA_FUNCPTR_TO_POINTER(f) (GSIZE_TO_POINTER (f))
+static struct PyModuleDef PyFrida_moduledef = { PyModuleDef_HEAD_INIT, "_frida", "Frida", -1, NULL, };
 
 static volatile gint toplevel_objects_alive = 0;
 
@@ -1326,7 +1312,7 @@ PyGObject_marshal_string (const gchar * str)
   if (str == NULL)
     Py_RETURN_NONE;
 
-  return PyUnicode_FromUTF8String (str);
+  return PyUnicode_FromString (str);
 }
 
 static gboolean
@@ -1547,7 +1533,7 @@ PyGObject_marshal_enum (gint value, GType type)
   enum_value = g_enum_get_value (enum_class, value);
   g_assert (enum_value != NULL);
 
-  result = PyUnicode_FromUTF8String (enum_value->value_nick);
+  result = PyUnicode_FromString (enum_value->value_nick);
 
   g_type_class_unref (enum_class);
 
@@ -1955,13 +1941,13 @@ PyGObject_marshal_socket_address (GSocketAddress * address)
     {
       case G_UNIX_SOCKET_ADDRESS_ANONYMOUS:
       {
-        result = PyUnicode_FromUTF8String ("");
+        result = PyUnicode_FromString ("");
         break;
       }
       case G_UNIX_SOCKET_ADDRESS_PATH:
       {
         gchar * path = g_filename_to_utf8 (g_unix_socket_address_get_path (sa), -1, NULL, NULL, NULL);
-        result = PyUnicode_FromUTF8String (path);
+        result = PyUnicode_FromString (path);
         g_free (path);
         break;
       }
@@ -2274,8 +2260,8 @@ PyDevice_init_from_handle (PyDevice * self, FridaDevice * handle)
 {
   GVariant * icon;
 
-  self->id = PyUnicode_FromUTF8String (frida_device_get_id (handle));
-  self->name = PyUnicode_FromUTF8String (frida_device_get_name (handle));
+  self->id = PyUnicode_FromString (frida_device_get_id (handle));
+  self->name = PyUnicode_FromString (frida_device_get_name (handle));
   icon = frida_device_get_icon (handle);
   if (icon != NULL)
   {
@@ -2311,7 +2297,7 @@ PyDevice_repr (PyDevice * self)
   name_bytes = PyUnicode_AsUTF8String (self->name);
   type_bytes = PyUnicode_AsUTF8String (self->type);
 
-  result = PyRepr_FromFormat ("Device(id=\"%s\", name=\"%s\", type='%s')",
+  result = PyUnicode_FromFormat ("Device(id=\"%s\", name=\"%s\", type='%s')",
       PyBytes_AsString (id_bytes),
       PyBytes_AsString (name_bytes),
       PyBytes_AsString (type_bytes));
@@ -3054,8 +3040,8 @@ PyApplication_init (PyApplication * self, PyObject * args, PyObject * kw)
 static void
 PyApplication_init_from_handle (PyApplication * self, FridaApplication * handle)
 {
-  self->identifier = PyUnicode_FromUTF8String (frida_application_get_identifier (handle));
-  self->name = PyUnicode_FromUTF8String (frida_application_get_name (handle));
+  self->identifier = PyUnicode_FromString (frida_application_get_identifier (handle));
+  self->name = PyUnicode_FromString (frida_application_get_name (handle));
   self->pid = frida_application_get_pid (handle);
   self->parameters = PyApplication_marshal_parameters_dict (frida_application_get_parameters (handle));
 }
@@ -3095,7 +3081,7 @@ PyApplication_repr (PyApplication * self)
 
   g_string_append (repr, ")");
 
-  result = PyRepr_FromString (repr->str);
+  result = PyUnicode_FromString (repr->str);
 
   g_string_free (repr, TRUE);
 
@@ -3155,7 +3141,7 @@ static void
 PyProcess_init_from_handle (PyProcess * self, FridaProcess * handle)
 {
   self->pid = frida_process_get_pid (handle);
-  self->name = PyUnicode_FromUTF8String (frida_process_get_name (handle));
+  self->name = PyUnicode_FromString (frida_process_get_name (handle));
   self->parameters = PyProcess_marshal_parameters_dict (frida_process_get_parameters (handle));
 }
 
@@ -3190,7 +3176,7 @@ PyProcess_repr (PyProcess * self)
 
   g_string_append (repr, ")");
 
-  result = PyRepr_FromString (repr->str);
+  result = PyUnicode_FromString (repr->str);
 
   g_string_free (repr, TRUE);
 
@@ -3271,7 +3257,7 @@ PySpawn_repr (PySpawn * self)
 
     identifier_bytes = PyUnicode_AsUTF8String (self->identifier);
 
-    result = PyRepr_FromFormat ("Spawn(pid=%u, identifier=\"%s\")",
+    result = PyUnicode_FromFormat ("Spawn(pid=%u, identifier=\"%s\")",
         self->pid,
         PyBytes_AsString (identifier_bytes));
 
@@ -3279,7 +3265,7 @@ PySpawn_repr (PySpawn * self)
   }
   else
   {
-    result = PyRepr_FromFormat ("Spawn(pid=%u)",
+    result = PyUnicode_FromFormat ("Spawn(pid=%u)",
         self->pid);
   }
 
@@ -3394,7 +3380,7 @@ PyChild_repr (PyChild * self)
 
   g_string_append (repr, ")");
 
-  result = PyRepr_FromString (repr->str);
+  result = PyUnicode_FromString (repr->str);
 
   g_string_free (repr, TRUE);
 
@@ -3462,7 +3448,7 @@ PyCrash_repr (PyCrash * self)
 
   g_string_append (repr, ")");
 
-  result = PyRepr_FromString (repr->str);
+  result = PyUnicode_FromString (repr->str);
 
   g_string_free (repr, TRUE);
 
@@ -3604,7 +3590,7 @@ PySession_init_from_handle (PySession * self, FridaSession * handle)
 static PyObject *
 PySession_repr (PySession * self)
 {
-  return PyRepr_FromFormat ("Session(pid=%u)", self->pid);
+  return PyUnicode_FromFormat ("Session(pid=%u)", self->pid);
 }
 
 static PyObject *
@@ -4256,9 +4242,9 @@ beach:
 static void
 PyRelay_init_from_handle (PyRelay * self, FridaRelay * handle)
 {
-  self->address = PyUnicode_FromUTF8String (frida_relay_get_address (handle));
-  self->username = PyUnicode_FromUTF8String (frida_relay_get_username (handle));
-  self->password = PyUnicode_FromUTF8String (frida_relay_get_password (handle));
+  self->address = PyUnicode_FromString (frida_relay_get_address (handle));
+  self->username = PyUnicode_FromString (frida_relay_get_username (handle));
+  self->password = PyUnicode_FromString (frida_relay_get_password (handle));
   self->kind = PyGObject_marshal_enum (frida_relay_get_kind (handle), FRIDA_TYPE_RELAY_KIND);
 }
 
@@ -4283,7 +4269,7 @@ PyRelay_repr (PyRelay * self)
   password_bytes = PyUnicode_AsUTF8String (self->password);
   kind_bytes = PyUnicode_AsUTF8String (self->kind);
 
-  result = PyRepr_FromFormat ("Relay(address=\"%s\", username=\"%s\", password=\"%s\", kind='%s')",
+  result = PyUnicode_FromFormat ("Relay(address=\"%s\", username=\"%s\", password=\"%s\", kind='%s')",
       PyBytes_AsString (address_bytes),
       PyBytes_AsString (username_bytes),
       PyBytes_AsString (password_bytes),
@@ -4805,7 +4791,7 @@ PyCompiler_build (PyCompiler * self, PyObject * args, PyObject * kw)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  result = PyUnicode_FromUTF8String (bundle);
+  result = PyUnicode_FromString (bundle);
   g_free (bundle);
 
   return result;
@@ -4959,7 +4945,7 @@ PyIOStream_repr (PyIOStream * self)
 {
   GIOStream * handle = PY_GOBJECT_HANDLE (self);
 
-  return PyRepr_FromFormat ("IOStream(handle=%p, is_closed=%s)",
+  return PyUnicode_FromFormat ("IOStream(handle=%p, is_closed=%s)",
       handle,
       g_io_stream_is_closed (handle) ? "TRUE" : "FALSE");
 }
@@ -5151,7 +5137,7 @@ PyCancellable_repr (PyCancellable * self)
 {
   GCancellable * handle = PY_GOBJECT_HANDLE (self);
 
-  return PyRepr_FromFormat ("Cancellable(handle=%p, is_cancelled=%s)",
+  return PyUnicode_FromFormat ("Cancellable(handle=%p, is_cancelled=%s)",
       handle,
       g_cancellable_is_cancelled (handle) ? "TRUE" : "FALSE");
 }
@@ -5408,12 +5394,13 @@ beach:
 }
 
 
-MOD_INIT (_frida)
+PyMODINIT_FUNC
+PyInit__frida (void)
 {
   PyObject * inspect, * datetime, * module;
 
   inspect = PyImport_ImportModule ("inspect");
-  inspect_getargspec = PyObject_GetAttrString (inspect, PYFRIDA_GETARGSPEC_FUNCTION);
+  inspect_getargspec = PyObject_GetAttrString (inspect, "getfullargspec");
   inspect_ismethod = PyObject_GetAttrString (inspect, "ismethod");
   Py_DECREF (inspect);
 
@@ -5425,7 +5412,7 @@ MOD_INIT (_frida)
 
   PyGObject_class_init ();
 
-  MOD_DEF (module, "_frida", "Frida", NULL);
+  module = PyModule_Create (&PyFrida_moduledef);
 
   PyModule_AddStringConstant (module, "__version__", frida_version_string ());
 
@@ -5480,5 +5467,5 @@ MOD_INIT (_frida)
   Py_INCREF (cancelled_exception);
   PyModule_AddObject (module, "OperationCancelledError", cancelled_exception);
 
-  return MOD_SUCCESS_VAL (module);
+  return module;
 }
