@@ -79,7 +79,7 @@
     t->object = PyType_FromSpecWithBases (&_PYFRIDA_TYPE_VAR (cname, spec), \
         (t->parent != NULL) ? PyTuple_Pack (1, t->parent->object) : NULL); \
     PyGObject_register_type (gtype, t); \
-    Py_INCREF (t->object); \
+    Py_IncRef (t->object); \
     PyModule_AddObject (module, G_STRINGIFY (cname), t->object); \
   } \
   G_END_DECLS
@@ -102,6 +102,14 @@
 #define PY_GOBJECT(o) ((PyGObject *) (o))
 #define PY_GOBJECT_HANDLE(o) (PY_GOBJECT (o)->handle)
 #define PY_GOBJECT_SIGNAL_CLOSURE(o) ((PyGObjectSignalClosure *) (o))
+
+#define PyFrida_RETURN_NONE \
+  G_STMT_START \
+  { \
+    Py_IncRef (Py_None); \
+    return Py_None; \
+  } \
+  G_STMT_END
 
 static struct PyModuleDef PyFrida_moduledef = { PyModuleDef_HEAD_INIT, "_frida", "Frida", -1, NULL, };
 
@@ -895,7 +903,7 @@ PyGObject_new_take_handle (gpointer handle, const PyGObjectType * pytype)
   PyObject * object;
 
   if (handle == NULL)
-    Py_RETURN_NONE;
+    PyFrida_RETURN_NONE;
 
   object = PyGObject_try_get_from_handle (handle);
   if (object == NULL)
@@ -909,7 +917,7 @@ PyGObject_new_take_handle (gpointer handle, const PyGObjectType * pytype)
   else
   {
     pytype->destroy (handle);
-    Py_INCREF (object);
+    Py_IncRef (object);
   }
 
   return object;
@@ -1015,7 +1023,7 @@ PyGObject_on (PyGObject * self, PyObject * args)
 
   self->signal_closures = g_slist_prepend (self->signal_closures, closure);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 
 too_many_arguments:
   {
@@ -1047,7 +1055,7 @@ PyGObject_off (PyGObject * self, PyObject * args)
   num_matches = g_signal_handlers_disconnect_matched (self->handle, G_SIGNAL_MATCH_CLOSURE, signal_id, 0, closure, NULL, NULL);
   g_assert (num_matches == 1);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 
 unknown_callback:
   {
@@ -1209,11 +1217,11 @@ PyGObjectSignalClosure_marshal (GClosure * closure, GValue * return_gvalue, guin
 
   result = PyObject_CallObject (callback, args);
   if (result != NULL)
-    Py_DECREF (result);
+    Py_DecRef (result);
   else
     PyErr_Print ();
 
-  Py_DECREF (args);
+  Py_DecRef (args);
 
 beach:
   PyGILState_Release (gstate);
@@ -1242,7 +1250,7 @@ PyGObjectSignalClosure_marshal_params (const GValue * params, guint params_lengt
 
 marshal_error:
   {
-    Py_DECREF (args);
+    Py_DecRef (args);
     return NULL;
   }
 }
@@ -1304,7 +1312,7 @@ static PyObject *
 PyGObject_marshal_string (const gchar * str)
 {
   if (str == NULL)
-    Py_RETURN_NONE;
+    PyFrida_RETURN_NONE;
 
   return PyUnicode_FromString (str);
 }
@@ -1335,7 +1343,7 @@ PyGObject_marshal_datetime (const gchar * iso8601_text)
 
   raw_dt = g_date_time_new_from_iso8601 (iso8601_text, NULL);
   if (raw_dt == NULL)
-    Py_RETURN_NONE;
+    PyFrida_RETURN_NONE;
 
   dt = g_date_time_to_local (raw_dt);
 
@@ -1361,7 +1369,7 @@ PyGObject_marshal_strv (gchar * const * strv, gint length)
   gint i;
 
   if (strv == NULL)
-    Py_RETURN_NONE;
+    PyFrida_RETURN_NONE;
 
   result = PyList_New (length);
 
@@ -1392,12 +1400,12 @@ PyGObject_unmarshal_strv (PyObject * value, gchar *** strv, gint * length)
     element = PySequence_GetItem (value, i);
     if (PyUnicode_Check (element))
     {
-      Py_DECREF (element);
+      Py_DecRef (element);
       element = PyUnicode_AsUTF8String (element);
     }
     if (PyBytes_Check (element))
       elements[i] = g_strdup (PyBytes_AsString (element));
-    Py_DECREF (element);
+    Py_DecRef (element);
 
     if (elements[i] == NULL)
       goto invalid_element;
@@ -1429,7 +1437,7 @@ PyGObject_marshal_envp (gchar * const * envp, gint length)
   gint i;
 
   if (envp == NULL)
-    Py_RETURN_NONE;
+    PyFrida_RETURN_NONE;
 
   result = PyDict_New ();
 
@@ -1449,7 +1457,7 @@ PyGObject_marshal_envp (gchar * const * envp, gint length)
 
       PyDict_SetItemString (result, name, value);
 
-      Py_DECREF (value);
+      Py_DecRef (value);
     }
 
     g_strfreev (tokens);
@@ -1586,7 +1594,7 @@ static PyObject *
 PyGObject_marshal_bytes (GBytes * bytes)
 {
   if (bytes == NULL)
-    Py_RETURN_NONE;
+    PyFrida_RETURN_NONE;
 
   return PyGObject_marshal_bytes_non_nullable (bytes);
 }
@@ -1629,7 +1637,7 @@ PyGObject_marshal_variant (GVariant * variant)
       break;
   }
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -1661,7 +1669,7 @@ PyGObject_marshal_variant_dict (GVariant * variant)
 
     PyDict_SetItemString (dict, key, value);
 
-    Py_DECREF (value);
+    Py_DecRef (value);
     g_variant_unref (raw_value);
     g_free (key);
   }
@@ -1794,7 +1802,7 @@ PyGObject_unmarshal_variant_from_mapping (PyObject * mapping, GVariant ** varian
 
     g_variant_builder_add (&builder, "{sv}", PyBytes_AsString (key_bytes), raw_value);
 
-    Py_DECREF (key_bytes);
+    Py_DecRef (key_bytes);
   }
 
   Py_DecRef (items);
@@ -1805,7 +1813,7 @@ PyGObject_unmarshal_variant_from_mapping (PyObject * mapping, GVariant ** varian
 
 propagate_error:
   {
-    Py_XDECREF (items);
+    Py_DecRef (items);
     g_variant_builder_clear (&builder);
 
     return FALSE;
@@ -1844,7 +1852,7 @@ PyGObject_unmarshal_variant_from_sequence (PyObject * sequence, GVariant ** vari
     else
       g_variant_builder_add (&builder, "v", raw_value);
 
-    Py_DECREF (val);
+    Py_DecRef (val);
   }
 
   *variant = g_variant_builder_end (&builder);
@@ -1853,7 +1861,7 @@ PyGObject_unmarshal_variant_from_sequence (PyObject * sequence, GVariant ** vari
 
 propagate_error:
   {
-    Py_XDECREF (val);
+    Py_DecRef (val);
     g_variant_builder_clear (&builder);
 
     return FALSE;
@@ -1878,7 +1886,7 @@ PyGObject_marshal_parameters_dict (GHashTable * dict)
 
     PyDict_SetItemString (result, key, value);
 
-    Py_DECREF (value);
+    Py_DecRef (value);
   }
 
   return result;
@@ -1890,7 +1898,7 @@ PyGObject_marshal_object (gpointer handle, GType type)
   const PyGObjectType * pytype;
 
   if (handle == NULL)
-    Py_RETURN_NONE;
+    PyFrida_RETURN_NONE;
 
   pytype = g_hash_table_lookup (pygobject_type_spec_by_type, GSIZE_TO_POINTER (type));
   if (pytype == NULL)
@@ -1953,8 +1961,8 @@ PyGObject_marshal_socket_address (GSocketAddress * address)
       }
       default:
       {
+        Py_IncRef (Py_None);
         result = Py_None;
-        Py_INCREF (result);
         break;
       }
     }
@@ -2033,7 +2041,7 @@ PyDeviceManager_close (PyDeviceManager * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -2082,14 +2090,14 @@ PyDeviceManager_is_matching_device (FridaDevice * device, PyObject * predicate)
   {
     is_matching = result == Py_True;
 
-    Py_DECREF (result);
+    Py_DecRef (result);
   }
   else
   {
     PyErr_Print ();
   }
 
-  Py_DECREF (device_object);
+  Py_DecRef (device_object);
 
   PyGILState_Release (gstate);
 
@@ -2185,7 +2193,7 @@ PyDeviceManager_remove_remote_device (PyDeviceManager * self, PyObject * args, P
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static FridaRemoteDeviceOptions *
@@ -2273,11 +2281,11 @@ PyDevice_init_from_handle (PyDevice * self, FridaDevice * handle)
 static void
 PyDevice_dealloc (PyDevice * self)
 {
-  Py_XDECREF (self->bus);
-  Py_XDECREF (self->type);
-  Py_XDECREF (self->icon);
-  Py_XDECREF (self->name);
-  Py_XDECREF (self->id);
+  Py_DecRef (self->bus);
+  Py_DecRef (self->type);
+  Py_DecRef (self->icon);
+  Py_DecRef (self->name);
+  Py_DecRef (self->id);
 
   PyGObject_tp_dealloc ((PyObject *) self);
 }
@@ -2296,9 +2304,9 @@ PyDevice_repr (PyDevice * self)
       PyBytes_AsString (name_bytes),
       PyBytes_AsString (type_bytes));
 
-  Py_DECREF (type_bytes);
-  Py_DECREF (name_bytes);
-  Py_DECREF (id_bytes);
+  Py_DecRef (type_bytes);
+  Py_DecRef (name_bytes);
+  Py_DecRef (id_bytes);
 
   return result;
 }
@@ -2370,7 +2378,7 @@ PyDevice_get_frontmost_application (PyDevice * self, PyObject * args, PyObject *
   if (result != NULL)
     return PyApplication_new_take_handle (result);
   else
-    Py_RETURN_NONE;
+    PyFrida_RETURN_NONE;
 
 invalid_argument:
   {
@@ -2443,7 +2451,7 @@ PyDevice_parse_application_query_options (PyObject * identifiers_value, const gc
       if (element == NULL)
         goto propagate_error;
       PyGObject_unmarshal_string (element, &identifier);
-      Py_DECREF (element);
+      Py_DecRef (element);
       if (identifier == NULL)
         goto propagate_error;
 
@@ -2536,7 +2544,7 @@ PyDevice_parse_process_query_options (PyObject * pids_value, const gchar * scope
       if (element == NULL)
         goto propagate_error;
       pid = PyLong_AsLongLong (element);
-      Py_DECREF (element);
+      Py_DecRef (element);
       if (pid == -1)
         goto propagate_error;
 
@@ -2575,7 +2583,7 @@ PyDevice_enable_spawn_gating (PyDevice * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -2589,7 +2597,7 @@ PyDevice_disable_spawn_gating (PyDevice * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -2803,7 +2811,7 @@ PyDevice_input (PyDevice * self, PyObject * args)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -2821,7 +2829,7 @@ PyDevice_resume (PyDevice * self, PyObject * args)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -2839,7 +2847,7 @@ PyDevice_kill (PyDevice * self, PyObject * args)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -3007,7 +3015,7 @@ PyDevice_unpair (PyDevice * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 
@@ -3043,9 +3051,9 @@ PyApplication_init_from_handle (PyApplication * self, FridaApplication * handle)
 static void
 PyApplication_dealloc (PyApplication * self)
 {
-  Py_XDECREF (self->parameters);
-  Py_XDECREF (self->name);
-  Py_XDECREF (self->identifier);
+  Py_DecRef (self->parameters);
+  Py_DecRef (self->name);
+  Py_DecRef (self->identifier);
 
   PyGObject_tp_dealloc ((PyObject *) self);
 }
@@ -3105,7 +3113,7 @@ PyApplication_marshal_parameters_dict (GHashTable * dict)
 
     PyDict_SetItemString (result, key, value);
 
-    Py_DECREF (value);
+    Py_DecRef (value);
   }
 
   return result;
@@ -3142,8 +3150,8 @@ PyProcess_init_from_handle (PyProcess * self, FridaProcess * handle)
 static void
 PyProcess_dealloc (PyProcess * self)
 {
-  Py_XDECREF (self->parameters);
-  Py_XDECREF (self->name);
+  Py_DecRef (self->parameters);
+  Py_DecRef (self->name);
 
   PyGObject_tp_dealloc ((PyObject *) self);
 }
@@ -3200,7 +3208,7 @@ PyProcess_marshal_parameters_dict (GHashTable * dict)
 
     PyDict_SetItemString (result, key, value);
 
-    Py_DECREF (value);
+    Py_DecRef (value);
   }
 
   return result;
@@ -3235,7 +3243,7 @@ PySpawn_init_from_handle (PySpawn * self, FridaSpawn * handle)
 static void
 PySpawn_dealloc (PySpawn * self)
 {
-  Py_XDECREF (self->identifier);
+  Py_DecRef (self->identifier);
 
   PyGObject_tp_dealloc ((PyObject *) self);
 }
@@ -3255,7 +3263,7 @@ PySpawn_repr (PySpawn * self)
         self->pid,
         PyBytes_AsString (identifier_bytes));
 
-    Py_DECREF (identifier_bytes);
+    Py_DecRef (identifier_bytes);
   }
   else
   {
@@ -3315,11 +3323,11 @@ PyChild_init_from_handle (PyChild * self, FridaChild * handle)
 static void
 PyChild_dealloc (PyChild * self)
 {
-  Py_XDECREF (self->envp);
-  Py_XDECREF (self->argv);
-  Py_XDECREF (self->path);
-  Py_XDECREF (self->identifier);
-  Py_XDECREF (self->origin);
+  Py_DecRef (self->envp);
+  Py_DecRef (self->argv);
+  Py_DecRef (self->path);
+  Py_DecRef (self->identifier);
+  Py_DecRef (self->origin);
 
   PyGObject_tp_dealloc ((PyObject *) self);
 }
@@ -3410,10 +3418,10 @@ PyCrash_init_from_handle (PyCrash * self, FridaCrash * handle)
 static void
 PyCrash_dealloc (PyCrash * self)
 {
-  Py_XDECREF (self->parameters);
-  Py_XDECREF (self->report);
-  Py_XDECREF (self->summary);
-  Py_XDECREF (self->process_name);
+  Py_DecRef (self->parameters);
+  Py_DecRef (self->report);
+  Py_DecRef (self->summary);
+  Py_DecRef (self->process_name);
 
   PyGObject_tp_dealloc ((PyObject *) self);
 }
@@ -3467,7 +3475,7 @@ PyBus_attach (PySession * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -3491,7 +3499,7 @@ PyBus_post (PyScript * self, PyObject * args, PyObject * kw)
   g_bytes_unref (data);
   PyMem_Free (message);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 
@@ -3512,7 +3520,7 @@ PyService_activate (PyService * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -3526,7 +3534,7 @@ PyService_cancel (PyService * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -3610,7 +3618,7 @@ PySession_detach (PySession * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -3624,7 +3632,7 @@ PySession_resume (PySession * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -3638,7 +3646,7 @@ PySession_enable_child_gating (PySession * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -3652,7 +3660,7 @@ PySession_disable_child_gating (PySession * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -3931,7 +3939,7 @@ beach:
     if (!success)
       return NULL;
 
-    Py_RETURN_NONE;
+    PyFrida_RETURN_NONE;
   }
 }
 
@@ -3964,7 +3972,7 @@ PySession_parse_peer_options (const gchar * stun_server, PyObject * relays)
 
       frida_peer_options_add_relay (options, PY_GOBJECT_HANDLE (relay));
 
-      Py_DECREF (relay);
+      Py_DecRef (relay);
     }
   }
 
@@ -3972,7 +3980,7 @@ PySession_parse_peer_options (const gchar * stun_server, PyObject * relays)
 
 expected_relay:
   {
-    Py_DECREF (relay);
+    Py_DecRef (relay);
 
     PyErr_SetString (PyExc_TypeError, "expected sequence of Relay objects");
     goto propagate_error;
@@ -4102,7 +4110,7 @@ PyScript_load (PyScript * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4116,7 +4124,7 @@ PyScript_unload (PyScript * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4130,7 +4138,7 @@ PyScript_eternalize (PyScript * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4154,7 +4162,7 @@ PyScript_post (PyScript * self, PyObject * args, PyObject * kw)
   g_bytes_unref (data);
   PyMem_Free (message);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4173,7 +4181,7 @@ PyScript_enable_debugger (PyScript * self, PyObject * args, PyObject * kw)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4187,7 +4195,7 @@ PyScript_disable_debugger (PyScript * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 
@@ -4245,10 +4253,10 @@ PyRelay_init_from_handle (PyRelay * self, FridaRelay * handle)
 static void
 PyRelay_dealloc (PyRelay * self)
 {
-  Py_XDECREF (self->kind);
-  Py_XDECREF (self->password);
-  Py_XDECREF (self->username);
-  Py_XDECREF (self->address);
+  Py_DecRef (self->kind);
+  Py_DecRef (self->password);
+  Py_DecRef (self->username);
+  Py_DecRef (self->address);
 
   PyGObject_tp_dealloc ((PyObject *) self);
 }
@@ -4269,10 +4277,10 @@ PyRelay_repr (PyRelay * self)
       PyBytes_AsString (password_bytes),
       PyBytes_AsString (kind_bytes));
 
-  Py_DECREF (kind_bytes);
-  Py_DECREF (password_bytes);
-  Py_DECREF (username_bytes);
-  Py_DECREF (address_bytes);
+  Py_DecRef (kind_bytes);
+  Py_DecRef (password_bytes);
+  Py_DecRef (username_bytes);
+  Py_DecRef (address_bytes);
 
   return result;
 }
@@ -4295,7 +4303,7 @@ PyPortalMembership_terminate (PyPortalMembership * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 
@@ -4349,7 +4357,7 @@ PyPortalService_dealloc (PyPortalService * self)
     Py_END_ALLOW_THREADS
   }
 
-  Py_XDECREF (self->device);
+  Py_DecRef (self->device);
 
   PyGObject_tp_dealloc ((PyObject *) self);
 }
@@ -4365,7 +4373,7 @@ PyPortalService_start (PyPortalService * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4379,7 +4387,7 @@ PyPortalService_stop (PyPortalService * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4394,7 +4402,7 @@ PyPortalService_kick (PyScript * self, PyObject * args)
   frida_portal_service_kick (PY_GOBJECT_HANDLE (self), connection_id);
   Py_END_ALLOW_THREADS
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4422,7 +4430,7 @@ PyPortalService_post (PyScript * self, PyObject * args, PyObject * kw)
   g_bytes_unref (data);
   PyMem_Free (message);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4450,7 +4458,7 @@ PyPortalService_narrowcast (PyScript * self, PyObject * args, PyObject * kw)
   PyMem_Free (message);
   PyMem_Free (tag);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4476,7 +4484,7 @@ PyPortalService_broadcast (PyScript * self, PyObject * args, PyObject * kw)
   g_bytes_unref (data);
   PyMem_Free (message);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4518,7 +4526,7 @@ PyPortalService_tag (PyScript * self, PyObject * args, PyObject * kw)
 
   PyMem_Free (tag);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4539,7 +4547,7 @@ PyPortalService_untag (PyScript * self, PyObject * args, PyObject * kw)
 
   PyMem_Free (tag);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 
@@ -4660,7 +4668,7 @@ frida_python_authentication_service_dispose (GObject * object)
 
     gstate = PyGILState_Ensure ();
 
-    Py_DECREF (self->callback);
+    Py_DecRef (self->callback);
     self->callback = NULL;
 
     PyGILState_Release (gstate);
@@ -4714,19 +4722,19 @@ frida_python_authentication_service_do_authenticate (GTask * task, FridaPythonAu
     {
       PyObject * message_value = PyObject_Str (value);
       PyGObject_unmarshal_string (message_value, &message);
-      Py_DECREF (message_value);
+      Py_DecRef (message_value);
     }
     else
     {
       message = g_strdup ("Internal error");
     }
 
-    Py_DECREF (type);
-    Py_XDECREF (value);
-    Py_XDECREF (traceback);
+    Py_DecRef (type);
+    Py_DecRef (value);
+    Py_DecRef (traceback);
   }
 
-  Py_XDECREF (result);
+  Py_DecRef (result);
 
   PyGILState_Release (gstate);
 
@@ -4824,7 +4832,7 @@ PyCompiler_watch (PyCompiler * self, PyObject * args, PyObject * kw)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 
 invalid_option_value:
   {
@@ -4891,7 +4899,7 @@ PyFileMonitor_enable (PyFileMonitor * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4905,7 +4913,7 @@ PyFileMonitor_disable (PyFileMonitor * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 
@@ -4961,7 +4969,7 @@ PyIOStream_close (PyIOStream * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -4994,14 +5002,14 @@ PyIOStream_read (PyIOStream * self, PyObject * args)
     {
       result = PyBytes_FromStringAndSize (PyBytes_AsString (buffer), bytes_read);
 
-      Py_DECREF (buffer);
+      Py_DecRef (buffer);
     }
   }
   else
   {
     result = PyFrida_raise (error);
 
-    Py_DECREF (buffer);
+    Py_DecRef (buffer);
   }
 
   return result;
@@ -5035,7 +5043,7 @@ PyIOStream_read_all (PyIOStream * self, PyObject * args)
   {
     result = PyFrida_raise (error);
 
-    Py_DECREF (buffer);
+    Py_DecRef (buffer);
   }
 
   return result;
@@ -5079,7 +5087,7 @@ PyIOStream_write_all (PyIOStream * self, PyObject * args)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 
@@ -5096,7 +5104,7 @@ PyCancellable_new_take_handle (GCancellable * handle)
   else
   {
     g_object_unref (handle);
-    Py_INCREF (object);
+    Py_IncRef (object);
   }
 
   return object;
@@ -5151,7 +5159,7 @@ PyCancellable_raise_if_cancelled (PyCancellable * self)
   if (error != NULL)
     return PyFrida_raise (error);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -5165,7 +5173,7 @@ PyCancellable_release_fd (PyCancellable * self)
 {
   g_cancellable_release_fd (PY_GOBJECT_HANDLE (self));
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -5186,7 +5194,7 @@ PyCancellable_push_current (PyCancellable * self)
 {
   g_cancellable_push_current (PY_GOBJECT_HANDLE (self));
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
@@ -5199,7 +5207,7 @@ PyCancellable_pop_current (PyCancellable * self)
 
   g_cancellable_pop_current (handle);
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 
 invalid_operation:
   {
@@ -5258,7 +5266,7 @@ PyCancellable_disconnect (PyCancellable * self, PyObject * args)
   g_cancellable_disconnect (PY_GOBJECT_HANDLE (self), handler_id);
   Py_END_ALLOW_THREADS
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 static void
@@ -5271,7 +5279,7 @@ PyCancellable_on_cancelled (GCancellable * cancellable, PyObject * callback)
 
   result = PyObject_CallObject (callback, NULL);
   if (result != NULL)
-    Py_DECREF (result);
+    Py_DecRef (result);
   else
     PyErr_Print ();
 
@@ -5295,7 +5303,7 @@ PyCancellable_cancel (PyCancellable * self)
   g_cancellable_cancel (PY_GOBJECT_HANDLE (self));
   Py_END_ALLOW_THREADS
 
-  Py_RETURN_NONE;
+  PyFrida_RETURN_NONE;
 }
 
 
@@ -5303,7 +5311,7 @@ static void
 PyFrida_object_decref (gpointer obj)
 {
   PyObject * o = obj;
-  Py_DECREF (o);
+  Py_DecRef (o);
 }
 
 static PyObject *
@@ -5346,7 +5354,7 @@ PyFrida_repr (PyObject * obj)
 
   PyGObject_unmarshal_string (repr_value, &result);
 
-  Py_DECREF (repr_value);
+  Py_DecRef (repr_value);
 
   return result;
 }
@@ -5379,10 +5387,10 @@ PyFrida_get_max_argument_count (PyObject * callable)
   g_assert (is_method != NULL);
   if (is_method == Py_True)
     result--;
-  Py_DECREF (is_method);
+  Py_DecRef (is_method);
 
 beach:
-  Py_XDECREF (spec);
+  Py_DecRef (spec);
 
   return result;
 }
@@ -5396,11 +5404,11 @@ PyInit__frida (void)
   inspect = PyImport_ImportModule ("inspect");
   inspect_getargspec = PyObject_GetAttrString (inspect, "getfullargspec");
   inspect_ismethod = PyObject_GetAttrString (inspect, "ismethod");
-  Py_DECREF (inspect);
+  Py_DecRef (inspect);
 
   datetime = PyImport_ImportModule ("datetime");
   datetime_constructor = PyObject_GetAttrString (datetime, "datetime");
-  Py_DECREF (datetime);
+  Py_DecRef (datetime);
 
   frida_init ();
 
@@ -5440,7 +5448,7 @@ PyInit__frida (void)
     { \
       PyObject * exception = PyErr_NewException ("frida." name "Error", NULL, NULL); \
       g_hash_table_insert (frida_exception_by_error_code, GINT_TO_POINTER (G_PASTE (FRIDA_ERROR_, code)), exception); \
-      Py_INCREF (exception); \
+      Py_IncRef (exception); \
       PyModule_AddObject (module, name "Error", exception); \
     } while (FALSE)
   PYFRIDA_DECLARE_EXCEPTION (SERVER_NOT_RUNNING, "ServerNotRunning");
@@ -5458,7 +5466,7 @@ PyInit__frida (void)
   PYFRIDA_DECLARE_EXCEPTION (TRANSPORT, "Transport");
 
   cancelled_exception = PyErr_NewException ("frida.OperationCancelledError", NULL, NULL);
-  Py_INCREF (cancelled_exception);
+  Py_IncRef (cancelled_exception);
   PyModule_AddObject (module, "OperationCancelledError", cancelled_exception);
 
   return module;
