@@ -46,12 +46,6 @@
 # endif
 #endif
 
-#if PY_VERSION_HEX >= 0x03080000
-# define PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET 0
-#else
-# define PYFRIDA_NO_PRINT_FUNC_OR_VECTORCALL_OFFSET NULL
-#endif
-
 #define PYFRIDA_TYPE(name) \
   (&_PYFRIDA_TYPE_VAR (name, type))
 #define PYFRIDA_TYPE_OBJECT(name) \
