@@ -38,6 +38,11 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import NotRequired
 
+if sys.version_info >= (3, 10):
+    from typing import ParamSpec
+else:
+    from typing_extensions import ParamSpec
+
 from . import _frida
 
 _device_manager = None
@@ -73,11 +78,11 @@ def _filter_missing_kwargs(d: MutableMapping[Any, Any]) -> None:
 
 
 R = TypeVar("R")
+P = ParamSpec("P")
 
-
-def cancellable(f: Callable[..., R]) -> Callable[..., R]:
+def cancellable(f: Callable[P, R]) -> Callable[P, R]:
     @functools.wraps(f)
-    def wrapper(*args: Any, **kwargs: Any) -> R:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         cancellable = kwargs.pop("cancellable", None)
         if cancellable is not None:
             with cancellable:
