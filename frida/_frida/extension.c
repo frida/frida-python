@@ -5037,6 +5037,12 @@ PyIOStream_read_all (PyIOStream * self, PyObject * args)
 
   if (error == NULL)
   {
+    if ((unsigned long) bytes_read != count)
+    {
+      Py_DecRef (buffer);
+      buffer = PyBytes_FromString ("");
+    }
+
     result = buffer;
   }
   else
