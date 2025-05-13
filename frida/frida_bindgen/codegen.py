@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 
 from .model import (ClassObjectType, CustomTypeKind, Enumeration,
                     InterfaceObjectType, Method, Model, ObjectType, Parameter,
-                    Procedure, Property, Signal, Tuple, to_pascal_case)
+                    Procedure, Property, Signal, Tuple, to_pascal_case, to_snake_case)
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 CODEGEN_HELPERS_TS = (ASSETS_DIR / "codegen_helpers.ts").read_text(encoding="utf-8")
@@ -1563,7 +1563,8 @@ def generate_abstract_base_type_declarations(model: Model) -> str:
     for itype in model.interface_types_with_abstract_base:
         ctype = itype.abstract_base_c_type
         cprefix = itype.abstract_base_c_symbol_prefix
-        module_upper, obj_name_upper = cprefix.upper().split("_", maxsplit=1)
+        module_upper = "PY"
+        obj_name_upper = "ABSTRACT_" + to_snake_case(itype.name).upper()
         decls.append(
             f"""G_DECLARE_FINAL_TYPE ({ctype}, {cprefix}, {module_upper}, {obj_name_upper}, GObject)
 
