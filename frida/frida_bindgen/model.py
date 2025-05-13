@@ -146,7 +146,7 @@ class ObjectType:
 
     @cached_property
     def abstract_base_c_type(self) -> str:
-        return f"FdnAbstract{self.name}"
+        return f"PyAbstract{self.name}"
 
     @cached_property
     def parent(self) -> ObjectType:
@@ -184,11 +184,11 @@ class ObjectType:
 
     @cached_property
     def c_symbol_prefix(self) -> str:
-        return f"fdn_{to_snake_case(self.name)}"
+        return f"Py{self.name}"
 
     @cached_property
     def abstract_base_c_symbol_prefix(self) -> str:
-        return f"fdn_abstract_{to_snake_case(self.name)}"
+        return f"PyAbstract{self.name}"
 
     @cached_property
     def c_cast_macro(self) -> str:
@@ -537,11 +537,11 @@ class Method(Procedure):
 
     @cached_property
     def operation_type_name(self) -> str:
-        return f"Fdn{self.object_type.name}{to_pascal_case(self.name)}Operation"
+        return f"Py{self.object_type.name}{to_pascal_case(self.name)}Operation"
 
     @cached_property
     def abstract_base_operation_type_name(self) -> str:
-        return f"FdnAbstract{self.object_type.name}{to_pascal_case(self.name)}Operation"
+        return f"PyAbstract{self.object_type.name}{to_pascal_case(self.name)}Operation"
 
     @cached_property
     def is_select_method(self) -> bool:
@@ -801,7 +801,7 @@ class Enumeration:
 
     @cached_property
     def c_symbol_prefix(self) -> str:
-        return f"fdn_{to_snake_case(self.name)}"
+        return f"Py{self.name}"
 
 
 @dataclass
