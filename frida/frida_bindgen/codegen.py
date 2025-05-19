@@ -10,8 +10,13 @@ from .model import (ClassObjectType, CustomTypeKind, Enumeration,
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 CODEGEN_HELPERS_TS = (ASSETS_DIR / "codegen_helpers.ts").read_text(encoding="utf-8")
-CODEGEN_TYPES_H = (ASSETS_DIR / "codegen_types.h").read_text(encoding="utf-8")
+CODEGEN_MACROS_H = (ASSETS_DIR / "codegen_macros.h").read_text(encoding="utf-8")
+CODEGEN_TYPEDEFS_H = (ASSETS_DIR / "codegen_typedefs.h").read_text(encoding="utf-8")
+CODEGEN_STRUCTS_H = (ASSETS_DIR / "codegen_structs.h").read_text(encoding="utf-8")
 CODEGEN_PROTOTYPES_H = (ASSETS_DIR / "codegen_prototypes.h").read_text(encoding="utf-8")
+CODEGEN_GOBJECT_PROTOTYPES = (ASSETS_DIR / "codegen_gobject_prototypes.h").read_text(encoding="utf-8")
+CODEGEN_GOBJECT_GLOBALS = (ASSETS_DIR / "codegen_gobject_globals.c").read_text(encoding="utf-8")
+CODEGEN_GOBJECT_METHODS = (ASSETS_DIR / "codegen_gobject_methods.c").read_text(encoding="utf-8")
 CODEGEN_HELPERS_C = (ASSETS_DIR / "codegen_helpers.c").read_text(encoding="utf-8")
 
 
@@ -507,50 +512,61 @@ def generate_extension_c(model: Model) -> str:
     enumerations = model.enumerations.values()
 
     code = generate_includes()
-    code += generate_abstract_base_type_declarations(model)
-    code += generate_operation_structs(object_types)
-    code += CODEGEN_TYPES_H
-    code += generate_prototypes(object_types, enumerations)
-    code += generate_abstract_base_define_type_invocations(model)
-    code += generate_shared_globals()
-    code += generate_type_tags(object_types)
-    code += generate_constructor_declarations(object_types)
-    code += generate_tsfn_declarations(object_types)
-    code += generate_init_function(object_types, enumerations)
-    code += generate_commit_constructors_function(object_types)
+    code += CODEGEN_MACROS_H
+    code += "\n" + CODEGEN_TYPEDEFS_H
+    code += generate_object_type_typedefs(model)
+    code += "\n\n" + CODEGEN_STRUCTS_H
+    code += "\n" + generate_object_type_structs(model)
+    #code += generate_abstract_base_type_declarations(model)
+    #code += generate_operation_structs(object_types)
+    code += "\n" + generate_prototypes(model)
+    #code += generate_abstract_base_define_type_invocations(model)
+    code += "\n" + generate_shared_globals()
+    code += "\n" + CODEGEN_GOBJECT_GLOBALS
+    code += "\n" + generate_object_type_method_definitions(model)
+    code += "\n" + generate_object_type_toplevel_definitions(model)
+    #code += generate_type_tags(object_types)
+    #code += generate_constructor_declarations(object_types)
+    #code += generate_tsfn_declarations(object_types)
+    code += "\n" + generate_init_function(object_types, enumerations)
+    #code += generate_commit_constructors_function(object_types)
 
     for otype in object_types:
-        if otype.is_frida_options:
-            code += generate_options_conversion_functions(otype)
-            continue
-        if otype.is_frida_list:
-            code += generate_list_conversion_functions(otype)
-            continue
+        pass
+        #if otype.is_frida_options:
+        #    code += generate_options_conversion_functions(otype)
+        #    continue
+        #if otype.is_frida_list:
+        #    code += generate_list_conversion_functions(otype)
+        #    continue
 
-        code += generate_object_type_registration_code(otype, model)
-        code += generate_object_type_conversion_functions(otype)
-        code += generate_object_type_constructor(otype)
-        code += generate_object_type_finalizer(otype)
-        code += generate_object_type_cleanup_code(otype)
+        #code += generate_object_type_registration_code(otype, model)
+        #code += generate_object_type_conversion_functions(otype)
+        #code += generate_object_type_constructor(otype)
+        #code += generate_object_type_finalizer(otype)
+        #code += generate_object_type_cleanup_code(otype)
 
-        for method in otype.methods:
-            code += generate_method_code(method)
+        #for method in otype.methods:
+        #    code += generate_method_code(method)
 
-        for signal in otype.signals:
-            code += generate_signal_getter_code(otype, signal)
+        #for signal in otype.signals:
+        #    code += generate_signal_getter_code(otype, signal)
 
-        if isinstance(otype, InterfaceObjectType) and otype.has_abstract_base:
-            code += generate_abstract_base_registration_code(otype)
-            code += generate_abstract_base_constructor(otype)
-            code += generate_abstract_base_gobject_glue(otype)
-            for method in otype.methods:
-                code += generate_abstract_base_method_code(method)
+        #if isinstance(otype, InterfaceObjectType) and otype.has_abstract_base:
+        #    code += generate_abstract_base_registration_code(otype)
+        #    code += generate_abstract_base_constructor(otype)
+        #    code += generate_abstract_base_gobject_glue(otype)
+        #    for method in otype.methods:
+        #        code += generate_abstract_base_method_code(method)
 
-    for enum in enumerations:
-        code += generate_enum_registration_code(enum)
-        code += generate_enum_conversion_functions(enum)
+        if otype.name == "Object":
+            code += CODEGEN_GOBJECT_METHODS
 
-    code += CODEGEN_HELPERS_C
+    #for enum in enumerations:
+    #    code += generate_enum_registration_code(enum)
+    #    code += generate_enum_conversion_functions(enum)
+
+    #code += CODEGEN_HELPERS_C
 
     return code
 
@@ -558,8 +574,24 @@ def generate_extension_c(model: Model) -> str:
 def generate_includes() -> str:
     return """\
 #include <frida-core.h>
-#include <node_api.h>
-#include <string.h>
+
+#define PY_SSIZE_T_CLEAN
+
+/*
+ * Don't propagate _DEBUG state to pyconfig as it incorrectly attempts to load
+ * debug libraries that don't normally ship with Python (e.g. 2.x). Debuggers
+ * wishing to spelunk the Python core can override this workaround by defining
+ * _FRIDA_ENABLE_PYDEBUG.
+ */
+#if defined (_DEBUG) && !defined (_FRIDA_ENABLE_PYDEBUG)
+# undef _DEBUG
+# include <pyconfig.h>
+# define _DEBUG
+#else
+# include <pyconfig.h>
+#endif
+
+#include <Python.h>
 
 """
 
@@ -611,116 +643,72 @@ typedef struct {{
     return "\n".join(structs)
 
 
-def generate_prototypes(
-    object_types: List[ObjectType], enumerations: List[Enumeration]
-) -> str:
-    prototypes = [
-        "static void fdn_deinit (void * data);",
-        "",
-        "static napi_value fdn_commit_constructors (napi_env env, napi_callback_info info);",
-    ]
+def generate_prototypes(model: Model) -> str:
+    prototypes = []
 
-    for otype in object_types:
+    for otype in model.regular_object_types:
         otype_cprefix = otype.c_symbol_prefix
 
-        prototypes.append("")
-
-        if not otype.is_frida_options and not otype.is_frida_list:
-            prototypes.append(
-                f"static void {otype_cprefix}_register (napi_env env, napi_value exports);"
-            )
-
-        if not otype.is_frida_list:
-            prototypes.append(
-                f"G_GNUC_UNUSED static gboolean {otype_cprefix}_from_value (napi_env env, napi_value value, {otype.c_type} ** handle);"
-            )
-
-        if not otype.is_frida_options:
-            prototypes += [
-                f"G_GNUC_UNUSED static napi_value {otype_cprefix}_to_value (napi_env env, {otype.c_type} * handle);",
-            ]
-
-        if not otype.is_frida_options and not otype.is_frida_list:
-            prototypes.append(
-                f"static napi_value {otype_cprefix}_construct (napi_env env, napi_callback_info info);"
-            )
-
-            custom = otype.customizations
-            if custom is not None and custom.cleanup is not None:
-                prototypes += [
-                    f"static void {otype_cprefix}_finalize (napi_env env, void * finalize_data, void * finalize_hint);",
-                    "",
-                    f"static void {otype.c_symbol_prefix}_handle_cleanup (void * data);",
-                ]
-
-            for method in otype.methods:
-                method_cprefix = f"{otype_cprefix}_{method.name}"
-                prototypes += [
-                    "",
-                    f"static napi_value {method_cprefix} (napi_env env, napi_callback_info info);",
-                ]
-                if method.is_async:
-                    prototypes += [
-                        f"static gboolean {method_cprefix}_begin (gpointer user_data);",
-                        f"static void {method_cprefix}_end (GObject * source_object, GAsyncResult * res, gpointer user_data);",
-                        f"static void {method_cprefix}_deliver (napi_env env, napi_value js_cb, void * context, void * data);",
-                        f"static void {method_cprefix}_operation_free ({method.operation_type_name} * operation);",
-                    ]
-
-            for i, signal in enumerate(otype.signals):
-                if i == 0:
-                    prototypes.append("")
-                prototypes.append(
-                    f"static napi_value {otype_cprefix}_get_{signal.c_name}_signal (napi_env env, napi_callback_info info);"
-                )
-
-        if isinstance(otype, InterfaceObjectType) and otype.has_abstract_base:
-            cprefix = otype.abstract_base_c_symbol_prefix
-
-            prototypes += [
-                "",
-                f"static void {cprefix}_register (napi_env env, napi_value exports);",
-                f"static napi_value {cprefix}_construct (napi_env env, napi_callback_info info);",
-                f"static void {cprefix}_iface_init (gpointer g_iface, gpointer iface_data);",
-                f"static void {cprefix}_dispose (GObject * object);",
-                f"static void {cprefix}_release_js_resources (napi_env env, napi_value js_cb, void * context, void * data);",
-            ]
-
-            for m in otype.methods:
-                method_cprefix = f"{cprefix}_{m.name}"
-                prototypes += [
-                    f"static void {method_cprefix} ({', '.join(m.param_ctypings)});",
-                    f"static void {method_cprefix}_operation_free ({m.abstract_base_operation_type_name} * operation);",
-                    f"static void {method_cprefix}_begin (napi_env env, napi_value js_cb, void * context, void * data);",
-                    f"static napi_value {method_cprefix}_on_success (napi_env env, napi_callback_info info);",
-                    f"static napi_value {method_cprefix}_on_failure (napi_env env, napi_callback_info info);",
-                    f"static {m.return_ctyping} {method_cprefix}_finish ({', '.join(m.finish_param_ctypings)});",
-                ]
-
-    for enum in enumerations:
-        enum_cprefix = enum.c_symbol_prefix
         prototypes += [
             "",
-            f"static void {enum_cprefix}_register (napi_env env, napi_value exports);",
-            f"G_GNUC_UNUSED static gboolean {enum_cprefix}_from_value (napi_env env, napi_value value, {enum.c_type} * e);",
-            f"G_GNUC_UNUSED static napi_value {enum_cprefix}_to_value (napi_env env, {enum.c_type} e);",
+            f"static int {otype_cprefix}_init ({otype_cprefix} * self, PyObject * args, PyObject * kw);",
+            f"static void {otype_cprefix}_dealloc ({otype_cprefix} * self);",
         ]
 
-    prototypes.append(CODEGEN_PROTOTYPES_H.rstrip())
+        if otype.name == "Object":
+            prototypes += [
+                "",
+                CODEGEN_GOBJECT_PROTOTYPES.rstrip(),
+            ]
 
-    return "\n".join(prototypes) + "\n\n"
+    return "\n".join(prototypes)
 
 
 def generate_shared_globals() -> str:
     return "\n".join(
         [
-            "static napi_ref fdn_exports;",
-            "static GHashTable * fdn_constructors;",
-            "static gboolean fdn_in_cleanup = FALSE;",
             "",
-            "",
+            'static struct PyModuleDef PyFrida_moduledef = { PyModuleDef_HEAD_INIT, "_frida", "Frida", -1, NULL, };',
         ]
     )
+
+
+def generate_object_type_toplevel_definitions(model: Model) -> str:
+    defs = []
+
+    for otype in model.regular_object_types:
+        if otype.name == "Object":
+            kind = "BASETYPE"
+            extra_args = ""
+        else:
+            kind = "TYPE"
+            parent = otype.parent
+            parent_name = parent.py_name if parent is not None else "GObject"
+            extra_args = f", {parent_name}"
+
+        cprefix = otype.c_symbol_prefix
+
+        defs.append(f"""PYFRIDA_DEFINE_{kind} ("_frida.{otype.py_name}", {otype.py_name}{extra_args},
+  {{ Py_tp_doc, "{otype.name}" }},
+  {{ Py_tp_init, {cprefix}_init }},
+  {{ Py_tp_dealloc, {cprefix}_dealloc }},
+  {{ Py_tp_methods, {cprefix}_methods }},
+);""")
+
+    return "\n\n".join(defs)
+
+
+def generate_object_type_method_definitions(model: Model) -> str:
+    defs = []
+
+    for otype in model.regular_object_types:
+        cprefix = otype.c_symbol_prefix
+        defs.append(f"""static PyMethodDef {cprefix}_methods[] =
+{{
+  {{ NULL }}
+}};""")
+
+    return "\n\n".join(defs)
 
 
 def generate_type_tags(object_types: List[ObjectType]) -> str:
@@ -779,57 +767,33 @@ def generate_tsfn_declarations(object_types: List[ObjectType]) -> str:
 def generate_init_function(
     object_types: List[ObjectType], enumerations: List[Enumeration]
 ) -> str:
-    object_type_prefixes = []
+    object_type_entries = []
     for otype in object_types:
         if otype.is_frida_options or otype.is_frida_list:
             continue
-        object_type_prefixes.append(otype.c_symbol_prefix)
-        if isinstance(otype, InterfaceObjectType) and otype.has_abstract_base:
-            object_type_prefixes.append(otype.abstract_base_c_symbol_prefix)
+        object_type_entries.append((otype.py_name, otype.get_type))
+        #if isinstance(otype, InterfaceObjectType) and otype.has_abstract_base:
+        #    object_type_entries.append((f"Abstract{otype.name}", f"PyAbstract{otype.name}_get_type"))
     object_type_registration_calls = "\n  ".join(
-        [f"{prefix}_register (env, exports);" for prefix in object_type_prefixes]
-    )
-
-    enum_type_registration_calls = "\n  ".join(
-        [f"{enum.c_symbol_prefix}_register (env, exports);" for enum in enumerations]
+        [f'PYFRIDA_REGISTER_TYPE ({name}, {get_type} ());' for name, get_type in object_type_entries]
     )
 
     return f"""
-static napi_value
-fdn_init (napi_env env,
-          napi_value exports)
+PyMODINIT_FUNC
+PyInit__frida (void)
 {{
-  napi_value commit_ctors;
+  PyObject * module;
 
   frida_init ();
 
-  napi_create_reference (env, exports, 1, &fdn_exports);
-  fdn_constructors = g_hash_table_new (NULL, NULL);
+  PyGObject_class_init ();
 
-  napi_create_function (env, "commitConstructors", NAPI_AUTO_LENGTH, fdn_commit_constructors, NULL, &commit_ctors);
-  napi_set_named_property (env, exports, "commitConstructors", commit_ctors);
+  module = PyModule_Create (&PyFrida_moduledef);
 
   {object_type_registration_calls}
 
-  {enum_type_registration_calls}
-
-  fdn_signal_register (env, exports);
-
-  napi_create_threadsafe_function (env, NULL, NULL, fdn_utf8_to_value (env, "FridaKeepAlive"), 0, 1, NULL, NULL, NULL, fdn_keep_alive_on_tsfn_invoke, &fdn_keep_alive_tsfn);
-  napi_unref_threadsafe_function (env, fdn_keep_alive_tsfn);
-
-  napi_add_env_cleanup_hook (env, fdn_deinit, NULL);
-
-  return exports;
+  return module;
 }}
-
-static void
-fdn_deinit (void * data)
-{{
-  fdn_in_cleanup = TRUE;
-}}
-
-NAPI_MODULE (NODE_GYP_MODULE_NAME, fdn_init)
 """
 
 
@@ -1556,6 +1520,26 @@ static napi_value
   return fdn_object_get_signal (env, info, "{signal.name}", "_{signal.prefixed_js_name}", {behavior});
 }}
 """
+
+
+def generate_object_type_typedefs(model: Model) -> str:
+    return "\n".join([f"typedef struct _{t.c_symbol_prefix} {t.c_symbol_prefix};" for t in model.regular_object_types if t.name != "Object"])
+
+
+def generate_object_type_structs(model: Model) -> str:
+    structs = []
+
+    for otype in model.regular_object_types:
+        if otype.name == "Object":
+            continue
+        parent = otype.parent
+        parent_type = parent.c_symbol_prefix if parent is not None else "PyGObject"
+        structs.append(f"""struct _{otype.c_symbol_prefix}
+{{
+  {parent_type} parent;
+}};""")
+
+    return "\n\n".join(structs)
 
 
 def generate_abstract_base_type_declarations(model: Model) -> str:

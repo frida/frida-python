@@ -75,6 +75,10 @@ class Model:
         return result
 
     @cached_property
+    def regular_object_types(self) -> List[ObjectType]:
+        return [t for t in self.object_types.values() if not t.is_frida_options and not t.is_frida_list]
+
+    @cached_property
     def public_types(self) -> OrderedDict[str, Union[ObjectType, Enumeration]]:
         return OrderedDict(
             [(k, v) for k, v in self.object_types.items() if v.is_public]
@@ -141,6 +145,13 @@ class ObjectType:
         return self.name
 
     @cached_property
+    def py_name(self) -> str:
+        custom = self.customizations
+        if custom is not None and custom.py_name is not None:
+            return custom.py_name
+        return "GObject" if self.name == "Object" else self.name
+
+    @cached_property
     def prefixed_js_name(self) -> str:
         return f"_{self.js_name}" if self.needs_wrapper else self.js_name
 
@@ -184,7 +195,7 @@ class ObjectType:
 
     @cached_property
     def c_symbol_prefix(self) -> str:
-        return f"Py{self.name}"
+        return f"Py{self.py_name}"
 
     @cached_property
     def abstract_base_c_symbol_prefix(self) -> str:
@@ -849,6 +860,7 @@ class TypeCustomizations:
 @dataclass
 class ObjectTypeCustomizations(TypeCustomizations):
     js_name: Optional[str] = None
+    py_name: Optional[str] = None
     drop: bool = False
     drop_abstract_base: bool = False
     constructor: Optional[ConstructorCustomizations] = None

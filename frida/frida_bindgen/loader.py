@@ -10,12 +10,12 @@ INCLUDED_GIO_OBJECT_TYPES = [
     "IOStream",
     "InputStream",
     "OutputStream",
-    "InetSocketAddress",
-    "InetAddress",
-    "UnixSocketAddress",
     "SocketAddress",
     "SocketAddressEnumerator",
     "SocketConnectable",
+    "InetSocketAddress",
+    "InetAddress",
+    "UnixSocketAddress",
 ]
 INCLUDED_GIO_ENUMERATIONS = [
     "FileMonitorEvent",
@@ -36,8 +36,9 @@ def compute_model(
     gio = parse_gir(gio_gir, [glib, gobject])
     frida = parse_gir(frida_gir, [glib, gobject, gio])
 
-    object_types = OrderedDict(frida.object_types)
+    object_types = OrderedDict()
     object_types["Object"] = gobject.object_types["Object"]
+    object_types.update(frida.object_types)
     for t in INCLUDED_GIO_OBJECT_TYPES:
         object_types[t] = gio.object_types[t]
 
