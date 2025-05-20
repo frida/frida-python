@@ -532,17 +532,19 @@ def generate_extension_c(model: Model) -> str:
     #code += generate_commit_constructors_function(object_types)
 
     for otype in object_types:
-        pass
-        #if otype.is_frida_options:
-        #    code += generate_options_conversion_functions(otype)
-        #    continue
-        #if otype.is_frida_list:
-        #    code += generate_list_conversion_functions(otype)
-        #    continue
+        if otype.name == "Object":
+            code += "\n" + CODEGEN_GOBJECT_METHODS
+            continue
+        if otype.is_frida_options:
+            #code += generate_options_conversion_functions(otype)
+            continue
+        if otype.is_frida_list:
+            #code += generate_list_conversion_functions(otype)
+            continue
 
         #code += generate_object_type_registration_code(otype, model)
         #code += generate_object_type_conversion_functions(otype)
-        #code += generate_object_type_constructor(otype)
+        code += generate_object_type_constructor(otype)
         #code += generate_object_type_finalizer(otype)
         #code += generate_object_type_cleanup_code(otype)
 
@@ -559,8 +561,6 @@ def generate_extension_c(model: Model) -> str:
         #    for method in otype.methods:
         #        code += generate_abstract_base_method_code(method)
 
-        if otype.name == "Object":
-            code += CODEGEN_GOBJECT_METHODS
 
     #for enum in enumerations:
     #    code += generate_enum_registration_code(enum)
@@ -649,16 +649,16 @@ def generate_prototypes(model: Model) -> str:
     for otype in model.regular_object_types:
         otype_cprefix = otype.c_symbol_prefix
 
-        prototypes += [
-            "",
-            f"static int {otype_cprefix}_init ({otype_cprefix} * self, PyObject * args, PyObject * kw);",
-            f"static void {otype_cprefix}_dealloc ({otype_cprefix} * self);",
-        ]
-
         if otype.name == "Object":
             prototypes += [
                 "",
                 CODEGEN_GOBJECT_PROTOTYPES.rstrip(),
+            ]
+        else:
+            prototypes += [
+                "",
+                f"static int {otype_cprefix}_init ({otype_cprefix} * self, PyObject * args, PyObject * kw);",
+                f"static void {otype_cprefix}_dealloc ({otype_cprefix} * self);",
             ]
 
     return "\n".join(prototypes)
@@ -669,6 +669,9 @@ def generate_shared_globals() -> str:
         [
             "",
             'static struct PyModuleDef PyFrida_moduledef = { PyModuleDef_HEAD_INIT, "_frida", "Frida", -1, NULL, };',
+            "",
+            "static initproc PyGObject_tp_init;",
+            "static destructor PyGObject_tp_dealloc;",
         ]
     )
 
@@ -789,6 +792,11 @@ PyInit__frida (void)
   PyGObject_class_init ();
 
   module = PyModule_Create (&PyFrida_moduledef);
+
+  PyModule_AddStringConstant (module, "__version__", frida_version_string ());
+
+  PyGObject_tp_init = PyType_GetSlot ((PyTypeObject *) PYFRIDA_TYPE_OBJECT (GObject), Py_tp_init);
+  PyGObject_tp_dealloc = PyType_GetSlot ((PyTypeObject *) PYFRIDA_TYPE_OBJECT (GObject), Py_tp_dealloc);
 
   {object_type_registration_calls}
 
@@ -982,12 +990,7 @@ static napi_value
 def generate_object_type_constructor(otype: ObjectType) -> str:
     otype_cprefix = otype.c_symbol_prefix
 
-    def calculate_indent(suffix: str) -> str:
-        return " " * (len(otype_cprefix) + len(suffix) + 2)
-
     ctor = next(iter(otype.constructors), None)
-
-    n_parameters = max(len(ctor.parameters) if ctor is not None else 0, 1)
 
     storage_prefix = ""
     invalid_arg_label = "propagate_error"
@@ -998,13 +1001,9 @@ def generate_object_type_constructor(otype: ObjectType) -> str:
         param_declarations = generate_parameter_variable_declarations(
             ctor, initialize=True
         )
-        if ctor.parameters:
-            param_conversions = generate_input_parameter_conversions_code(
-                ctor, storage_prefix, invalid_arg_label
-            )
-        else:
-            param_conversions = """if (argc != 0)
-  goto invalid_handle;"""
+        param_conversions = generate_input_parameter_conversions_code(
+            ctor, storage_prefix, invalid_arg_label
+        )
         param_destructions = generate_parameter_destructions_code(ctor, storage_prefix)
 
         call_args = generate_call_arguments_code(ctor, storage_prefix)
@@ -1038,78 +1037,32 @@ goto invalid_handle;"""
   }}
 """
 
-    if ctor is not None and ctor.parameters:
-        invalid_handle_logic = ""
-    else:
-        invalid_handle_logic = f"""invalid_handle:
-  {{
-    napi_throw_type_error (env, NULL, "expected a {otype.js_name} handle");
-    goto propagate_error;
-  }}
-"""
-
-    custom = otype.customizations
-
-    finalizer = "fdn_object_finalize"
-
-    cleanup_code = ""
-    if custom is not None and custom.cleanup is not None:
-        cleanup_code = f"""
-
-  napi_add_env_cleanup_hook (env, {otype_cprefix}_handle_cleanup, handle);
-  g_object_set_data (G_OBJECT (handle), "fdn-cleanup-hook", {otype_cprefix}_handle_cleanup);"""
-        finalizer = f"{otype_cprefix}_finalize"
-
-    keep_alive_code = ""
-    if custom is not None and custom.keep_alive is not None:
-        keep_alive = custom.keep_alive
-        method = next(
-            (
-                method
-                for method in otype.methods
-                if method.name == keep_alive.is_destroyed_function
-            )
-        )
-        keep_alive_code = f"""
-
-  fdn_keep_alive_until (env, jsthis, G_OBJECT (handle), (FdnIsDestroyedFunc) {method.c_identifier}, "{keep_alive.destroy_signal_name}");"""
+    def calculate_indent(suffix: str) -> str:
+        return " " * (len(otype_cprefix) + len(suffix) + 2)
 
     one_newline = "\n"
     two_newlines = "\n\n"
 
     return f"""
-static napi_value
-{otype_cprefix}_construct (napi_env env,
-{calculate_indent("_construct")}napi_callback_info info)
+static int
+{otype_cprefix}_init ({otype_cprefix} * self,
+{calculate_indent("_init")}PyObject * args,
+{calculate_indent("_init")}PyObject * kw)
 {{
-  napi_value result = NULL;
-  size_t argc = {n_parameters};
-  napi_value args[{n_parameters}], jsthis;
-  bool is_instance;{indent_c_code(param_declarations, 1, prologue=one_newline)}
+  int result = -1;{indent_c_code(param_declarations, 1, prologue=one_newline)}
   {otype.c_type} * handle = NULL;
 
-  if (napi_get_cb_info (env, info, &argc, args, &jsthis, NULL) != napi_ok)
+  if ({otype.parent_c_symbol_prefix}_tp_init ((PyObject *) self, args, kw) < 0)
     goto propagate_error;
 
-  if (argc != 0 && napi_check_object_type_tag (env, args[0], &fdn_handle_wrapper_type_tag, &is_instance) == napi_ok && is_instance)
-  {{
-    if (napi_get_value_external (env, args[0], (void **) &handle) != napi_ok)
-      goto propagate_error;
+{indent_c_code(param_conversions, 1)}{indent_c_code(constructor_call, 1, prologue=two_newlines)}{indent_c_code(error_check, 1, prologue=one_newline)}
 
-    g_object_ref (handle);
-  }}
-  else
-  {{
-{indent_c_code(param_conversions, 2)}{indent_c_code(constructor_call, 2, prologue=two_newlines)}{indent_c_code(error_check, 2, prologue=one_newline)}
-  }}
+  PyGObject_take_handle ((PyGObject *) self, g_steal_pointer (&handle), PYFRIDA_TYPE ({otype.py_name}));
 
-  if (!fdn_object_wrap (env, jsthis, G_OBJECT (handle), {finalizer}))
-    goto propagate_error;{cleanup_code}{keep_alive_code}
-
-  result = jsthis;
+  result = 0;
   goto beach;
 
-{unconstructable_logic}{invalid_handle_logic}{construction_failed_logic}propagate_error:
+{unconstructable_logic}{construction_failed_logic}propagate_error:
   {{
     g_clear_object (&handle);
     goto beach;
@@ -1532,11 +1485,9 @@ def generate_object_type_structs(model: Model) -> str:
     for otype in model.regular_object_types:
         if otype.name == "Object":
             continue
-        parent = otype.parent
-        parent_type = parent.c_symbol_prefix if parent is not None else "PyGObject"
         structs.append(f"""struct _{otype.c_symbol_prefix}
 {{
-  {parent_type} parent;
+  {otype.parent_c_symbol_prefix} parent;
 }};""")
 
     return "\n\n".join(structs)

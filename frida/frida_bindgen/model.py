@@ -198,6 +198,11 @@ class ObjectType:
         return f"Py{self.py_name}"
 
     @cached_property
+    def parent_c_symbol_prefix(self) -> str:
+        parent = self.parent
+        return parent.c_symbol_prefix if parent is not None else "PyGObject"
+
+    @cached_property
     def abstract_base_c_symbol_prefix(self) -> str:
         return f"PyAbstract{self.name}"
 
