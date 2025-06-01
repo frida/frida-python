@@ -500,8 +500,8 @@ static void frida_python_authentication_service_do_authenticate (GTask * task, F
 static int PyCompiler_init (PyCompiler * self, PyObject * args, PyObject * kw);
 static PyObject * PyCompiler_build (PyCompiler * self, PyObject * args, PyObject * kw);
 static PyObject * PyCompiler_watch (PyCompiler * self, PyObject * args, PyObject * kw);
-static gboolean PyCompiler_set_options (FridaCompilerOptions * options, const gchar * project_root_value, const gchar * source_maps_value,
-    const gchar * compression_value);
+static gboolean PyCompiler_set_options (FridaCompilerOptions * options, const gchar * project_root_value, const gchar * output_format_value,
+    const gchar * bundle_format_value, const gchar * type_check_value, const gchar * source_maps_value, const gchar * compression_value);
 
 static int PyFileMonitor_init (PyFileMonitor * self, PyObject * args, PyObject * kw);
 static PyObject * PyFileMonitor_enable (PyFileMonitor * self);
@@ -4768,20 +4768,26 @@ static PyObject *
 PyCompiler_build (PyCompiler * self, PyObject * args, PyObject * kw)
 {
   PyObject * result;
-  static char * keywords[] = { "entrypoint", "project_root", "source_maps", "compression", NULL };
+  static char * keywords[] =
+      { "entrypoint", "project_root", "output_format", "bundle_format", "type_check", "source_maps", "compression", NULL };
   const char * entrypoint;
   const char * project_root = NULL;
+  const char * output_format = NULL;
+  const char * bundle_format = NULL;
+  const char * type_check = NULL;
   const char * source_maps = NULL;
   const char * compression = NULL;
   FridaBuildOptions * options;
   GError * error = NULL;
   gchar * bundle;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|sss", keywords, &entrypoint, &project_root, &source_maps, &compression))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|ssssss", keywords, &entrypoint, &project_root, &output_format, &bundle_format, &type_check,
+        &source_maps, &compression))
     return NULL;
 
   options = frida_build_options_new ();
-  if (!PyCompiler_set_options (FRIDA_COMPILER_OPTIONS (options), project_root, source_maps, compression))
+  if (!PyCompiler_set_options (FRIDA_COMPILER_OPTIONS (options), project_root, output_format, bundle_format, type_check, source_maps,
+        compression))
     goto invalid_option_value;
 
   Py_BEGIN_ALLOW_THREADS
@@ -4808,19 +4814,25 @@ invalid_option_value:
 static PyObject *
 PyCompiler_watch (PyCompiler * self, PyObject * args, PyObject * kw)
 {
-  static char * keywords[] = { "entrypoint", "project_root", "source_maps", "compression", NULL };
+  static char * keywords[] =
+      { "entrypoint", "project_root", "output_format", "bundle_format", "type_check", "source_maps", "compression", NULL };
   const char * entrypoint;
   const char * project_root = NULL;
+  const char * output_format = NULL;
+  const char * bundle_format = NULL;
+  const char * type_check = NULL;
   const char * source_maps = NULL;
   const char * compression = NULL;
   FridaWatchOptions * options;
   GError * error = NULL;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|sss", keywords, &entrypoint, &project_root, &source_maps, &compression))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|ssssss", keywords, &entrypoint, &project_root, &output_format, &bundle_format, &type_check,
+        &source_maps, &compression))
     return NULL;
 
   options = frida_watch_options_new ();
-  if (!PyCompiler_set_options (FRIDA_COMPILER_OPTIONS (options), project_root, source_maps, compression))
+  if (!PyCompiler_set_options (FRIDA_COMPILER_OPTIONS (options), project_root, output_format, bundle_format, type_check, source_maps,
+        compression))
     goto invalid_option_value;
 
   Py_BEGIN_ALLOW_THREADS
@@ -4842,11 +4854,41 @@ invalid_option_value:
 }
 
 static gboolean
-PyCompiler_set_options (FridaCompilerOptions * options, const gchar * project_root_value, const gchar * source_maps_value,
-    const gchar * compression_value)
+PyCompiler_set_options (FridaCompilerOptions * options, const gchar * project_root_value, const gchar * output_format_value,
+    const gchar * bundle_format_value, const gchar * type_check_value, const gchar * source_maps_value, const gchar * compression_value)
 {
   if (project_root_value != NULL)
     frida_compiler_options_set_project_root (options, project_root_value);
+
+  if (output_format_value != NULL)
+  {
+    FridaOutputFormat output_format;
+
+    if (!PyGObject_unmarshal_enum (output_format_value, FRIDA_TYPE_OUTPUT_FORMAT, &output_format))
+      return FALSE;
+
+    frida_compiler_options_set_output_format (options, output_format);
+  }
+
+  if (bundle_format_value != NULL)
+  {
+    FridaBundleFormat bundle_format;
+
+    if (!PyGObject_unmarshal_enum (bundle_format_value, FRIDA_TYPE_BUNDLE_FORMAT, &bundle_format))
+      return FALSE;
+
+    frida_compiler_options_set_bundle_format (options, bundle_format);
+  }
+
+  if (type_check_value != NULL)
+  {
+    FridaTypeCheckMode type_check;
+
+    if (!PyGObject_unmarshal_enum (type_check_value, FRIDA_TYPE_TYPE_CHECK_MODE, &type_check))
+      return FALSE;
+
+    frida_compiler_options_set_type_check (options, type_check);
+  }
 
   if (source_maps_value != NULL)
   {

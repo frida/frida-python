@@ -1567,10 +1567,20 @@ class Compiler:
         self,
         entrypoint: str,
         project_root: Optional[str] = None,
+        output_format: Optional[str] = None,
+        bundle_format: Optional[str] = None,
+        type_check: Optional[str] = None,
         source_maps: Optional[str] = None,
         compression: Optional[str] = None,
     ) -> str:
-        kwargs = {"project_root": project_root, "source_maps": source_maps, "compression": compression}
+        kwargs = {
+            "project_root": project_root,
+            "output_format": output_format,
+            "bundle_format": bundle_format,
+            "type_check": type_check,
+            "source_maps": source_maps,
+            "compression": compression,
+        }
         _filter_missing_kwargs(kwargs)
         return self._impl.build(entrypoint, **kwargs)
 
@@ -1579,10 +1589,20 @@ class Compiler:
         self,
         entrypoint: str,
         project_root: Optional[str] = None,
+        output_format: Optional[str] = None,
+        bundle_format: Optional[str] = None,
+        type_check: Optional[str] = None,
         source_maps: Optional[str] = None,
         compression: Optional[str] = None,
     ) -> None:
-        kwargs = {"project_root": project_root, "source_maps": source_maps, "compression": compression}
+        kwargs = {
+            "project_root": project_root,
+            "output_format": output_format,
+            "bundle_format": bundle_format,
+            "type_check": type_check,
+            "source_maps": source_maps,
+            "compression": compression,
+        }
         _filter_missing_kwargs(kwargs)
         return self._impl.watch(entrypoint, **kwargs)
 
