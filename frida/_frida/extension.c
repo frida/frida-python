@@ -4858,15 +4858,10 @@ frida_python_authentication_service_do_authenticate (GTask * task, FridaPythonAu
 static int
 PyCompiler_init (PyCompiler * self, PyObject * args, PyObject * kw)
 {
-  PyDeviceManager * manager;
-
   if (PyGObject_tp_init ((PyObject *) self, args, kw) < 0)
     return -1;
 
-  if (!PyArg_ParseTuple (args, "O!", PYFRIDA_TYPE_OBJECT (DeviceManager), &manager))
-    return -1;
-
-  PyGObject_take_handle (&self->parent, frida_compiler_new (PY_GOBJECT_HANDLE (manager)), PYFRIDA_TYPE (Compiler));
+  PyGObject_take_handle (&self->parent, frida_compiler_new (NULL), PYFRIDA_TYPE (Compiler));
 
   return 0;
 }
