@@ -1557,7 +1557,7 @@ CompilerDiagnosticsCallback = Callable[[List[CompilerDiagnostic]], None]
 
 class Compiler:
     def __init__(self) -> None:
-        self._impl = _frida.Compiler(get_device_manager()._impl)
+        self._impl = _frida.Compiler()
 
     def __repr__(self) -> str:
         return repr(self._impl)
