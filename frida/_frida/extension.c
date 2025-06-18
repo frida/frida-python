@@ -951,7 +951,7 @@ PYFRIDA_DEFINE_TYPE ("_frida.EndpointParameters", EndpointParameters, GObject, N
 );
 
 PYFRIDA_DEFINE_TYPE ("_frida.Compiler", Compiler, GObject, NULL, frida_unref,
-  { Py_tp_doc, "Frida File Monitor" },
+  { Py_tp_doc, "Frida Compiler" },
   { Py_tp_init, PyCompiler_init },
   { Py_tp_methods, PyCompiler_methods },
 );
