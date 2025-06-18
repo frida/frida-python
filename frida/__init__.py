@@ -23,6 +23,7 @@ Relay = _frida.Relay
 PortalService = core.PortalService
 EndpointParameters = core.EndpointParameters
 Compiler = core.Compiler
+PackageManager = core.PackageManager
 FileMonitor = _frida.FileMonitor
 Cancellable = core.Cancellable
 
