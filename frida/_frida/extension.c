@@ -529,12 +529,14 @@ static gchar * frida_python_authentication_service_authenticate_finish (FridaAut
 static void frida_python_authentication_service_do_authenticate (GTask * task, FridaPythonAuthenticationService * self);
 
 static int PyCompiler_init (PyCompiler * self, PyObject * args, PyObject * kw);
+static void PyCompiler_dealloc (PyCompiler * self);
 static PyObject * PyCompiler_build (PyCompiler * self, PyObject * args, PyObject * kw);
 static PyObject * PyCompiler_watch (PyCompiler * self, PyObject * args, PyObject * kw);
 static gboolean PyCompiler_set_options (FridaCompilerOptions * options, const gchar * project_root_value, const gchar * output_format_value,
     const gchar * bundle_format_value, const gchar * type_check_value, const gchar * source_maps_value, const gchar * compression_value);
 
 static int PyPackageManager_init (PyPackageManager * self, PyObject * args, PyObject * kw);
+static void PyPackageManager_dealloc (PyPackageManager * self);
 static PyObject * PyPackageManager_repr (PyPackageManager * self);
 static PyObject * PyPackageManager_search (PyPackageManager * self, PyObject * args, PyObject * kw);
 static PyObject * PyPackageManager_install (PyPackageManager * self, PyObject * args, PyObject * kw);
@@ -559,6 +561,7 @@ static void PyPackageInstallResult_dealloc (PyPackageInstallResult * self);
 static PyObject * PyPackageInstallResult_repr (PyPackageInstallResult * self);
 
 static int PyFileMonitor_init (PyFileMonitor * self, PyObject * args, PyObject * kw);
+static void PyFileMonitor_dealloc (PyFileMonitor * self);
 static PyObject * PyFileMonitor_enable (PyFileMonitor * self);
 static PyObject * PyFileMonitor_disable (PyFileMonitor * self);
 
@@ -957,12 +960,14 @@ PYFRIDA_DEFINE_TYPE ("_frida.EndpointParameters", EndpointParameters, GObject, N
 PYFRIDA_DEFINE_TYPE ("_frida.Compiler", Compiler, GObject, NULL, frida_unref,
   { Py_tp_doc, "Frida Compiler" },
   { Py_tp_init, PyCompiler_init },
+  { Py_tp_dealloc, PyCompiler_dealloc },
   { Py_tp_methods, PyCompiler_methods },
 );
 
 PYFRIDA_DEFINE_TYPE ("_frida.PackageManager", PackageManager, GObject, NULL, frida_unref,
   { Py_tp_doc, "Frida Package Manager" },
   { Py_tp_init, PyPackageManager_init },
+  { Py_tp_dealloc, PyPackageManager_dealloc },
   { Py_tp_repr, PyPackageManager_repr },
   { Py_tp_methods, PyPackageManager_methods },
 );
@@ -994,6 +999,7 @@ PYFRIDA_DEFINE_TYPE ("_frida.PackageInstallResult", PackageInstallResult, GObjec
 PYFRIDA_DEFINE_TYPE ("_frida.FileMonitor", FileMonitor, GObject, NULL, frida_unref,
   { Py_tp_doc, "Frida File Monitor" },
   { Py_tp_init, PyFileMonitor_init },
+  { Py_tp_dealloc, PyFileMonitor_dealloc },
   { Py_tp_methods, PyFileMonitor_methods },
 );
 
@@ -4869,9 +4875,19 @@ PyCompiler_init (PyCompiler * self, PyObject * args, PyObject * kw)
   if (PyGObject_tp_init ((PyObject *) self, args, kw) < 0)
     return -1;
 
+  g_atomic_int_inc (&toplevel_objects_alive);
+
   PyGObject_take_handle (&self->parent, frida_compiler_new (NULL), PYFRIDA_TYPE (Compiler));
 
   return 0;
+}
+
+static void
+PyCompiler_dealloc (PyCompiler * self)
+{
+  g_atomic_int_dec_and_test (&toplevel_objects_alive);
+
+  PyGObject_tp_dealloc ((PyObject *) self);
 }
 
 static PyObject *
@@ -5030,9 +5046,19 @@ PyPackageManager_init (PyPackageManager * self, PyObject * args, PyObject * kw)
   if (PyGObject_tp_init ((PyObject *) self, args, kw) < 0)
     return -1;
 
+  g_atomic_int_inc (&toplevel_objects_alive);
+
   PyGObject_take_handle (&self->parent, frida_package_manager_new (), PYFRIDA_TYPE (PackageManager));
 
   return 0;
+}
+
+static void
+PyPackageManager_dealloc (PyPackageManager * self)
+{
+  g_atomic_int_dec_and_test (&toplevel_objects_alive);
+
+  PyGObject_tp_dealloc ((PyObject *) self);
 }
 
 static PyObject *
@@ -5373,9 +5399,19 @@ PyFileMonitor_init (PyFileMonitor * self, PyObject * args, PyObject * kw)
   if (!PyArg_ParseTuple (args, "s", &path))
     return -1;
 
+  g_atomic_int_inc (&toplevel_objects_alive);
+
   PyGObject_take_handle (&self->parent, frida_file_monitor_new (path), PYFRIDA_TYPE (FileMonitor));
 
   return 0;
+}
+
+static void
+PyFileMonitor_dealloc (PyFileMonitor * self)
+{
+  g_atomic_int_dec_and_test (&toplevel_objects_alive);
+
+  PyGObject_tp_dealloc ((PyObject *) self);
 }
 
 static PyObject *
