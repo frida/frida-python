@@ -775,6 +775,20 @@ class Compiler(Object):
         ...
 
 class PackageManager(Object):
+    @property
+    def registry(self) -> str:
+        """
+        The registry being used.
+        """
+        ...
+
+    @registry.setter
+    def registry(self, value: str) -> None:
+        """
+        Change the registry to use.
+        """
+        ...
+
     def search(
         self,
         query: str,
