@@ -538,6 +538,8 @@ static gboolean PyCompiler_set_options (FridaCompilerOptions * options, const gc
 static int PyPackageManager_init (PyPackageManager * self, PyObject * args, PyObject * kw);
 static void PyPackageManager_dealloc (PyPackageManager * self);
 static PyObject * PyPackageManager_repr (PyPackageManager * self);
+static PyObject * PyPackageManager_get_registry (PyPackageManager * self, void * closure);
+static int PyPackageManager_set_registry (PyPackageManager * self, PyObject * val, void * closure);
 static PyObject * PyPackageManager_search (PyPackageManager * self, PyObject * args, PyObject * kw);
 static PyObject * PyPackageManager_install (PyPackageManager * self, PyObject * args, PyObject * kw);
 static FridaPackageInstallOptions * PyPackageManager_parse_install_options (const gchar * project_root, PyObject * specs_value);
@@ -783,6 +785,12 @@ static PyMethodDef PyCompiler_methods[] =
   { NULL }
 };
 
+static PyGetSetDef PyPackageManager_getset[] =
+{
+  { "registry", (getter) PyPackageManager_get_registry, (setter) PyPackageManager_set_registry, "The registry to use.", NULL },
+  { NULL }
+};
+
 static PyMethodDef PyPackageManager_methods[] =
 {
   { "search", (PyCFunction) PyPackageManager_search, METH_VARARGS | METH_KEYWORDS, "Search for packages to install." },
@@ -969,6 +977,7 @@ PYFRIDA_DEFINE_TYPE ("_frida.PackageManager", PackageManager, GObject, NULL, fri
   { Py_tp_init, PyPackageManager_init },
   { Py_tp_dealloc, PyPackageManager_dealloc },
   { Py_tp_repr, PyPackageManager_repr },
+  { Py_tp_getset, PyPackageManager_getset },
   { Py_tp_methods, PyPackageManager_methods },
 );
 
@@ -5072,6 +5081,25 @@ PyPackageManager_repr (PyPackageManager * self)
   g_free (repr);
 
   return result;
+}
+
+static PyObject *
+PyPackageManager_get_registry (PyPackageManager * self, void * closure)
+{
+  return PyUnicode_FromString (frida_package_manager_get_registry (PY_GOBJECT_HANDLE (self)));
+}
+
+static int
+PyPackageManager_set_registry (PyPackageManager * self, PyObject * val, void * closure)
+{
+  gchar * registry;
+
+  if (!PyGObject_unmarshal_string (val, &registry))
+    return -1;
+  frida_package_manager_set_registry (PY_GOBJECT_HANDLE (self), registry);
+  g_free (registry);
+
+  return 0;
 }
 
 static PyObject *

@@ -1675,6 +1675,14 @@ class PackageManager:
     def __repr__(self) -> str:
         return repr(self._impl)
 
+    @property
+    def registry(self):
+        return self._impl.registry
+
+    @registry.setter
+    def registry(self, value):
+        self._impl.registry = value
+
     @cancellable
     def search(
         self,
