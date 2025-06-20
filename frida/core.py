@@ -1656,7 +1656,6 @@ PackageManagerInstallProgressCallback = Callable[
             "downloading-package",
             "package-installed",
             "resolving-and-installing-all",
-            "awaiting-completion",
             "dependencies-processed",
             "finalizing-manifests",
             "complete",
