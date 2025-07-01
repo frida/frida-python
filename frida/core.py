@@ -46,7 +46,6 @@ _Cancellable = _frida.Cancellable
 
 ProcessTarget = Union[int, str]
 Spawn = _frida.Spawn
-PackageRole = _frida.PackageRole
 
 
 @dataclasses.dataclass
@@ -1662,6 +1661,8 @@ PackageManagerInstallProgressCallback = Callable[
     ],
     None,
 ]
+
+PackageRole = Literal["runtime", "development", "optional", "peer"]
 
 
 class PackageManager:
