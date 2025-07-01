@@ -542,7 +542,8 @@ static PyObject * PyPackageManager_get_registry (PyPackageManager * self, void *
 static int PyPackageManager_set_registry (PyPackageManager * self, PyObject * val, void * closure);
 static PyObject * PyPackageManager_search (PyPackageManager * self, PyObject * args, PyObject * kw);
 static PyObject * PyPackageManager_install (PyPackageManager * self, PyObject * args, PyObject * kw);
-static FridaPackageInstallOptions * PyPackageManager_parse_install_options (const gchar * project_root, PyObject * specs_value);
+static FridaPackageInstallOptions * PyPackageManager_parse_install_options (const gchar * project_root, const char * role_value,
+    PyObject * specs_value, PyObject * omits_value);
 
 static PyObject * PyPackage_new_take_handle (FridaPackage * handle);
 static int PyPackage_init (PyPackage * self, PyObject * args, PyObject * kw);
@@ -5140,16 +5141,18 @@ static PyObject *
 PyPackageManager_install (PyPackageManager * self, PyObject * args, PyObject * kw)
 {
   FridaPackageInstallResult * result;
-  static char * keywords[] = { "project_root", "specs", NULL };
+  static char * keywords[] = { "project_root", "role", "specs", "omits", NULL };
   const char * project_root = NULL;
+  const char * role_value = NULL;
   PyObject * specs = NULL;
+  PyObject * omits = NULL;
   FridaPackageInstallOptions * options;
   GError * error = NULL;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "|sO", keywords, &project_root, &specs))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "|ssOO", keywords, &project_root, &role_value, &specs, &omits))
     return NULL;
 
-  options = PyPackageManager_parse_install_options (project_root, specs);
+  options = PyPackageManager_parse_install_options (project_root, role_value, specs, omits);
 
   Py_BEGIN_ALLOW_THREADS
   result = frida_package_manager_install_sync (PY_GOBJECT_HANDLE (self), options, g_cancellable_get_current (), &error);
@@ -5164,7 +5167,7 @@ PyPackageManager_install (PyPackageManager * self, PyObject * args, PyObject * k
 }
 
 static FridaPackageInstallOptions *
-PyPackageManager_parse_install_options (const gchar * project_root, PyObject * specs_value)
+PyPackageManager_parse_install_options (const gchar * project_root, const char * role_value, PyObject * specs_value, PyObject * omits_value)
 {
   FridaPackageInstallOptions * options;
 
@@ -5172,6 +5175,16 @@ PyPackageManager_parse_install_options (const gchar * project_root, PyObject * s
 
   if (project_root != NULL)
     frida_package_install_options_set_project_root (options, project_root);
+
+  if (role_value != NULL)
+  {
+    FridaPackageRole role;
+
+    if (!PyGObject_unmarshal_enum (role_value, FRIDA_TYPE_PACKAGE_ROLE, &role))
+      goto propagate_error;
+
+    frida_package_install_options_set_role (options, role);
+  }
 
   if (specs_value != NULL)
   {
@@ -5195,6 +5208,35 @@ PyPackageManager_parse_install_options (const gchar * project_root, PyObject * s
         goto propagate_error;
 
       frida_package_install_options_add_spec (options, spec);
+    }
+  }
+
+  if (omits_value != NULL)
+  {
+    gint n, i;
+
+    n = PySequence_Size (omits_value);
+    if (n == -1)
+      goto propagate_error;
+
+    for (i = 0; i != n; i++)
+    {
+      PyObject * element;
+      gchar * str = NULL;
+      FridaPackageRole role;
+
+      element = PySequence_GetItem (omits_value, i);
+      if (element == NULL)
+        goto propagate_error;
+      PyGObject_unmarshal_string (element, &str);
+      Py_DecRef (element);
+      if (str == NULL)
+        goto propagate_error;
+
+      if (!PyGObject_unmarshal_enum (str, FRIDA_TYPE_PACKAGE_ROLE, &role))
+        goto propagate_error;
+
+      frida_package_install_options_add_omit (options, role);
     }
   }
 

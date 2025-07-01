@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
 # Exceptions
 class AddressInUseError(Exception): ...
@@ -774,6 +774,8 @@ class Compiler(Object):
         """
         ...
 
+PackageRole = Literal["runtime", "development", "optional", "peer"]
+
 class PackageManager(Object):
     @property
     def registry(self) -> str:
@@ -803,7 +805,9 @@ class PackageManager(Object):
     def install(
         self,
         project_root: Optional[str] = None,
+        role: Optional[PackageRole] = None,
         specs: Optional[Sequence[str]] = None,
+        omits: Optional[Sequence[PackageRole]] = None,
     ) -> PackageInstallResult:
         """
         Install one or more packages.
