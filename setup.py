@@ -27,7 +27,7 @@ def main():
         author="Frida Developers",
         author_email="oleavr@frida.re",
         url="https://frida.re",
-        install_requires=["typing_extensions],
+        install_requires=["typing_extensions"],
         python_requires=">=3.7",
         license="wxWindows Library Licence, Version 3.1",
         keywords="frida debugger dynamic instrumentation inject javascript windows macos linux ios iphone ipad android qnx",
