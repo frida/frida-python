@@ -14,9 +14,6 @@ from setuptools.extension import Extension
 SOURCE_ROOT = Path(__file__).resolve().parent
 FRIDA_EXTENSION = os.environ.get("FRIDA_EXTENSION", None)
 
-use_limited_api = False if bool(sysconfig.get_config_var("Py_GIL_DISABLED") else True
-
-
 def main():
     setup(
         name="frida",
@@ -59,7 +56,7 @@ def main():
             Extension(
                 name="frida._frida",
                 sources=["frida/_frida/extension.c"],
-                py_limited_api=use_limited_api,
+                py_limited_api=not(bool(sysconfig.get_config_var("Py_GIL_DISABLED"))),
             )
         ],
         cmdclass={"build_ext": FridaPrebuiltExt if FRIDA_EXTENSION is not None else FridaDemandBuiltExt},
