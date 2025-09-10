@@ -3,6 +3,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 from typing import Iterator
 
@@ -12,6 +13,8 @@ from setuptools.extension import Extension
 
 SOURCE_ROOT = Path(__file__).resolve().parent
 FRIDA_EXTENSION = os.environ.get("FRIDA_EXTENSION", None)
+
+use_limited_api = False if bool(sysconfig.get_config_var("Py_GIL_DISABLED") else True
 
 
 def main():
@@ -24,7 +27,7 @@ def main():
         author="Frida Developers",
         author_email="oleavr@frida.re",
         url="https://frida.re",
-        install_requires=["typing_extensions; python_version<'3.11'"],
+        install_requires=["typing_extensions],
         python_requires=">=3.7",
         license="wxWindows Library Licence, Version 3.1",
         keywords="frida debugger dynamic instrumentation inject javascript windows macos linux ios iphone ipad android qnx",
@@ -56,8 +59,7 @@ def main():
             Extension(
                 name="frida._frida",
                 sources=["frida/_frida/extension.c"],
-                py_limited_api=False if bool(sysconfig.get_config_var("Py_GIL_DISABLED") else True)
-,
+                py_limited_api=use_limited_api),
             )
         ],
         cmdclass={"build_ext": FridaPrebuiltExt if FRIDA_EXTENSION is not None else FridaDemandBuiltExt},
