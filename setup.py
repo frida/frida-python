@@ -59,7 +59,7 @@ def main():
             Extension(
                 name="frida._frida",
                 sources=["frida/_frida/extension.c"],
-                py_limited_api=use_limited_api),
+                py_limited_api=use_limited_api,
             )
         ],
         cmdclass={"build_ext": FridaPrebuiltExt if FRIDA_EXTENSION is not None else FridaDemandBuiltExt},
