@@ -56,7 +56,8 @@ def main():
             Extension(
                 name="frida._frida",
                 sources=["frida/_frida/extension.c"],
-                py_limited_api=True,
+                py_limited_api=False if bool(sysconfig.get_config_var("Py_GIL_DISABLED") else True)
+,
             )
         ],
         cmdclass={"build_ext": FridaPrebuiltExt if FRIDA_EXTENSION is not None else FridaDemandBuiltExt},
