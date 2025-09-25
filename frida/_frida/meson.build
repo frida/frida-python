@@ -12,7 +12,6 @@ elif host_os_family != 'windows'
 endif
 
 extension = python.extension_module('_frida', 'extension.c',
-  limited_api: '3.7',
   c_args: frida_component_cflags,
   link_args: extra_link_args,
   dependencies: [python_dep, frida_core_dep, os_deps],
