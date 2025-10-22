@@ -6018,6 +6018,10 @@ PyInit__frida (void)
 
   module = PyModule_Create (&PyFrida_moduledef);
 
+#ifdef Py_GIL_DISABLED
+  PyUnstable_Module_SetGIL(module, Py_MOD_GIL_NOT_USED);
+#endif
+
   PyModule_AddStringConstant (module, "__version__", frida_version_string ());
 
   PYFRIDA_REGISTER_TYPE (GObject, G_TYPE_OBJECT);
