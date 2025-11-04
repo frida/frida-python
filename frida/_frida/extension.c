@@ -5251,6 +5251,8 @@ PyPackageManager_parse_install_options (const gchar * project_root, const char *
         goto propagate_error;
 
       frida_package_install_options_add_spec (options, spec);
+
+      g_free (spec);
     }
   }
 
