@@ -533,7 +533,8 @@ static void PyCompiler_dealloc (PyCompiler * self);
 static PyObject * PyCompiler_build (PyCompiler * self, PyObject * args, PyObject * kw);
 static PyObject * PyCompiler_watch (PyCompiler * self, PyObject * args, PyObject * kw);
 static gboolean PyCompiler_set_options (FridaCompilerOptions * options, const gchar * project_root_value, const gchar * output_format_value,
-    const gchar * bundle_format_value, const gchar * type_check_value, const gchar * source_maps_value, const gchar * compression_value);
+    const gchar * bundle_format_value, const gchar * type_check_value, const gchar * source_maps_value, const gchar * compression_value,
+    const gchar * platform_value, PyObject * externals_value);
 
 static int PyPackageManager_init (PyPackageManager * self, PyObject * args, PyObject * kw);
 static void PyPackageManager_dealloc (PyPackageManager * self);
@@ -4904,8 +4905,8 @@ static PyObject *
 PyCompiler_build (PyCompiler * self, PyObject * args, PyObject * kw)
 {
   PyObject * result;
-  static char * keywords[] =
-      { "entrypoint", "project_root", "output_format", "bundle_format", "type_check", "source_maps", "compression", NULL };
+  static char * keywords[] = { "entrypoint", "project_root", "output_format", "bundle_format", "type_check", "source_maps", "compression",
+    "platform", "externals", NULL };
   const char * entrypoint;
   const char * project_root = NULL;
   const char * output_format = NULL;
@@ -4913,17 +4914,19 @@ PyCompiler_build (PyCompiler * self, PyObject * args, PyObject * kw)
   const char * type_check = NULL;
   const char * source_maps = NULL;
   const char * compression = NULL;
+  const char * platform = NULL;
+  PyObject * externals = NULL;
   FridaBuildOptions * options;
   GError * error = NULL;
   gchar * bundle;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|ssssss", keywords, &entrypoint, &project_root, &output_format, &bundle_format, &type_check,
-        &source_maps, &compression))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|sssssssO", keywords, &entrypoint, &project_root, &output_format, &bundle_format,
+        &type_check, &source_maps, &compression, &platform, &externals))
     return NULL;
 
   options = frida_build_options_new ();
   if (!PyCompiler_set_options (FRIDA_COMPILER_OPTIONS (options), project_root, output_format, bundle_format, type_check, source_maps,
-        compression))
+        compression, platform, externals))
     goto invalid_option_value;
 
   Py_BEGIN_ALLOW_THREADS
@@ -4950,8 +4953,8 @@ invalid_option_value:
 static PyObject *
 PyCompiler_watch (PyCompiler * self, PyObject * args, PyObject * kw)
 {
-  static char * keywords[] =
-      { "entrypoint", "project_root", "output_format", "bundle_format", "type_check", "source_maps", "compression", NULL };
+  static char * keywords[] = { "entrypoint", "project_root", "output_format", "bundle_format", "type_check", "source_maps", "compression",
+    "platform", "externals", NULL };
   const char * entrypoint;
   const char * project_root = NULL;
   const char * output_format = NULL;
@@ -4959,16 +4962,18 @@ PyCompiler_watch (PyCompiler * self, PyObject * args, PyObject * kw)
   const char * type_check = NULL;
   const char * source_maps = NULL;
   const char * compression = NULL;
+  const char * platform = NULL;
+  PyObject * externals = NULL;
   FridaWatchOptions * options;
   GError * error = NULL;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|ssssss", keywords, &entrypoint, &project_root, &output_format, &bundle_format, &type_check,
-        &source_maps, &compression))
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "s|sssssssO", keywords, &entrypoint, &project_root, &output_format, &bundle_format,
+        &type_check, &source_maps, &compression, &platform, &externals))
     return NULL;
 
   options = frida_watch_options_new ();
   if (!PyCompiler_set_options (FRIDA_COMPILER_OPTIONS (options), project_root, output_format, bundle_format, type_check, source_maps,
-        compression))
+        compression, platform, externals))
     goto invalid_option_value;
 
   Py_BEGIN_ALLOW_THREADS
@@ -4991,7 +4996,8 @@ invalid_option_value:
 
 static gboolean
 PyCompiler_set_options (FridaCompilerOptions * options, const gchar * project_root_value, const gchar * output_format_value,
-    const gchar * bundle_format_value, const gchar * type_check_value, const gchar * source_maps_value, const gchar * compression_value)
+    const gchar * bundle_format_value, const gchar * type_check_value, const gchar * source_maps_value, const gchar * compression_value,
+    const gchar * platform_value, PyObject * externals_value)
 {
   if (project_root_value != NULL)
     frida_compiler_options_set_project_root (options, project_root_value);
@@ -5044,6 +5050,43 @@ PyCompiler_set_options (FridaCompilerOptions * options, const gchar * project_ro
       return FALSE;
 
     frida_compiler_options_set_compression (options, compression);
+  }
+
+  if (platform_value != NULL)
+  {
+    FridaJsPlatform platform;
+
+    if (!PyGObject_unmarshal_enum (platform_value, FRIDA_TYPE_JS_PLATFORM, &platform))
+      return FALSE;
+
+    frida_compiler_options_set_platform (options, platform);
+  }
+
+  if (externals_value != NULL)
+  {
+    gint n, i;
+
+    n = PySequence_Size (externals_value);
+    if (n == -1)
+      return FALSE;
+
+    for (i = 0; i != n; i++)
+    {
+      PyObject * element;
+      gchar * external = NULL;
+
+      element = PySequence_GetItem (externals_value, i);
+      if (element == NULL)
+        return FALSE;
+      PyGObject_unmarshal_string (element, &external);
+      Py_DecRef (element);
+      if (external == NULL)
+        return FALSE;
+
+      frida_compiler_options_add_external (options, external);
+
+      g_free (external);
+    }
   }
 
   return TRUE;

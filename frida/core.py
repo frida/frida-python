@@ -1572,6 +1572,8 @@ class Compiler:
         type_check: Optional[str] = None,
         source_maps: Optional[str] = None,
         compression: Optional[str] = None,
+        platform: Optional[str] = None,
+        externals: Optional[Sequence[str]] = None,
     ) -> str:
         kwargs = {
             "project_root": project_root,
@@ -1580,6 +1582,8 @@ class Compiler:
             "type_check": type_check,
             "source_maps": source_maps,
             "compression": compression,
+            "platform": platform,
+            "externals": externals,
         }
         _filter_missing_kwargs(kwargs)
         return self._impl.build(entrypoint, **kwargs)
@@ -1594,6 +1598,8 @@ class Compiler:
         type_check: Optional[str] = None,
         source_maps: Optional[str] = None,
         compression: Optional[str] = None,
+        platform: Optional[str] = None,
+        externals: Optional[Sequence[str]] = None,
     ) -> None:
         kwargs = {
             "project_root": project_root,
@@ -1602,6 +1608,8 @@ class Compiler:
             "type_check": type_check,
             "source_maps": source_maps,
             "compression": compression,
+            "platform": platform,
+            "externals": externals,
         }
         _filter_missing_kwargs(kwargs)
         return self._impl.watch(entrypoint, **kwargs)
