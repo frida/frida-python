@@ -33,10 +33,15 @@ if sys.version_info >= (3, 8):
 else:
     from typing_extensions import Literal, TypedDict
 
-if sys.version_info >= (3, 11):
-    from typing import NotRequired
+if sys.version_info >= (3, 10):
+    from typing import ParamSpec
 else:
-    from typing_extensions import NotRequired
+    from typing_extensions import ParamSpec
+
+if sys.version_info >= (3, 11):
+    from typing import NotRequired, cast
+else:
+    from typing_extensions import NotRequired, cast
 
 from . import _frida
 
@@ -72,15 +77,18 @@ def _filter_missing_kwargs(d: MutableMapping[Any, Any]) -> None:
             d.pop(key)
 
 
-R = TypeVar("R")
+P = ParamSpec("P")
+R = TypeVar("R", covariant=True)
 
 
-def cancellable(f: Callable[..., R]) -> Callable[..., R]:
+def cancellable(f: Callable[P, R]) -> Callable[P, R]:
+    # currently there is no way to type properly the extended callable with optional cancellable parameter
+    # ref: https://github.com/python/typing/discussions/1905#discussioncomment-11696995
     @functools.wraps(f)
-    def wrapper(*args: Any, **kwargs: Any) -> R:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         cancellable = kwargs.pop("cancellable", None)
         if cancellable is not None:
-            with cancellable:
+            with cast(Cancellable, cancellable):
                 return f(*args, **kwargs)
 
         return f(*args, **kwargs)
@@ -351,9 +359,6 @@ class Script:
     @overload
     def on(self, signal: Literal["message"], callback: ScriptMessageCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -369,9 +374,6 @@ class Script:
 
     @overload
     def off(self, signal: Literal["message"], callback: ScriptMessageCallback) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -693,34 +695,22 @@ class Session:
         _filter_missing_kwargs(kwargs)
         return PortalMembership(self._impl.join_portal(address, **kwargs))
 
-    @overload
     def on(
         self,
         signal: Literal["detached"],
         callback: SessionDetachedCallback,
-    ) -> None: ...
-
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
-    def on(self, signal: str, callback: Callable[..., Any]) -> None:
+    ) -> None:
         """
         Add a signal handler
         """
 
         self._impl.on(signal, callback)
 
-    @overload
     def off(
         self,
         signal: Literal["detached"],
         callback: SessionDetachedCallback,
-    ) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
-    def off(self, signal: str, callback: Callable[..., Any]) -> None:
+    ) -> None:
         """
         Remove a signal handler
         """
@@ -763,9 +753,6 @@ class Bus:
     @overload
     def on(self, signal: Literal["message"], callback: BusMessageCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -781,9 +768,6 @@ class Bus:
 
     @overload
     def off(self, signal: Literal["message"], callback: BusMessageCallback) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -842,9 +826,6 @@ class Service:
     @overload
     def on(self, signal: Literal["message"], callback: ServiceMessageCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -857,9 +838,6 @@ class Service:
 
     @overload
     def off(self, signal: Literal["message"], callback: ServiceMessageCallback) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -1144,9 +1122,6 @@ class Device:
     @overload
     def on(self, signal: Literal["lost"], callback: DeviceLostCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -1177,9 +1152,6 @@ class Device:
 
     @overload
     def off(self, signal: Literal["lost"], callback: DeviceLostCallback) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -1298,9 +1270,6 @@ class DeviceManager:
     @overload
     def on(self, signal: Literal["changed"], callback: DeviceManagerChangedCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -1316,9 +1285,6 @@ class DeviceManager:
 
     @overload
     def off(self, signal: Literal["changed"], callback: DeviceManagerChangedCallback) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -1490,9 +1456,6 @@ class PortalService:
     @overload
     def on(self, signal: Literal["message"], callback: PortalServiceMessageCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -1554,6 +1517,12 @@ CompilerFinishedCallback = Callable[[], None]
 CompilerOutputCallback = Callable[[str], None]
 CompilerDiagnosticsCallback = Callable[[List[CompilerDiagnostic]], None]
 
+CompilerOutputFormat = Literal["unescaped", "hex-bytes", "c-string"]
+CompilerBundleFormat = Literal["esm", "iife"]
+CompilerTypeCheck = Literal["full", "none"]
+CompilerSourceMaps = Literal["included", "omitted"]
+CompilerCompression = Literal["none", "terser"]
+CompilerPlatform = Literal["neutral", "gum", "browser"]
 
 class Compiler:
     def __init__(self) -> None:
@@ -1567,12 +1536,12 @@ class Compiler:
         self,
         entrypoint: str,
         project_root: Optional[str] = None,
-        output_format: Optional[str] = None,
-        bundle_format: Optional[str] = None,
-        type_check: Optional[str] = None,
-        source_maps: Optional[str] = None,
-        compression: Optional[str] = None,
-        platform: Optional[str] = None,
+        output_format: Optional[CompilerOutputFormat] = None,
+        bundle_format: Optional[CompilerBundleFormat] = None,
+        type_check: Optional[CompilerTypeCheck] = None,
+        source_maps: Optional[CompilerSourceMaps] = None,
+        compression: Optional[CompilerCompression] = None,
+        platform: Optional[CompilerPlatform] = None,
         externals: Optional[Sequence[str]] = None,
     ) -> str:
         kwargs = {
@@ -1593,12 +1562,12 @@ class Compiler:
         self,
         entrypoint: str,
         project_root: Optional[str] = None,
-        output_format: Optional[str] = None,
-        bundle_format: Optional[str] = None,
-        type_check: Optional[str] = None,
-        source_maps: Optional[str] = None,
-        compression: Optional[str] = None,
-        platform: Optional[str] = None,
+        output_format: Optional[CompilerOutputFormat] = None,
+        bundle_format: Optional[CompilerBundleFormat] = None,
+        type_check: Optional[CompilerTypeCheck] = None,
+        source_maps: Optional[CompilerSourceMaps] = None,
+        compression: Optional[CompilerCompression] = None,
+        platform: Optional[CompilerPlatform] = None,
         externals: Optional[Sequence[str]] = None,
     ) -> None:
         kwargs = {
@@ -1626,10 +1595,11 @@ class Compiler:
     @overload
     def on(self, signal: Literal["diagnostics"], callback: CompilerDiagnosticsCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
+        """
+        Add a signal handler
+        """
+
         self._impl.on(signal, callback)
 
     @overload
@@ -1644,10 +1614,11 @@ class Compiler:
     @overload
     def off(self, signal: Literal["diagnostics"], callback: CompilerDiagnosticsCallback) -> None: ...
 
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
+        """
+        Remove a signal handler
+        """
+
         self._impl.off(signal, callback)
 
 
@@ -1719,22 +1690,10 @@ class PackageManager:
         _filter_missing_kwargs(kwargs)
         return self._impl.install(**kwargs)
 
-    @overload
-    def on(self, signal: Literal["install-progress"], callback: PackageManagerInstallProgressCallback) -> None: ...
-
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
-    def on(self, signal: str, callback: Callable[..., Any]) -> None:
+    def on(self, signal: Literal["install-progress"], callback: PackageManagerInstallProgressCallback) -> None:
         self._impl.on(signal, callback)
 
-    @overload
-    def off(self, signal: Literal["install-progress"], callback: PackageManagerInstallProgressCallback) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
-    def off(self, signal: str, callback: Callable[..., Any]) -> None:
+    def off(self, signal: Literal["install-progress"], callback: PackageManagerInstallProgressCallback) -> None:
         self._impl.off(signal, callback)
 
 
