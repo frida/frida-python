@@ -754,8 +754,13 @@ class Compiler(Object):
         self,
         entrypoint: str,
         project_root: Optional[str] = None,
+        output_format: Optional[str] = None,
+        bundle_format: Optional[str] = None,
+        type_check: Optional[str] = None,
         source_maps: Optional[str] = None,
         compression: Optional[str] = None,
+        platform: Optional[str] = None,
+        externals: Optional[Sequence[str]] = None,
     ) -> str:
         """
         Build an agent.
@@ -766,8 +771,13 @@ class Compiler(Object):
         self,
         entrypoint: str,
         project_root: Optional[str] = None,
+        output_format: Optional[str] = None,
+        bundle_format: Optional[str] = None,
+        type_check: Optional[str] = None,
         source_maps: Optional[str] = None,
         compression: Optional[str] = None,
+        platform: Optional[str] = None,
+        externals: Optional[Sequence[str]] = None,
     ) -> None:
         """
         Continuously build an agent.
