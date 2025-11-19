@@ -359,9 +359,6 @@ class Script:
     @overload
     def on(self, signal: Literal["message"], callback: ScriptMessageCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -377,9 +374,6 @@ class Script:
 
     @overload
     def off(self, signal: Literal["message"], callback: ScriptMessageCallback) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -701,34 +695,22 @@ class Session:
         _filter_missing_kwargs(kwargs)
         return PortalMembership(self._impl.join_portal(address, **kwargs))
 
-    @overload
     def on(
         self,
         signal: Literal["detached"],
         callback: SessionDetachedCallback,
-    ) -> None: ...
-
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
-    def on(self, signal: str, callback: Callable[..., Any]) -> None:
+    ) -> None:
         """
         Add a signal handler
         """
 
         self._impl.on(signal, callback)
 
-    @overload
     def off(
         self,
         signal: Literal["detached"],
         callback: SessionDetachedCallback,
-    ) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
-    def off(self, signal: str, callback: Callable[..., Any]) -> None:
+    ) -> None:
         """
         Remove a signal handler
         """
@@ -771,9 +753,6 @@ class Bus:
     @overload
     def on(self, signal: Literal["message"], callback: BusMessageCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -789,9 +768,6 @@ class Bus:
 
     @overload
     def off(self, signal: Literal["message"], callback: BusMessageCallback) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -850,9 +826,6 @@ class Service:
     @overload
     def on(self, signal: Literal["message"], callback: ServiceMessageCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -865,9 +838,6 @@ class Service:
 
     @overload
     def off(self, signal: Literal["message"], callback: ServiceMessageCallback) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -1152,9 +1122,6 @@ class Device:
     @overload
     def on(self, signal: Literal["lost"], callback: DeviceLostCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -1185,9 +1152,6 @@ class Device:
 
     @overload
     def off(self, signal: Literal["lost"], callback: DeviceLostCallback) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -1306,9 +1270,6 @@ class DeviceManager:
     @overload
     def on(self, signal: Literal["changed"], callback: DeviceManagerChangedCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -1324,9 +1285,6 @@ class DeviceManager:
 
     @overload
     def off(self, signal: Literal["changed"], callback: DeviceManagerChangedCallback) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
 
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
         """
@@ -1498,9 +1456,6 @@ class PortalService:
     @overload
     def on(self, signal: Literal["message"], callback: PortalServiceMessageCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
         """
         Add a signal handler
@@ -1640,10 +1595,11 @@ class Compiler:
     @overload
     def on(self, signal: Literal["diagnostics"], callback: CompilerDiagnosticsCallback) -> None: ...
 
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def on(self, signal: str, callback: Callable[..., Any]) -> None:
+        """
+        Add a signal handler
+        """
+
         self._impl.on(signal, callback)
 
     @overload
@@ -1658,10 +1614,11 @@ class Compiler:
     @overload
     def off(self, signal: Literal["diagnostics"], callback: CompilerDiagnosticsCallback) -> None: ...
 
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
     def off(self, signal: str, callback: Callable[..., Any]) -> None:
+        """
+        Remove a signal handler
+        """
+
         self._impl.off(signal, callback)
 
 
@@ -1733,22 +1690,10 @@ class PackageManager:
         _filter_missing_kwargs(kwargs)
         return self._impl.install(**kwargs)
 
-    @overload
-    def on(self, signal: Literal["install-progress"], callback: PackageManagerInstallProgressCallback) -> None: ...
-
-    @overload
-    def on(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
-    def on(self, signal: str, callback: Callable[..., Any]) -> None:
+    def on(self, signal: Literal["install-progress"], callback: PackageManagerInstallProgressCallback) -> None:
         self._impl.on(signal, callback)
 
-    @overload
-    def off(self, signal: Literal["install-progress"], callback: PackageManagerInstallProgressCallback) -> None: ...
-
-    @overload
-    def off(self, signal: str, callback: Callable[..., Any]) -> None: ...
-
-    def off(self, signal: str, callback: Callable[..., Any]) -> None:
+    def off(self, signal: Literal["install-progress"], callback: PackageManagerInstallProgressCallback) -> None:
         self._impl.off(signal, callback)
 
 
