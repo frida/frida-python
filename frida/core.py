@@ -1524,6 +1524,7 @@ CompilerSourceMaps = Literal["included", "omitted"]
 CompilerCompression = Literal["none", "terser"]
 CompilerPlatform = Literal["neutral", "gum", "browser"]
 
+
 class Compiler:
     def __init__(self) -> None:
         self._impl = _frida.Compiler()
@@ -1544,7 +1545,7 @@ class Compiler:
         platform: Optional[CompilerPlatform] = None,
         externals: Optional[Sequence[str]] = None,
     ) -> str:
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "project_root": project_root,
             "output_format": output_format,
             "bundle_format": bundle_format,
@@ -1570,7 +1571,7 @@ class Compiler:
         platform: Optional[CompilerPlatform] = None,
         externals: Optional[Sequence[str]] = None,
     ) -> None:
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "project_root": project_root,
             "output_format": output_format,
             "bundle_format": bundle_format,
