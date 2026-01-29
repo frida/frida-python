@@ -1886,14 +1886,14 @@ PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant)
 
     PyGObject_unmarshal_string (value, &str);
 
-    *variant = g_variant_new_take_string (str);
+    *variant = g_variant_ref_sink (g_variant_new_take_string (str));
 
     return TRUE;
   }
 
   if (PyBool_Check (value))
   {
-    *variant = g_variant_new_boolean (value == Py_True);
+    *variant = g_variant_ref_sink (g_variant_new_boolean (value == Py_True));
 
     return TRUE;
   }
@@ -1906,14 +1906,14 @@ PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant)
     if (l == -1 && PyErr_Occurred ())
       return FALSE;
 
-    *variant = g_variant_new_int64 (l);
+    *variant = g_variant_ref_sink (g_variant_new_int64 (l));
 
     return TRUE;
   }
 
   if (PyFloat_Check (value))
   {
-    *variant = g_variant_new_double (PyFloat_AsDouble (value));
+    *variant = g_variant_ref_sink (g_variant_new_double (PyFloat_AsDouble (value)));
 
     return TRUE;
   }
@@ -1927,7 +1927,7 @@ PyGObject_unmarshal_variant (PyObject * value, GVariant ** variant)
     PyBytes_AsStringAndSize (value, &buffer, &length);
 
     copy = g_memdup2 (buffer, length);
-    *variant = g_variant_new_from_data (G_VARIANT_TYPE_BYTESTRING, copy, length, TRUE, g_free, copy);
+    *variant = g_variant_ref_sink (g_variant_new_from_data (G_VARIANT_TYPE_BYTESTRING, copy, length, TRUE, g_free, copy));
 
     return TRUE;
   }
@@ -1973,12 +1973,13 @@ PyGObject_unmarshal_variant_from_mapping (PyObject * mapping, GVariant ** varian
 
     g_variant_builder_add (&builder, "{sv}", PyBytes_AsString (key_bytes), raw_value);
 
+    g_variant_unref (raw_value);
     Py_DecRef (key_bytes);
   }
 
   Py_DecRef (items);
 
-  *variant = g_variant_builder_end (&builder);
+  *variant = g_variant_ref_sink (g_variant_builder_end (&builder));
 
   return TRUE;
 
@@ -2023,10 +2024,11 @@ PyGObject_unmarshal_variant_from_sequence (PyObject * sequence, GVariant ** vari
     else
       g_variant_builder_add (&builder, "v", raw_value);
 
+    g_variant_unref (raw_value);
     Py_DecRef (val);
   }
 
-  *variant = g_variant_builder_end (&builder);
+  *variant = g_variant_ref_sink (g_variant_builder_end (&builder));
 
   return TRUE;
 
@@ -2926,7 +2928,7 @@ PyDevice_spawn (PyDevice * self, PyObject * args, PyObject * kw)
         goto invalid_dict_value;
       }
 
-      g_hash_table_insert (aux, raw_key, g_variant_ref_sink (raw_value));
+      g_hash_table_insert (aux, raw_key, raw_value);
     }
   }
 
