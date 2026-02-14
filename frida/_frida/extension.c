@@ -2002,6 +2002,31 @@ PyGObject_unmarshal_variant_from_sequence (PyObject * sequence, GVariant ** vari
 
   is_tuple = PyTuple_Check (sequence);
 
+  if (is_tuple && PyTuple_Size (sequence) == 2)
+  {
+    gchar * type;
+    gboolean is_uint64_cast;
+
+    if (!PyGObject_unmarshal_string (PyTuple_GetItem (sequence, 0), &type))
+      return FALSE;
+
+    is_uint64_cast = strcmp (type, "uint64") == 0;
+
+    g_free (type);
+
+    if (is_uint64_cast)
+    {
+      unsigned PY_LONG_LONG l;
+
+      l = PyLong_AsUnsignedLongLong (PyTuple_GetItem (sequence, 1));
+      if (l == (unsigned PY_LONG_LONG) -1 && PyErr_Occurred ())
+        return FALSE;
+
+      *variant = g_variant_ref_sink (g_variant_new_uint64 (l));
+      return TRUE;
+    }
+  }
+
   g_variant_builder_init (&builder, is_tuple ? G_VARIANT_TYPE_TUPLE : G_VARIANT_TYPE ("av"));
 
   n = PySequence_Length (sequence);
