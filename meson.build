@@ -19,7 +19,7 @@ if ndebug == 'true' or (ndebug == 'if-release' and not get_option('debug'))
   ]
 endif
 
-python_dep = python.dependency(method: 'system')
+python_dep = python.dependency()
 frida_core_dep = dependency('frida-core-1.0', default_options: [
   'frida_version=' + meson.project_version().replace('.dev', '-dev.'),
 ])
