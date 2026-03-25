@@ -44,11 +44,11 @@ class Application:
         print("✔ create_script()")
         script = session.create_script(
             """\
-Interceptor.attach(Module.getExportByName(null, 'open'), {
-  onEnter: function (args) {
+Interceptor.attach(Module.getGlobalExportByName('open'), {
+  onEnter(args) {
     send({
       type: 'open',
-      path: Memory.readUtf8String(args[0])
+      path: args[0].readUtf8String()
     });
   }
 });
