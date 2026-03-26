@@ -404,6 +404,7 @@ static void PyDevice_init_from_handle (PyDevice * self, FridaDevice * handle);
 static void PyDevice_dealloc (PyDevice * self);
 static PyObject * PyDevice_repr (PyDevice * self);
 static PyObject * PyDevice_is_lost (PyDevice * self);
+static PyObject * PyDevice_override_option (PyDevice * self, PyObject * args, PyObject * kw);
 static PyObject * PyDevice_query_system_parameters (PyDevice * self);
 static PyObject * PyDevice_get_frontmost_application (PyDevice * self, PyObject * args, PyObject * kw);
 static PyObject * PyDevice_enumerate_applications (PyDevice * self, PyObject * args, PyObject * kw);
@@ -620,6 +621,7 @@ static PyMethodDef PyDeviceManager_methods[] =
 static PyMethodDef PyDevice_methods[] =
 {
   { "is_lost", (PyCFunction) PyDevice_is_lost, METH_NOARGS, "Query whether the device has been lost." },
+  { "override_option", (PyCFunction) PyDevice_override_option, METH_VARARGS | METH_KEYWORDS, "Override a backend-specific option." },
   { "query_system_parameters", (PyCFunction) PyDevice_query_system_parameters, METH_NOARGS, "Returns a dictionary of information about the host system." },
   { "get_frontmost_application", (PyCFunction) PyDevice_get_frontmost_application, METH_VARARGS | METH_KEYWORDS, "Get details about the frontmost application." },
   { "enumerate_applications", (PyCFunction) PyDevice_enumerate_applications, METH_VARARGS | METH_KEYWORDS, "Enumerate applications." },
@@ -2519,6 +2521,33 @@ PyDevice_is_lost (PyDevice * self)
   Py_END_ALLOW_THREADS
 
   return PyBool_FromLong (is_lost);
+}
+
+static PyObject *
+PyDevice_override_option (PyDevice * self, PyObject * args, PyObject * kw)
+{
+  static char * keywords[] = { "name", "value", NULL };
+  const char * name;
+  PyObject * value;
+  GVariant * raw_value;
+  GError * error = NULL;
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "sO", keywords, &name, &value))
+    return NULL;
+
+  if (!PyGObject_unmarshal_variant (value, &raw_value))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_device_override_option (PY_GOBJECT_HANDLE (self), name, raw_value, &error);
+  Py_END_ALLOW_THREADS
+
+  g_variant_unref (raw_value);
+
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  PyFrida_RETURN_NONE;
 }
 
 static PyObject *
