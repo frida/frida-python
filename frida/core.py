@@ -1318,7 +1318,7 @@ class EndpointParameters:
         _filter_missing_kwargs(kwargs)
 
         if authentication is not None:
-            (auth_scheme, auth_data) = authentication
+            auth_scheme, auth_data = authentication
             if auth_scheme == "token":
                 kwargs["auth_token"] = auth_data
             elif auth_scheme == "callback":

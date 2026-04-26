@@ -22,8 +22,7 @@ class Application:
         self._session = session
         session.on("detached", lambda *args: self._reactor.schedule(lambda: self._on_detached(*args)))
 
-        script = session.create_script(
-            """
+        script = session.create_script("""
 let _puts = null;
 
 Interceptor.attach(DebugSymbol.getFunctionByName('f'), {
@@ -48,8 +47,7 @@ function puts(s) {
   }
   _puts(Memory.allocUtf8String(s));
 }
-"""
-        )
+""")
         self._script = script
         script.on("message", lambda *args: self._reactor.schedule(lambda: self._on_message(*args)))
         script.load()
