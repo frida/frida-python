@@ -420,7 +420,7 @@ static PyObject * PyDevice_input (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_resume (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_kill (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_attach (PyDevice * self, PyObject * args, PyObject * kw);
-static FridaSessionOptions * PyDevice_parse_session_options (const gchar * realm_value, guint persist_timeout);
+static FridaSessionOptions * PyDevice_parse_session_options (const gchar * realm_value, guint persist_timeout, const gchar * exceptor_value, gint unwind_broker, gint exit_monitor, gint thread_suspend_monitor, PyObject * linker_notifier_offsets_value);
 static PyObject * PyDevice_inject_library_file (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_inject_library_blob (PyDevice * self, PyObject * args);
 static PyObject * PyDevice_open_channel (PyDevice * self, PyObject * args);
@@ -3081,21 +3081,43 @@ static PyObject *
 PyDevice_attach (PyDevice * self, PyObject * args, PyObject * kw)
 {
   PyObject * result = NULL;
-  static char * keywords[] = { "pid", "realm", "persist_timeout", NULL };
+  static char * keywords[] = {
+    "pid",
+    "realm",
+    "persist_timeout",
+    "exceptor",
+    "unwind_broker",
+    "exit_monitor",
+    "thread_suspend_monitor",
+    "linker_notifier_offsets",
+    NULL
+  };
   long pid;
   char * realm_value = NULL;
   unsigned int persist_timeout = 0;
+  char * exceptor_value = NULL;
+  int unwind_broker = -1;
+  int exit_monitor = -1;
+  int thread_suspend_monitor = -1;
+  PyObject * linker_notifier_offsets_value = NULL;
   FridaSessionOptions * options = NULL;
   GError * error = NULL;
   FridaSession * handle;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "l|esI", keywords,
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "l|esIespppO", keywords,
         &pid,
         "utf-8", &realm_value,
-        &persist_timeout))
+        &persist_timeout,
+        "utf-8", &exceptor_value,
+        &unwind_broker,
+        &exit_monitor,
+        &thread_suspend_monitor,
+        &linker_notifier_offsets_value))
     return NULL;
 
-  options = PyDevice_parse_session_options (realm_value, persist_timeout);
+  options = PyDevice_parse_session_options (realm_value, persist_timeout,
+      exceptor_value, unwind_broker, exit_monitor, thread_suspend_monitor,
+      linker_notifier_offsets_value);
   if (options == NULL)
     goto beach;
 
@@ -3110,6 +3132,7 @@ PyDevice_attach (PyDevice * self, PyObject * args, PyObject * kw)
 beach:
   g_clear_object (&options);
 
+  PyMem_Free (exceptor_value);
   PyMem_Free (realm_value);
 
   return result;
@@ -3117,7 +3140,12 @@ beach:
 
 static FridaSessionOptions *
 PyDevice_parse_session_options (const gchar * realm_value,
-                                guint persist_timeout)
+                                guint persist_timeout,
+                                const gchar * exceptor_value,
+                                gint unwind_broker,
+                                gint exit_monitor,
+                                gint thread_suspend_monitor,
+                                PyObject * linker_notifier_offsets_value)
 {
   FridaSessionOptions * options;
 
@@ -3134,6 +3162,50 @@ PyDevice_parse_session_options (const gchar * realm_value,
   }
 
   frida_session_options_set_persist_timeout (options, persist_timeout);
+
+  if (exceptor_value != NULL)
+  {
+    FridaExceptor exceptor;
+
+    if (!PyGObject_unmarshal_enum (exceptor_value, FRIDA_TYPE_EXCEPTOR, &exceptor))
+      goto propagate_error;
+
+    frida_session_options_set_exceptor (options, exceptor);
+  }
+
+  if (unwind_broker != -1)
+    frida_session_options_set_unwind_broker (options, unwind_broker);
+
+  if (exit_monitor != -1)
+    frida_session_options_set_exit_monitor (options, exit_monitor);
+
+  if (thread_suspend_monitor != -1)
+    frida_session_options_set_thread_suspend_monitor (options, thread_suspend_monitor);
+
+  if (linker_notifier_offsets_value != NULL)
+  {
+    gint n, i;
+
+    n = PySequence_Size (linker_notifier_offsets_value);
+    if (n == -1)
+      goto propagate_error;
+
+    for (i = 0; i != n; i++)
+    {
+      PyObject * element;
+      unsigned long offset;
+
+      element = PySequence_GetItem (linker_notifier_offsets_value, i);
+      if (element == NULL)
+        goto propagate_error;
+      offset = PyLong_AsUnsignedLong (element);
+      Py_DecRef (element);
+      if (offset == (unsigned long) -1 && PyErr_Occurred () != NULL)
+        goto propagate_error;
+
+      frida_session_options_add_linker_notifier_offset (options, offset);
+    }
+  }
 
   return options;
 

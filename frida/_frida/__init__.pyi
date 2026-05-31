@@ -256,7 +256,17 @@ class Device(Object):
         """
         ...
 
-    def attach(self, pid: int, realm: Optional[str] = None, persist_timeout: Optional[int] = None) -> "Session":
+    def attach(
+        self,
+        pid: int,
+        realm: Optional[str] = None,
+        persist_timeout: Optional[int] = None,
+        exceptor: Optional[str] = None,
+        unwind_broker: Optional[bool] = None,
+        exit_monitor: Optional[bool] = None,
+        thread_suspend_monitor: Optional[bool] = None,
+        linker_notifier_offsets: Optional[Sequence[int]] = None,
+    ) -> "Session":
         """
         Attach to a PID.
         """

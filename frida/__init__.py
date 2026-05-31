@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 try:
     from . import _frida
@@ -86,14 +86,30 @@ def kill(target: core.ProcessTarget) -> None:
 
 
 def attach(
-    target: core.ProcessTarget, realm: Optional[str] = None, persist_timeout: Optional[int] = None
+    target: core.ProcessTarget,
+    realm: Optional[str] = None,
+    persist_timeout: Optional[int] = None,
+    exceptor: Optional[str] = None,
+    unwind_broker: Optional[bool] = None,
+    exit_monitor: Optional[bool] = None,
+    thread_suspend_monitor: Optional[bool] = None,
+    linker_notifier_offsets: Optional[Sequence[int]] = None,
 ) -> core.Session:
     """
     Attach to a process
     :param target: the PID or name of the process
     """
 
-    return get_local_device().attach(target, realm=realm, persist_timeout=persist_timeout)
+    return get_local_device().attach(
+        target,
+        realm=realm,
+        persist_timeout=persist_timeout,
+        exceptor=exceptor,
+        unwind_broker=unwind_broker,
+        exit_monitor=exit_monitor,
+        thread_suspend_monitor=thread_suspend_monitor,
+        linker_notifier_offsets=linker_notifier_offsets,
+    )
 
 
 def inject_library_file(target: core.ProcessTarget, path: str, entrypoint: str, data: str) -> int:

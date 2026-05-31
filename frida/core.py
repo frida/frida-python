@@ -1046,13 +1046,26 @@ class Device:
         target: ProcessTarget,
         realm: Optional[str] = None,
         persist_timeout: Optional[int] = None,
+        exceptor: Optional[str] = None,
+        unwind_broker: Optional[bool] = None,
+        exit_monitor: Optional[bool] = None,
+        thread_suspend_monitor: Optional[bool] = None,
+        linker_notifier_offsets: Optional[Sequence[int]] = None,
     ) -> Session:
         """
         Attach to a process
         :param target: the PID or name of the process
         """
 
-        kwargs = {"realm": realm, "persist_timeout": persist_timeout}
+        kwargs = {
+            "realm": realm,
+            "persist_timeout": persist_timeout,
+            "exceptor": exceptor,
+            "unwind_broker": unwind_broker,
+            "exit_monitor": exit_monitor,
+            "thread_suspend_monitor": thread_suspend_monitor,
+            "linker_notifier_offsets": linker_notifier_offsets,
+        }
         _filter_missing_kwargs(kwargs)
         return Session(self._impl.attach(self._pid_of(target), **kwargs))  # type: ignore
 
