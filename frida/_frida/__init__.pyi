@@ -364,6 +364,12 @@ class Device(Object):
         """
         ...
 
+    def override_option(self, name: str, value: Any) -> None:
+        """
+        Override a backend-specific option.
+        """
+        ...
+
     def query_system_parameters(self) -> Dict[str, Any]:
         """
         Returns a dictionary of information about the host system.
