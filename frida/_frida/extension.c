@@ -492,7 +492,9 @@ static FridaPortalOptions * PySession_parse_portal_options (const gchar * certif
 static PyObject * PyScript_new_take_handle (FridaScript * handle);
 static PyObject * PyScript_is_destroyed (PyScript * self);
 static PyObject * PyScript_load (PyScript * self);
+static PyObject * PyScript_interrupt (PyScript * self);
 static PyObject * PyScript_unload (PyScript * self);
+static PyObject * PyScript_terminate (PyScript * self);
 static PyObject * PyScript_eternalize (PyScript * self);
 static PyObject * PyScript_post (PyScript * self, PyObject * args, PyObject * kw);
 static PyObject * PyScript_enable_debugger (PyScript * self, PyObject * args, PyObject * kw);
@@ -740,7 +742,9 @@ static PyMethodDef PyScript_methods[] =
 {
   { "is_destroyed", (PyCFunction) PyScript_is_destroyed, METH_NOARGS, "Query whether the script has been destroyed." },
   { "load", (PyCFunction) PyScript_load, METH_NOARGS, "Load the script." },
+  { "interrupt", (PyCFunction) PyScript_interrupt, METH_NOARGS, "Interrupt any JavaScript currently executing in the script." },
   { "unload", (PyCFunction) PyScript_unload, METH_NOARGS, "Unload the script." },
+  { "terminate", (PyCFunction) PyScript_terminate, METH_NOARGS, "Interrupt execution and unload the script." },
   { "eternalize", (PyCFunction) PyScript_eternalize, METH_NOARGS, "Eternalize the script." },
   { "post", (PyCFunction) PyScript_post, METH_VARARGS | METH_KEYWORDS, "Post a JSON-encoded message to the script." },
   { "enable_debugger", (PyCFunction) PyScript_enable_debugger, METH_VARARGS | METH_KEYWORDS, "Enable the Node.js compatible script debugger." },
@@ -4413,12 +4417,40 @@ PyScript_load (PyScript * self)
 }
 
 static PyObject *
+PyScript_interrupt (PyScript * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_script_interrupt_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  PyFrida_RETURN_NONE;
+}
+
+static PyObject *
 PyScript_unload (PyScript * self)
 {
   GError * error = NULL;
 
   Py_BEGIN_ALLOW_THREADS
   frida_script_unload_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
+  Py_END_ALLOW_THREADS
+  if (error != NULL)
+    return PyFrida_raise (error);
+
+  PyFrida_RETURN_NONE;
+}
+
+static PyObject *
+PyScript_terminate (PyScript * self)
+{
+  GError * error = NULL;
+
+  Py_BEGIN_ALLOW_THREADS
+  frida_script_terminate_sync (PY_GOBJECT_HANDLE (self), g_cancellable_get_current (), &error);
   Py_END_ALLOW_THREADS
   if (error != NULL)
     return PyFrida_raise (error);

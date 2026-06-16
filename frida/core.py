@@ -310,12 +310,30 @@ class Script:
         self._impl.load()
 
     @cancellable
+    def interrupt(self) -> None:
+        """
+        Interrupt any JavaScript currently executing in the script, leaving it
+        loaded and able to run again
+        """
+
+        self._impl.interrupt()
+
+    @cancellable
     def unload(self) -> None:
         """
         Unload the script
         """
 
         self._impl.unload()
+
+    @cancellable
+    def terminate(self) -> None:
+        """
+        Interrupt execution and unload the script, even if it is stuck in a
+        long-running or infinite operation
+        """
+
+        self._impl.terminate()
 
     @cancellable
     def eternalize(self) -> None:

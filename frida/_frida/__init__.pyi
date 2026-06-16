@@ -627,6 +627,12 @@ class Script(Object):
         """
         ...
 
+    def interrupt(self) -> None:
+        """
+        Interrupt any JavaScript currently executing in the script.
+        """
+        ...
+
     def post(self, message: str, data: Optional[Union[str, bytes]] = None) -> None:
         """
         Post a JSON-encoded message to the script.
@@ -636,6 +642,12 @@ class Script(Object):
     def unload(self) -> None:
         """
         Unload the script.
+        """
+        ...
+
+    def terminate(self) -> None:
+        """
+        Interrupt execution and unload the script.
         """
         ...
 
