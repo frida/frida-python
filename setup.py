@@ -114,7 +114,7 @@ class FridaPrebuiltExt(build_ext):
         target = self.get_ext_fullpath(ext.name)
         Path(target).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(FRIDA_EXTENSION, target)
-        copy_generated_package(self.build_lib)
+        copy_generated_package(self.build_lib, Path(FRIDA_EXTENSION).parent)
 
 
 class FridaDemandBuiltExt(build_ext):
@@ -131,11 +131,10 @@ class FridaDemandBuiltExt(build_ext):
         target = self.get_ext_fullpath(ext.name)
         Path(target).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(outputs[0], target)
-        copy_generated_package(self.build_lib)
+        copy_generated_package(self.build_lib, SOURCE_ROOT / "build" / "frida")
 
 
-def copy_generated_package(build_lib):
-    generated = SOURCE_ROOT / "build" / "frida"
+def copy_generated_package(build_lib, generated):
     destination = Path(build_lib) / "frida"
     destination.mkdir(parents=True, exist_ok=True)
     for name in GENERATED_PACKAGE_FILES:
