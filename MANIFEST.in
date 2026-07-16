@@ -1,8 +1,8 @@
 include meson.build
 include frida/meson.build
-include frida/_frida/extension.c
-include frida/_frida/extension.version
-include frida/_frida/meson.build
+include frida/extension.version
+recursive-include frida/frida_bindgen *.py *.c *.h
+recursive-include frida-bindgen *.py
 include subprojects/frida-core.wrap
 
 include BSDmakefile

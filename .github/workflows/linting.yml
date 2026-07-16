@@ -5,11 +5,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: lgeiger/pyflakes-action@master
+      - run: pip install pyflakes
+      - run: pyflakes $(git ls-files '*.py' | grep -v '^frida/frida_bindgen/assets/')
   mypy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: jpetrucciani/mypy-check@master
         with:
-          mypy_flags: '--exclude examples --exclude setup'
+          mypy_flags: '--exclude examples --exclude setup --exclude frida/frida_bindgen/assets'

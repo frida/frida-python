@@ -8,7 +8,7 @@ all $(MAKECMDGOALS):
 		$(MAKECMDGOALS)
 
 git-submodules:
-	@if [ ! -f releng/meson/meson.py ]; then \
+	@if [ ! -f releng/meson/meson.py ] || [ ! -f frida-bindgen/frida_bindgen_core/model.py ]; then \
 		git submodule update --init --recursive --depth 1; \
 	fi
 -include git-submodules

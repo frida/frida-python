@@ -13,6 +13,8 @@ from setuptools.extension import Extension
 SOURCE_ROOT = Path(__file__).resolve().parent
 FRIDA_EXTENSION = os.environ.get("FRIDA_EXTENSION", None)
 
+GENERATED_PACKAGE_FILES = ["__init__.py", "aio.py", "_frida.pyi"]
+
 
 def main():
     setup(
@@ -50,12 +52,12 @@ def main():
             "Topic :: Software Development :: Debuggers",
             "Topic :: Software Development :: Libraries :: Python Modules",
         ],
-        packages=["frida", "frida._frida"],
-        package_data={"frida": ["py.typed"], "frida._frida": ["py.typed", "__init__.pyi"]},
+        packages=["frida"],
+        package_data={"frida": ["py.typed"]},
         ext_modules=[
             Extension(
                 name="frida._frida",
-                sources=["frida/_frida/extension.c"],
+                sources=[],
                 py_limited_api=True,
             )
         ],
@@ -112,6 +114,7 @@ class FridaPrebuiltExt(build_ext):
         target = self.get_ext_fullpath(ext.name)
         Path(target).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(FRIDA_EXTENSION, target)
+        copy_generated_package(self.build_lib)
 
 
 class FridaDemandBuiltExt(build_ext):
@@ -119,11 +122,24 @@ class FridaDemandBuiltExt(build_ext):
         make = SOURCE_ROOT / "make.bat" if platform.system() == "Windows" else "make"
         subprocess.run([make], check=True)
 
-        outputs = [entry for entry in (SOURCE_ROOT / "build" / "frida" / "_frida").glob("_frida.*") if entry.is_file()]
+        outputs = [
+            entry
+            for entry in (SOURCE_ROOT / "build" / "frida").glob("_frida.*")
+            if entry.is_file() and entry.suffix != ".pyi"
+        ]
         assert len(outputs) == 1
         target = self.get_ext_fullpath(ext.name)
         Path(target).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(outputs[0], target)
+        copy_generated_package(self.build_lib)
+
+
+def copy_generated_package(build_lib):
+    generated = SOURCE_ROOT / "build" / "frida"
+    destination = Path(build_lib) / "frida"
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in GENERATED_PACKAGE_FILES:
+        shutil.copy(generated / name, destination / name)
 
 
 if __name__ == "__main__":
