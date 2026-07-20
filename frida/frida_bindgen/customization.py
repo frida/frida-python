@@ -121,7 +121,8 @@ if aux:
                     param_typings=["target", "**kwargs"],
                     custom_logic=(
                         "pid = self._pid_of(target)\n" "options = _make_options(_frida.SessionOptions, kwargs, {})",
-                        "pid = await self._pid_of(target)\n" "options = _make_options(_frida.SessionOptions, kwargs, {})",
+                        "pid = await self._pid_of(target)\n"
+                        "options = _make_options(_frida.SessionOptions, kwargs, {})",
                     ),
                 ),
             },
