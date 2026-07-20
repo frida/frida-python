@@ -70,10 +70,18 @@ def _to_envp(value):
     return value
 
 
-def _make_options(cls, values):
+def _make_options(cls, values, selectors):
     options = cls()
     for name, value in values.items():
-        setattr(options, name, value)
+        if value is None:
+            continue
+        select = selectors.get(name)
+        if select is None:
+            setattr(options, name, value)
+        else:
+            add = getattr(options, select)
+            for element in value:
+                add(element)
     return options
 
 
@@ -156,10 +164,18 @@ def _to_envp(value):
     return value
 
 
-def _make_options(cls, values):
+def _make_options(cls, values, selectors):
     options = cls()
     for name, value in values.items():
-        setattr(options, name, value)
+        if value is None:
+            continue
+        select = selectors.get(name)
+        if select is None:
+            setattr(options, name, value)
+        else:
+            add = getattr(options, select)
+            for element in value:
+                add(element)
     return options
 
 
@@ -575,7 +591,7 @@ def build_facade_async_parts(method: Method, model: Model) -> Optional[Tuple[str
         options = resolve_options_type(param.type, model)
         if options is not None:
             signature.append("**kwargs")
-            args.append(f"_make_options(_frida.{options.py_name}, kwargs)")
+            args.append(f"_make_options(_frida.{options.py_name}, kwargs, {build_option_selectors(options)})")
         elif resolve_input_object_type(param.type, model) is not None:
             signature.append(f"{param.name}=None")
             args.append(f"_unwrap({param.name})")
@@ -588,6 +604,17 @@ def build_facade_async_parts(method: Method, model: Model) -> Optional[Tuple[str
             return None
 
     return ", ".join(signature), "".join(arg + ", " for arg in args)
+
+
+def build_option_selectors(options: ObjectType) -> str:
+    selectors = {}
+    otype = options
+    while otype is not None:
+        for method in otype.methods:
+            if method.is_select_method:
+                selectors[method.select_plural_noun] = method.name
+        otype = otype.parent
+    return repr(selectors)
 
 
 def wrap_result(call: str, type: Type, model: Model) -> str:

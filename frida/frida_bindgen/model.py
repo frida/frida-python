@@ -108,6 +108,14 @@ class Method(core.Method):
         return f"Py{self.object_type.name}{to_pascal_case(self.name)}Operation"
 
     @cached_property
+    def is_select_method(self) -> bool:
+        return self.name.startswith("select_") or self.name.startswith("add_")
+
+    @cached_property
+    def select_plural_noun(self) -> str:
+        return f"{self.name.split('_', maxsplit=1)[1]}s"
+
+    @cached_property
     def customizations(self) -> Optional[MethodCustomizations]:
         custom = self.object_type.customizations
         if custom is None:
