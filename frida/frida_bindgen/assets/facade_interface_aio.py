@@ -1,8 +1,10 @@
 class _Implementation:
-    def _frida_dispatch(self, name, args, completion):
+    _loop: Any
+
+    def _frida_dispatch(self, name: str, args: List[Any], completion: Any) -> None:
         loop = self._loop
 
-        async def run():
+        async def run() -> None:
             try:
                 result = getattr(self, name)(*[_wrap(a) for a in args])
                 if asyncio.iscoroutine(result):

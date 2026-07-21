@@ -44,7 +44,7 @@ def load_customizations() -> Customizations:
             ),
             methods={
                 "post": MethodCustomizations(
-                    param_typings=["message", "data=None"],
+                    param_typings=["message: Any", "data: Optional[bytes] = None"],
                     custom_logic="json = _to_json(message)",
                 ),
             },
@@ -56,15 +56,15 @@ def load_customizations() -> Customizations:
             ),
             methods={
                 "post": MethodCustomizations(
-                    param_typings=["connection_id", "message", "data=None"],
+                    param_typings=["connection_id: int", "message: Any", "data: Optional[bytes] = None"],
                     custom_logic="json = _to_json(message)",
                 ),
                 "narrowcast": MethodCustomizations(
-                    param_typings=["tag", "message", "data=None"],
+                    param_typings=["tag: str", "message: Any", "data: Optional[bytes] = None"],
                     custom_logic="json = _to_json(message)",
                 ),
                 "broadcast": MethodCustomizations(
-                    param_typings=["message", "data=None"],
+                    param_typings=["message: Any", "data: Optional[bytes] = None"],
                     custom_logic="json = _to_json(message)",
                 ),
             },
@@ -73,22 +73,20 @@ def load_customizations() -> Customizations:
             methods={
                 "spawn": MethodCustomizations(
                     param_typings=[
-                        "program",
-                        "argv=None",
-                        "envp=None",
-                        "env=None",
-                        "cwd=None",
-                        "stdio=None",
-                        "**aux",
+                        "program: Union[str, List[Union[str, bytes]]]",
+                        "argv: Optional[List[Union[str, bytes]]] = None",
+                        "envp: Optional[Mapping[str, str]] = None",
+                        "env: Optional[Mapping[str, str]] = None",
+                        "cwd: Optional[str] = None",
+                        "stdio: Optional[str] = None",
+                        "**aux: Any",
                     ],
                     custom_logic="""\
 if not isinstance(program, str):
-    argv = program
-    program = argv[0]
-    if len(argv) == 1:
-        argv = None
-if isinstance(program, bytes):
-    program = program.decode()
+    args = list(program)
+    argv = args if len(args) > 1 else None
+    first = args[0]
+    program = first.decode() if isinstance(first, bytes) else first
 
 options = _frida.SpawnOptions()
 if argv is not None:
@@ -106,19 +104,21 @@ if aux:
 """,
                 ),
                 "is_lost": MethodCustomizations(as_property=True),
-                "resume": MethodCustomizations(param_typings=["target"], custom_logic=_RESOLVE_PID),
-                "kill": MethodCustomizations(param_typings=["target"], custom_logic=_RESOLVE_PID),
-                "input": MethodCustomizations(param_typings=["target", "data"], custom_logic=_RESOLVE_PID),
+                "resume": MethodCustomizations(param_typings=["target: ProcessTarget"], custom_logic=_RESOLVE_PID),
+                "kill": MethodCustomizations(param_typings=["target: ProcessTarget"], custom_logic=_RESOLVE_PID),
+                "input": MethodCustomizations(
+                    param_typings=["target: ProcessTarget", "data: bytes"], custom_logic=_RESOLVE_PID
+                ),
                 "inject_library_file": MethodCustomizations(
-                    param_typings=["target", "path", "entrypoint", "data"],
+                    param_typings=["target: ProcessTarget", "path: str", "entrypoint: str", "data: str"],
                     custom_logic=_RESOLVE_PID,
                 ),
                 "inject_library_blob": MethodCustomizations(
-                    param_typings=["target", "blob", "entrypoint", "data"],
+                    param_typings=["target: ProcessTarget", "blob: bytes", "entrypoint: str", "data: str"],
                     custom_logic=_RESOLVE_PID,
                 ),
                 "attach": MethodCustomizations(
-                    param_typings=["target", "**kwargs"],
+                    param_typings=["target: ProcessTarget", "**kwargs: Any"],
                     custom_logic=(
                         "pid = self._pid_of(target)\n" "options = _make_options(_frida.SessionOptions, kwargs, {})",
                         "pid = await self._pid_of(target)\n"
@@ -138,7 +138,7 @@ if aux:
             ),
             methods={
                 "post": MethodCustomizations(
-                    param_typings=["message", "data=None"],
+                    param_typings=["message: Any", "data: Optional[bytes] = None"],
                     custom_logic="json = _to_json(message)",
                 ),
                 "is_destroyed": MethodCustomizations(as_property=True),
@@ -148,7 +148,12 @@ if aux:
             methods={
                 "is_detached": MethodCustomizations(as_property=True),
                 "create_script": MethodCustomizations(
-                    param_typings=["source", "name=None", "snapshot=None", "runtime=None"],
+                    param_typings=[
+                        "source: str",
+                        "name: Optional[str] = None",
+                        "snapshot: Optional[bytes] = None",
+                        "runtime: Optional[str] = None",
+                    ],
                     custom_logic="""\
 options = _frida.ScriptOptions()
 if name is not None:
@@ -159,7 +164,12 @@ if runtime is not None:
     options.runtime = runtime""",
                 ),
                 "create_script_from_bytes": MethodCustomizations(
-                    param_typings=["data", "name=None", "snapshot=None", "runtime=None"],
+                    param_typings=[
+                        "data: bytes",
+                        "name: Optional[str] = None",
+                        "snapshot: Optional[bytes] = None",
+                        "runtime: Optional[str] = None",
+                    ],
                     custom_logic="""\
 bytes = data
 options = _frida.ScriptOptions()
@@ -171,7 +181,7 @@ if runtime is not None:
     options.runtime = runtime""",
                 ),
                 "compile_script": MethodCustomizations(
-                    param_typings=["source", "name=None", "runtime=None"],
+                    param_typings=["source: str", "name: Optional[str] = None", "runtime: Optional[str] = None"],
                     custom_logic="""\
 options = _frida.ScriptOptions()
 if name is not None:
@@ -180,7 +190,11 @@ if runtime is not None:
     options.runtime = runtime""",
                 ),
                 "snapshot_script": MethodCustomizations(
-                    param_typings=["embed_script", "warmup_script=None", "runtime=None"],
+                    param_typings=[
+                        "embed_script: str",
+                        "warmup_script: Optional[str] = None",
+                        "runtime: Optional[str] = None",
+                    ],
                     custom_logic="""\
 options = _frida.SnapshotOptions()
 if warmup_script is not None:
@@ -199,13 +213,13 @@ if runtime is not None:
             custom_constructor="codegen_endpoint_parameters.c",
             constructor=ConstructorCustomizations(
                 param_typings=[
-                    "address=None",
-                    "port=None",
-                    "certificate=None",
-                    "origin=None",
-                    "authentication=None",
-                    "asset_root=None",
-                    "request_handler=None",
+                    "address: Optional[str] = None",
+                    "port: Optional[int] = None",
+                    "certificate: Optional[str] = None",
+                    "origin: Optional[str] = None",
+                    "authentication: Optional[Tuple[str, Any]] = None",
+                    "asset_root: Optional[str] = None",
+                    "request_handler: Optional[Callable[..., Any]] = None",
                 ],
                 custom_logic="""\
 auth_service = None
@@ -218,7 +232,7 @@ if authentication is not None:
             if not callable(data):
                 raise ValueError("authentication data must be callable for the callback scheme")
             service = AuthenticationService.__new__(AuthenticationService)
-            service.authenticate = lambda token: json.dumps(data(token))
+            service.authenticate = lambda token: json.dumps(data(token))  # type: ignore[attr-defined]
             AuthenticationService.__init__(service)
             auth_service = service._impl
         else:
@@ -226,7 +240,7 @@ if authentication is not None:
     else:
         auth_service = _unwrap(authentication)
 
-kwargs = {}
+kwargs: Dict[str, Any] = {}
 if address is not None:
     kwargs["address"] = address
 if port is not None:
@@ -382,4 +396,7 @@ if request_handler is not None:
         ),
     }
 
-    return Customizations(type_customizations=type_customizations)
+    return Customizations(
+        type_customizations=type_customizations,
+        facade_preludes=("facade_types.py",),
+    )

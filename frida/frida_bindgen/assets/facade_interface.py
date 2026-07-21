@@ -1,6 +1,6 @@
 class _Implementation:
-    def _frida_dispatch(self, name, args, completion):
-        def run():
+    def _frida_dispatch(self, name: str, args: List[Any], completion: Any) -> None:
+        def run() -> None:
             try:
                 result = _unwrap(getattr(self, name)(*[_wrap(a) for a in args]))
                 error = None

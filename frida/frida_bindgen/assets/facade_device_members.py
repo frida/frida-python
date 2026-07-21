@@ -1,11 +1,11 @@
 @property
-def type(self):
+def type(self) -> str:
     return self.dtype
 
-def get_bus(self):
+def get_bus(self) -> "Bus":
     return self.bus
 
-def get_process(self, process_name):
+def get_process(self, process_name: str) -> "Process":
     process_name_lc = process_name.lower()
     matching = [
         process
@@ -19,7 +19,7 @@ def get_process(self, process_name):
         raise _frida.ProcessNotFoundError(f"ambiguous name; it matches: {matches}")
     raise _frida.ProcessNotFoundError(f"unable to find process with name '{process_name}'")
 
-def _pid_of(self, target):
+def _pid_of(self, target: ProcessTarget) -> int:
     if isinstance(target, str):
         return self.get_process(target).pid
     return target

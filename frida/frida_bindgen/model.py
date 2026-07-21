@@ -200,6 +200,7 @@ class EnumerationMember(core.EnumerationMember):
 @dataclass
 class Customizations:
     type_customizations: Mapping[str, TypeCustomizations] = field(default_factory=OrderedDict)
+    facade_preludes: Tuple[str, ...] = ()
 
 
 @dataclass
