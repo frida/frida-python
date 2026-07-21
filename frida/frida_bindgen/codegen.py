@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import ast
+import re
 import textwrap
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 from frida_bindgen_core import Procedure, Type
+from frida_bindgen_core.naming import to_pascal_case
 
 from .model import (
     Enumeration,
@@ -32,7 +35,8 @@ def read_asset(name: str) -> str:
 
 
 FACADE_TYPING_IMPORTS = (
-    "from typing import Any, Callable, Dict, List, Literal, Mapping, NotRequired, Optional, Tuple, TypedDict, Union"
+    "from typing import (Any, Callable, Dict, List, Literal, Mapping, NotRequired, Optional, Tuple, TypedDict, "
+    "Union, overload)"
 )
 
 
@@ -366,6 +370,8 @@ def generate_aio_class(otype: ObjectType, model: Model) -> str:
     if not members:
         members.append("    pass")
 
+    members = apply_signal_overloads(members, otype, model)
+
     return f"class {otype.py_name}:\n" + "\n\n".join(members)
 
 
@@ -461,6 +467,8 @@ def generate_py_class(otype: ObjectType, model: Model) -> str:
     if not members:
         members.append("    pass")
 
+    members = apply_signal_overloads(members, otype, model)
+
     return f"class {otype.py_name}:\n" + "\n\n".join(members)
 
 
@@ -496,11 +504,52 @@ def generate_facade_init(otype: ObjectType) -> str:
 
 
 def generate_facade_signals() -> str:
-    return """    def on(self, signal, callback):
+    return """    def on(self, signal: str, callback: Callable[..., Any]) -> None:
         self._impl.on(signal, _make_signal_handler(callback))
 
-    def off(self, signal, callback):
+    def off(self, signal: str, callback: Callable[..., Any]) -> None:
         self._impl.off(signal, callback)"""
+
+
+def facade_prelude_names(model: Model) -> Set[str]:
+    names = set()
+    for asset in model.customizations.facade_preludes:
+        for node in ast.parse(read_asset(asset)).body:
+            if isinstance(node, ast.ClassDef):
+                names.add(node.name)
+            elif isinstance(node, ast.Assign):
+                names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+    return names
+
+
+def signal_callback_alias(otype: ObjectType, signal) -> str:
+    return f"{otype.py_name}{to_pascal_case(signal.name.replace('-', '_'))}Callback"
+
+
+def signal_overload_block(otype: ObjectType, model: Model, name: str) -> Optional[str]:
+    aliases = facade_prelude_names(model)
+    lines = []
+    for signal in otype.signals:
+        alias = signal_callback_alias(otype, signal)
+        if alias in aliases:
+            lines.append("    @overload")
+            lines.append(f'    def {name}(self, signal: Literal["{signal.name}"], callback: {alias}) -> None: ...')
+    return "\n".join(lines) if len(lines) > 2 else None
+
+
+def apply_signal_overloads(members: List[str], otype: ObjectType, model: Model) -> List[str]:
+    result = []
+    for member in members:
+        for name in ("on", "off"):
+            block = signal_overload_block(otype, model, name)
+            if block is None:
+                continue
+            pattern = re.compile(rf"^    (?:async )?def {name}\(self, signal", re.MULTILINE)
+            match = pattern.search(member)
+            if match is not None:
+                member = member[: match.start()] + block + "\n" + member[match.start() :]
+        result.append(member)
+    return result
 
 
 def facade_repr_property_names(otype: ObjectType) -> List[str]:
