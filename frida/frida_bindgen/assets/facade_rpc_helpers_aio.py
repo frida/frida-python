@@ -36,3 +36,20 @@ class _ScriptExports:
 
 
 ScriptExportsAsync = _ScriptExports
+
+
+@dataclasses.dataclass
+class RPCResult:
+    finished: bool = False
+    value: Any = None
+    error: Optional[Exception] = None
+
+
+def make_rpc_call_request(js_name: str, args: Sequence[Any]) -> Tuple[List[Any], Optional[bytes]]:
+    if args and isinstance(args[-1], bytes):
+        raw_args = args[:-1]
+        data = args[-1]
+    else:
+        raw_args = args
+        data = None
+    return (["call", js_name, raw_args], data)

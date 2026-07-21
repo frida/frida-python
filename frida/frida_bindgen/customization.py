@@ -399,4 +399,5 @@ if request_handler is not None:
     return Customizations(
         type_customizations=type_customizations,
         facade_preludes=("facade_types.py",),
+        facade_epilogues=("facade_epilogue.py",),
     )

@@ -36,7 +36,7 @@ def read_asset(name: str) -> str:
 
 FACADE_TYPING_IMPORTS = (
     "from typing import (Any, Callable, Dict, List, Literal, Mapping, NotRequired, Optional, Tuple, TypedDict, "
-    "Union, overload)"
+    "Sequence, Union, ParamSpec, TypeVar, cast, overload)"
 )
 
 
@@ -244,7 +244,9 @@ def generate_all(model: Model) -> Dict[str, str]:
 def generate_py(model: Model) -> str:
     lines = [
         "from . import _frida",
+        "import dataclasses",
         "import fnmatch",
+        "import functools",
         "import inspect",
         "import time",
         "import json",
@@ -280,6 +282,9 @@ def generate_py(model: Model) -> str:
     lines.append("")
     lines.append("")
     lines.append("from . import aio")
+    for asset in model.customizations.facade_epilogues:
+        lines.append("")
+        lines.append(read_asset(asset).strip())
     lines.append("")
     lines.append("core = sys.modules[__name__]")
     lines.append('sys.modules[__name__ + ".core"] = core')
@@ -312,7 +317,9 @@ def generate_aio(model: Model) -> str:
         "import asyncio",
         "import contextvars",
         "import time",
+        "import dataclasses",
         "import fnmatch",
+        "import functools",
         "import inspect",
         "import json",
         "import sys",

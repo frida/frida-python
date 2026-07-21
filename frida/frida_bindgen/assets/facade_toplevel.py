@@ -69,3 +69,11 @@ def inject_library_blob(target: ProcessTarget, blob: bytes, entrypoint: str, dat
 
 def shutdown() -> None:
     get_device_manager().close()
+
+
+def make_auth_callback(callback: Callable[[str], Any]) -> Callable[[Any], str]:
+    def authenticate(token: str) -> str:
+        session_info = callback(token)
+        return json.dumps(session_info)
+
+    return authenticate
