@@ -34,6 +34,12 @@ def load_customizations() -> Customizations:
                         c_symbol="PyFrida_get_device_manager",
                         asset="module_get_device_manager.c",
                     ),
+                    # TEMPORARY DEBUG HACK
+                    ModuleFunction(
+                        py_name="print_alive_tasks",
+                        c_symbol="PyFrida_print_alive_tasks",
+                        asset="module_print_alive_tasks.c",
+                    ),
                 ),
             ),
         ),

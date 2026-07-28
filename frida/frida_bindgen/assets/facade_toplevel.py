@@ -77,3 +77,8 @@ def make_auth_callback(callback: Callable[[str], Any]) -> Callable[[Any], str]:
         return json.dumps(session_info)
 
     return authenticate
+
+
+# TEMPORARY DEBUG HACK
+def print_alive_tasks() -> None:
+    _frida.print_alive_tasks()
