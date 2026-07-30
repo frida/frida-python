@@ -35,6 +35,8 @@ static PyObject * PyGObject_marshal_variant_byte_array (GVariant * variant);
 static PyObject * PyGObject_marshal_variant_dict (GVariant * variant);
 static PyObject * PyGObject_marshal_variant_array (GVariant * variant);
 static PyObject * PyGObject_marshal_variant_tuple (GVariant * variant);
+static gboolean PyGObject_unmarshal_certificate (PyObject * value, GTlsCertificate ** certificate);
+static PyObject * PyGObject_marshal_certificate (GTlsCertificate * certificate);
 
 static PyObject * PyFrida_raise (GError * error);
 static PyObject * PyFrida_marshal_error (GError * error);

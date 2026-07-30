@@ -1,27 +1,3 @@
-static gboolean
-PyGObject_unmarshal_certificate (const gchar * str,
-                                GTlsCertificate ** certificate)
-{
-  GError * error = NULL;
-
-  if (strchr (str, '\n') != NULL)
-    *certificate = g_tls_certificate_new_from_pem (str, -1, &error);
-  else
-    *certificate = g_tls_certificate_new_from_file (str, &error);
-  if (error != NULL)
-    goto propagate_error;
-
-  return TRUE;
-
-propagate_error:
-  {
-    PyFrida_raise (g_error_new_literal (FRIDA_ERROR, FRIDA_ERROR_INVALID_ARGUMENT, error->message));
-    g_error_free (error);
-
-    return FALSE;
-  }
-}
-
 static int
 PyEndpointParameters_init (PyEndpointParameters * self,
                            PyObject * args,
@@ -31,7 +7,7 @@ PyEndpointParameters_init (PyEndpointParameters * self,
   static char * keywords[] = { "address", "port", "certificate", "origin", "auth_service", "asset_root", NULL };
   char * address = NULL;
   unsigned short int port = 0;
-  char * certificate_value = NULL;
+  PyObject * certificate_value = NULL;
   char * origin = NULL;
   PyObject * auth_service_obj = NULL;
   char * asset_root_value = NULL;
@@ -43,10 +19,10 @@ PyEndpointParameters_init (PyEndpointParameters * self,
   if (PyGObject_tp_init ((PyObject *) self, args, kw) < 0)
     return -1;
 
-  if (!PyArg_ParseTupleAndKeywords (args, kw, "|esHesesOes", keywords,
+  if (!PyArg_ParseTupleAndKeywords (args, kw, "|esHOesOes", keywords,
         "utf-8", &address,
         &port,
-        "utf-8", &certificate_value,
+        &certificate_value,
         "utf-8", &origin,
         &auth_service_obj,
         "utf-8", &asset_root_value))
@@ -74,7 +50,6 @@ beach:
 
   PyMem_Free (asset_root_value);
   PyMem_Free (origin);
-  PyMem_Free (certificate_value);
   PyMem_Free (address);
 
   return result;

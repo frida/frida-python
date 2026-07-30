@@ -860,6 +860,8 @@ def pyi_type(type: Type, model: Model) -> str:
         return "dict"
     if name == "GLib.Variant":
         return "Any"
+    if name == "Gio.TlsCertificate":
+        return "str"
     if resolve_enumeration(type, model) is not None:
         return "str"
     obj = resolve_object_type(type, model)
@@ -1994,6 +1996,17 @@ def build_setter_body(param: Parameter, set_call) -> Optional[str]:
   g_hash_table_unref (dict);
 """
 
+    if type_name == "Gio.TlsCertificate":
+        return f"""  GTlsCertificate * certificate;
+
+  if (!PyGObject_unmarshal_certificate (value, &certificate))
+    return -1;
+
+  {set_call("certificate")}
+
+  g_clear_object (&certificate);
+"""
+
     if resolve_input_object_type(param.type, param.object_type.model) is not None:
         handle = f"({param.type.c}) ((value != Py_None) ? PY_GOBJECT_HANDLE (value) : NULL)"
         return f"  {set_call(handle)}\n"
@@ -2073,6 +2086,8 @@ def build_return_marshal(type: Type, model: Model) -> Optional[str]:
         return "PyGObject_marshal_vardict ({value})"
     if name == "GLib.Variant":
         return "PyGObject_marshal_variant ({value})"
+    if name == "Gio.TlsCertificate":
+        return "PyGObject_marshal_certificate ({value})"
 
     enum = resolve_enumeration(type, model)
     if enum is not None:

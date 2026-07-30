@@ -17,6 +17,27 @@ BINDGEN_CORE = REPO / "frida-bindgen"
 GIRDIR = REPO / "build" / "subprojects" / "frida-core" / "src" / "api"
 OUTDIR = REPO / "build" / "bindgen-out"
 BUILT_EXTENSION = REPO / "build" / "frida" / "_frida.abi3.so"
+CERTIFICATE = """\
+-----BEGIN CERTIFICATE-----
+MIIDGzCCAgOgAwIBAgIUEoCZX+FRWNTzcvvrCE2chFvE0EgwDQYJKoZIhvcNAQEL
+BQAwHDEaMBgGA1UEAwwRZnJpZGEtcHl0aG9uLXRlc3QwIBcNMjYwNzMwMjIyNjAy
+WhgPMjEyNjA3MDYyMjI2MDJaMBwxGjAYBgNVBAMMEWZyaWRhLXB5dGhvbi10ZXN0
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtKTIUbHLhkqRKdKqXuMc
+u7q8OZD2eKdykp4Qvv+I5JcmNW7nlW+58zTCLaqUCsSrojDb8T2qvtRJbaJYAofE
+P7bhb5ROOVwsyOjhvP7rZ4zRXIDAUlB7zE15yNkWL+Rh4l3wRxMOMIB2HQlurtDk
+PIqPOITwRvrADKZt/73iMASwrkkqKnl/F3rLT0JQrd907sBdGGZNbJM9L4TUBT9t
+MBBl6qXtDEFyBfeoqlnrLUTN/Jwyka+/6n6eZCN8g2g5tS1Lc7LFjX4iBG9ibgaH
+hrNSTM+haLImFS3dtXFr4rOCAHnDYYvkCY1nuZOXannCvZowv0xczqpGLbj5IYJK
+MQIDAQABo1MwUTAdBgNVHQ4EFgQUi83cV5yMTdWaVeRpgNO3vyeitMMwHwYDVR0j
+BBgwFoAUi83cV5yMTdWaVeRpgNO3vyeitMMwDwYDVR0TAQH/BAUwAwEB/zANBgkq
+hkiG9w0BAQsFAAOCAQEADScSFuasB4mgOb/kktq3O09rf/uUIa6OEjdFRec/i2+E
+ZAUd5onsWQTHm4yhjqQwqVBte58tTqZB7S1HMCy5sEgEVUFnTrMUqtrf/WAnsWA6
+SdjNr7h/aRnLHHysLkbl0Zo4fOIWIYSJpLn39e0OzcNBjEHN5U9HE/m/2LFku1Kb
+KMTYXrhBKvVPpZLxZyoLz00EM7euaNx3juAgfQdSDfKGahf5CqqMJ/VmITISDJDR
+jtN3wcv0/nZA5x/b73QCj0jqIEWqguYf4GLWitxGsSdT2dBEpT88Kz3Ibwb8uRT+
+Ls3eRsdoqxiOT0E7Z44O8gjbqsYOr/jdMShwEytDwQ==
+-----END CERTIFICATE-----
+"""
 
 
 @unittest.skipUnless(
@@ -130,6 +151,29 @@ class TestExtension(unittest.TestCase):
         self.assertEqual(options.argv, ["/bin/ls", "-la"])
         options.argv = None
         self.assertIsNone(options.argv)
+
+    def test_certificate_property_accepts_pem_and_path(self):
+        import tempfile
+
+        options = self._frida.RemoteDeviceOptions()
+        self.assertIsNone(options.certificate)
+
+        options.certificate = CERTIFICATE
+        self.assertEqual(options.certificate, CERTIFICATE)
+
+        with tempfile.NamedTemporaryFile("w", suffix=".pem") as f:
+            f.write(CERTIFICATE)
+            f.flush()
+            options.certificate = f.name
+        self.assertEqual(options.certificate, CERTIFICATE)
+
+        options.certificate = None
+        self.assertIsNone(options.certificate)
+
+    def test_certificate_property_rejects_missing_file(self):
+        options = self._frida.RemoteDeviceOptions()
+        with self.assertRaises(self._frida.InvalidArgumentError):
+            options.certificate = "/nonexistent.pem"
 
     def test_vardict_property_round_trips(self):
         options = self._frida.SpawnOptions()

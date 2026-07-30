@@ -1041,6 +1041,64 @@ PyGObject_marshal_variant_tuple (GVariant * variant)
   return tuple;
 }
 
+static gboolean
+PyGObject_unmarshal_certificate (PyObject * value,
+                                 GTlsCertificate ** certificate)
+{
+  PyObject * bytes;
+  const gchar * str;
+  GError * error = NULL;
+
+  if (value == Py_None)
+  {
+    *certificate = NULL;
+    return TRUE;
+  }
+
+  bytes = PyUnicode_AsUTF8String (value);
+  if (bytes == NULL)
+    return FALSE;
+  str = PyBytes_AsString (bytes);
+
+  if (strchr (str, '\n') != NULL)
+    *certificate = g_tls_certificate_new_from_pem (str, -1, &error);
+  else
+    *certificate = g_tls_certificate_new_from_file (str, &error);
+
+  Py_DecRef (bytes);
+
+  if (error != NULL)
+    goto propagate_error;
+
+  return TRUE;
+
+propagate_error:
+  {
+    PyFrida_raise (g_error_new_literal (FRIDA_ERROR, FRIDA_ERROR_INVALID_ARGUMENT, error->message));
+    g_error_free (error);
+
+    return FALSE;
+  }
+}
+
+static PyObject *
+PyGObject_marshal_certificate (GTlsCertificate * certificate)
+{
+  PyObject * result;
+  gchar * pem;
+
+  if (certificate == NULL)
+    PyFrida_RETURN_NONE;
+
+  g_object_get (certificate, "certificate-pem", &pem, NULL);
+
+  result = PyGObject_marshal_string (pem);
+
+  g_free (pem);
+
+  return result;
+}
+
 static PyObject *
 PyFrida_raise (GError * error)
 {
