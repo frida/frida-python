@@ -119,11 +119,7 @@ if aux:
                 ),
                 "attach": MethodCustomizations(
                     param_typings=["target: ProcessTarget", "**kwargs: Any"],
-                    custom_logic=(
-                        "pid = self._pid_of(target)\n" "options = _make_options(_frida.SessionOptions, kwargs, {})",
-                        "pid = await self._pid_of(target)\n"
-                        "options = _make_options(_frida.SessionOptions, kwargs, {})",
-                    ),
+                    custom_logic=_RESOLVE_PID,
                 ),
             },
             custom_code=CustomCode(

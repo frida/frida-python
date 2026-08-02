@@ -426,11 +426,12 @@ def generate_custom_facade_method(
     method: Method, logic: Union[str, Tuple[str, str]], model: Model, awaitable: bool
 ) -> str:
     signature = ", ".join(["self"] + method.custom_facade_params)
+    args = facade_call_args(method, model)
     if method.is_async:
-        invoke = f"_invoke(self._impl.{method.name}, ({method.facade_call_args}))"
+        invoke = f"_invoke(self._impl.{method.name}, ({args}))"
         call = f"await {invoke}" if awaitable else invoke
     else:
-        call = f"self._impl.{method.name}({method.facade_call_args})"
+        call = f"self._impl.{method.name}({args})"
     if method.return_value is not None:
         call = wrap_result(call, method.return_value.type, model)
 
@@ -444,6 +445,20 @@ def generate_custom_facade_method(
     return f"""    {keyword} {method.name}({signature}) -> {ret}:
 {body}
         return {call}"""
+
+
+def facade_call_args(method: Method, model: Model) -> str:
+    takes_kwargs = any(param.split(":")[0].strip() == "**kwargs" for param in method.custom_facade_params)
+    args = []
+    for param in method.input_parameters:
+        if param.type.name == "Gio.Cancellable":
+            continue
+        options = resolve_options_type(param.type, model)
+        if options is not None and takes_kwargs:
+            args.append(make_options_expr(options))
+        else:
+            args.append(param.name)
+    return "".join(arg + ", " for arg in args)
 
 
 def generate_py_exception_reexports(model: Model) -> List[str]:
@@ -681,7 +696,7 @@ def build_facade_async_parts(method: Method, model: Model) -> Optional[Tuple[str
         options = resolve_options_type(param.type, model)
         if options is not None:
             params.append("**kwargs")
-            args.append(f"_make_options(_frida.{options.py_name}, kwargs, {build_option_selectors(options)})")
+            args.append(make_options_expr(options))
         elif resolve_input_object_type(param.type, model) is not None:
             params.append(f"{param.name}: Optional[{pyi_type(param.type, model)}] = None")
             args.append(f"_unwrap({param.name})")
@@ -694,6 +709,10 @@ def build_facade_async_parts(method: Method, model: Model) -> Optional[Tuple[str
             return None
 
     return facade_signature(method, params), "".join(arg + ", " for arg in args)
+
+
+def make_options_expr(options: ObjectType) -> str:
+    return f"_make_options(_frida.{options.py_name}, kwargs, {build_option_selectors(options)})"
 
 
 def build_option_selectors(options: ObjectType) -> str:

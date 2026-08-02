@@ -690,6 +690,10 @@ class TestFacade(unittest.TestCase):
         finally:
             session.detach()
 
+    def test_attach_accepts_linker_notifier_offsets(self):
+        session = self.frida.get_local_device().attach(0, linker_notifier_offsets=[0x100])
+        session.detach()
+
     def test_enable_debugger_defaults_to_any_port(self):
         import inspect
 

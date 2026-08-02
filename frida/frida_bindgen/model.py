@@ -144,11 +144,6 @@ class Method(core.Method):
         custom = self.customizations
         return custom.custom_logic if custom is not None else None
 
-    @cached_property
-    def facade_call_args(self) -> str:
-        return "".join(f"{param.name}, " for param in self.input_parameters if param.type.name != "Gio.Cancellable")
-
-
 class Property(core.Property):
     pass
 
