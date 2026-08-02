@@ -627,9 +627,7 @@ def generate_py_sync_method(method: Method, model: Model) -> Optional[str]:
     if any(build_sync_param(param) is None for param in method.input_parameters):
         return None
 
-    signature = ["self"]
-    for param in method.input_parameters:
-        signature.append(facade_param(param, model))
+    params = [facade_param(param, model) for param in method.input_parameters]
     names = ", ".join(param.name for param in method.input_parameters)
 
     call = f"self._impl.{method.name}({names})"
@@ -638,8 +636,12 @@ def generate_py_sync_method(method: Method, model: Model) -> Optional[str]:
 
     ret = "None" if method.return_value is None else pyi_type(method.return_value.type, model)
 
-    return f"""    def {method.name}({", ".join(signature)}) -> {ret}:
+    return f"""    def {method.name}({facade_signature(method, params)}) -> {ret}:
         return {call}"""
+
+
+def facade_signature(method: Method, params: List[str]) -> str:
+    return ", ".join(["self"] + (method.custom_facade_params or params))
 
 
 def facade_param(param, model: Model) -> str:
@@ -669,7 +671,7 @@ def generate_py_async_method(method: Method, model: Model) -> Optional[str]:
 
 
 def build_facade_async_parts(method: Method, model: Model) -> Optional[Tuple[str, str]]:
-    signature = ["self"]
+    params = []
     args = []
     for param in method.input_parameters:
         if param.type.name == "Gio.Cancellable":
@@ -678,20 +680,20 @@ def build_facade_async_parts(method: Method, model: Model) -> Optional[Tuple[str
             return None
         options = resolve_options_type(param.type, model)
         if options is not None:
-            signature.append("**kwargs")
+            params.append("**kwargs")
             args.append(f"_make_options(_frida.{options.py_name}, kwargs, {build_option_selectors(options)})")
         elif resolve_input_object_type(param.type, model) is not None:
-            signature.append(f"{param.name}: Optional[{pyi_type(param.type, model)}] = None")
+            params.append(f"{param.name}: Optional[{pyi_type(param.type, model)}] = None")
             args.append(f"_unwrap({param.name})")
         else:
-            signature.append(facade_param(param, model))
+            params.append(facade_param(param, model))
             args.append(param.name)
 
     if method.return_value is not None:
         if build_return_marshal(method.return_value.type, model) is None:
             return None
 
-    return ", ".join(signature), "".join(arg + ", " for arg in args)
+    return facade_signature(method, params), "".join(arg + ", " for arg in args)
 
 
 def build_option_selectors(options: ObjectType) -> str:

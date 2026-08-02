@@ -690,6 +690,12 @@ class TestFacade(unittest.TestCase):
         finally:
             session.detach()
 
+    def test_enable_debugger_defaults_to_any_port(self):
+        import inspect
+
+        for script in [self.frida.Script, self.frida.aio.Script]:
+            self.assertEqual(inspect.signature(script.enable_debugger).parameters["port"].default, 0)
+
     def test_file_monitor_reports_changes(self):
         import os
         import tempfile

@@ -141,6 +141,7 @@ if aux:
                     param_typings=["message: Any", "data: Optional[bytes] = None"],
                     custom_logic="json = _to_json(message)",
                 ),
+                "enable_debugger": MethodCustomizations(param_typings=["port: int = 0"]),
                 "is_destroyed": MethodCustomizations(as_property=True),
             },
         ),
