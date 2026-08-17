@@ -88,17 +88,25 @@ def _to_envp(value):
 
 def _make_options(cls, values, selectors):
     options = cls()
+    _apply_settings(options, values, selectors)
+    return options
+
+
+def _apply_settings(impl, values, selectors):
     for name, value in values.items():
         if value is None:
             continue
         select = selectors.get(name)
         if select is None:
-            setattr(options, name, value)
+            setattr(impl, name, _unwrap(value))
+        elif isinstance(value, dict):
+            add = getattr(impl, select)
+            for key, element in value.items():
+                add(key, _unwrap(element))
         else:
-            add = getattr(options, select)
+            add = getattr(impl, select)
             for element in value:
-                add(element)
-    return options
+                add(_unwrap(element))
 
 
 _current_cancellable = threading.local()
@@ -182,17 +190,25 @@ def _to_envp(value):
 
 def _make_options(cls, values, selectors):
     options = cls()
+    _apply_settings(options, values, selectors)
+    return options
+
+
+def _apply_settings(impl, values, selectors):
     for name, value in values.items():
         if value is None:
             continue
         select = selectors.get(name)
         if select is None:
-            setattr(options, name, value)
+            setattr(impl, name, _unwrap(value))
+        elif isinstance(value, dict):
+            add = getattr(impl, select)
+            for key, element in value.items():
+                add(key, _unwrap(element))
         else:
-            add = getattr(options, select)
+            add = getattr(impl, select)
             for element in value:
-                add(element)
-    return options
+                add(_unwrap(element))
 
 
 _current_cancellable: contextvars.ContextVar = contextvars.ContextVar("frida_current_cancellable", default=None)
@@ -516,10 +532,8 @@ def generate_facade_init(otype: ObjectType) -> str:
 {body}"""
 
     return f"""    def __init__(self, *args, **kwargs):
-        self._impl = _frida.{otype.py_name}(
-            *[_unwrap(a) for a in args],
-            **{{k: _unwrap(v) for k, v in kwargs.items()}},
-        )
+        self._impl = _frida.{otype.py_name}(*[_unwrap(a) for a in args])
+        _apply_settings(self._impl, kwargs, {build_option_selectors(otype)})
         setup = getattr(self, "_setup", None)
         if setup is not None:
             setup()"""
@@ -643,7 +657,7 @@ def generate_py_sync_method(method: Method, model: Model) -> Optional[str]:
         return None
 
     params = [facade_param(param, model) for param in method.input_parameters]
-    names = ", ".join(param.name for param in method.input_parameters)
+    names = ", ".join(facade_argument(param, model) for param in method.input_parameters)
 
     call = f"self._impl.{method.name}({names})"
     if method.return_value is not None:
@@ -657,6 +671,12 @@ def generate_py_sync_method(method: Method, model: Model) -> Optional[str]:
 
 def facade_signature(method: Method, params: List[str]) -> str:
     return ", ".join(["self"] + (method.custom_facade_params or params))
+
+
+def facade_argument(param, model: Model) -> str:
+    if resolve_input_object_type(param.type, model) is not None:
+        return f"_unwrap({param.name})"
+    return param.name
 
 
 def facade_param(param, model: Model) -> str:
@@ -1837,6 +1857,16 @@ def build_sync_param(param: Parameter) -> Optional["SyncParam"]:
     return NULL;""",
             call_arg=name,
             cleanup=f"g_clear_pointer (&{name}, g_variant_unref);",
+        )
+
+    if resolve_input_object_type(param.type, param.object_type.model) is not None:
+        return SyncParam(
+            decl=f"PyObject * {name}_obj;\n{param.type.c} {name} = NULL;",
+            fmt="O",
+            parse_args=[f"&{name}_obj"],
+            pre=f"""if ({name}_obj != Py_None)
+    {name} = ({param.type.c}) PY_GOBJECT_HANDLE ({name}_obj);""",
+            call_arg=name,
         )
 
     return None
