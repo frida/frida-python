@@ -144,6 +144,7 @@ class Method(core.Method):
         custom = self.customizations
         return custom.custom_logic if custom is not None else None
 
+
 class Property(core.Property):
     pass
 
