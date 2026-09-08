@@ -34,10 +34,14 @@ def read_asset(name: str) -> str:
     return (ASSETS_DIR / name).read_text(encoding="utf-8")
 
 
-FACADE_TYPING_IMPORTS = (
-    "from typing import (Any, Callable, Dict, List, Literal, Mapping, NotRequired, Optional, Tuple, TypedDict, "
-    "Sequence, Union, ParamSpec, TypeVar, cast, overload)"
-)
+FACADE_TYPING_IMPORTS = """\
+from typing import (Any, Callable, Dict, List, Literal, Mapping, Optional, Tuple, Sequence, Union, TypeVar, cast,
+                    overload)
+
+if sys.version_info >= (3, 11):
+    from typing import NotRequired, ParamSpec, TypedDict
+else:
+    from typing_extensions import NotRequired, ParamSpec, TypedDict"""
 
 
 def generate_facade_preludes(model: Model) -> List[str]:
