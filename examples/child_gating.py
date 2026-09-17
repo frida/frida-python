@@ -42,7 +42,8 @@ class Application:
         print("✔ enable_child_gating()")
         session.enable_child_gating()
         print("✔ create_script()")
-        script = session.create_script("""\
+        script = session.create_script(
+            """\
 Interceptor.attach(Module.getGlobalExportByName('open'), {
   onEnter(args) {
     send({
@@ -51,7 +52,8 @@ Interceptor.attach(Module.getGlobalExportByName('open'), {
     });
   }
 });
-""")
+"""
+        )
         script.on("message", lambda message, data: self._reactor.schedule(lambda: self._on_message(pid, message)))
         print("✔ load()")
         script.load()

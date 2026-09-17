@@ -1303,13 +1303,15 @@ def generate_object_type_toplevel_definitions(model: Model) -> str:
         cprefix = otype.c_symbol_prefix
 
         if otype.name == "Object":
-            defs.append(f"""PYFRIDA_DEFINE_BASETYPE ("_frida.{otype.py_name}", {otype.py_name}, g_object_unref,
+            defs.append(
+                f"""PYFRIDA_DEFINE_BASETYPE ("_frida.{otype.py_name}", {otype.py_name}, g_object_unref,
   {{ Py_tp_doc, "{otype.name}" }},
   {{ Py_tp_init, {cprefix}_init }},
   {{ Py_tp_dealloc, {cprefix}_dealloc }},
   {{ Py_tp_methods, {cprefix}_methods }},
   {{ Py_tp_getset, {cprefix}_getsets }},
-);""")
+);"""
+            )
             continue
 
         parent = otype.parent
@@ -1329,12 +1331,14 @@ def generate_object_type_toplevel_definitions(model: Model) -> str:
             )
             continue
 
-        defs.append(f"""PYFRIDA_DEFINE_TYPE ("_frida.{otype.py_name}", {otype.py_name}, {parent_name}, g_object_unref,
+        defs.append(
+            f"""PYFRIDA_DEFINE_TYPE ("_frida.{otype.py_name}", {otype.py_name}, {parent_name}, g_object_unref,
   {{ Py_tp_doc, "{otype.name}" }},
   {{ Py_tp_init, {cprefix}_init }},
   {{ Py_tp_methods, {cprefix}_methods }},
   {{ Py_tp_getset, {cprefix}_getsets }},
-);""")
+);"""
+        )
 
     return "\n\n".join(defs)
 
@@ -2764,10 +2768,12 @@ def generate_object_type_structs(model: Model) -> str:
     for otype in model.regular_object_types:
         if otype.name == "Object":
             continue
-        structs.append(f"""struct _{otype.c_symbol_prefix}
+        structs.append(
+            f"""struct _{otype.c_symbol_prefix}
 {{
   {otype.parent_c_symbol_prefix} parent;
-}};""")
+}};"""
+        )
 
     return "\n\n".join(structs)
 
