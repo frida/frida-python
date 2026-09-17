@@ -436,7 +436,7 @@ def generate_aio_async_method(method: Method, model: Model) -> Optional[str]:
     if method.return_value is not None:
         call = wrap_result(call, method.return_value.type, model)
 
-    ret = "None" if method.return_value is None else pyi_type(method.return_value.type, model)
+    ret = facade_return_type(method, model)
 
     return f"""    async def {method.name}({signature}) -> {ret}:
         return {call}"""
@@ -460,7 +460,7 @@ def generate_custom_facade_method(
     body = textwrap.indent(logic.strip(), " " * 8)
     keyword = "async def" if awaitable else "def"
 
-    ret = "None" if method.return_value is None else pyi_type(method.return_value.type, model)
+    ret = facade_return_type(method, model)
 
     return f"""    {keyword} {method.name}({signature}) -> {ret}:
 {body}
@@ -667,7 +667,7 @@ def generate_py_sync_method(method: Method, model: Model) -> Optional[str]:
     if method.return_value is not None:
         call = wrap_result(call, method.return_value.type, model)
 
-    ret = "None" if method.return_value is None else pyi_type(method.return_value.type, model)
+    ret = facade_return_type(method, model)
 
     return f"""    def {method.name}({facade_signature(method, params)}) -> {ret}:
         return {call}"""
@@ -703,7 +703,7 @@ def generate_py_async_method(method: Method, model: Model) -> Optional[str]:
     if method.return_value is not None:
         call = wrap_result(call, method.return_value.type, model)
 
-    ret = "None" if method.return_value is None else pyi_type(method.return_value.type, model)
+    ret = facade_return_type(method, model)
 
     return f"""    def {method.name}({signature}) -> {ret}:
         return {call}"""
@@ -793,8 +793,8 @@ def generate_pyi_class(otype: ObjectType, model: Model) -> List[str]:
 
     body = []
 
-    primary = primary_constructor(otype)
-    if primary is not None and not primary.throws:
+    primary = inline_constructor(otype)
+    if primary is not None:
         params = pyi_parameters(primary.input_parameters, model)
         if params is not None:
             signature = ", ".join(["self"] + params)
@@ -869,7 +869,13 @@ def pyi_method(method: Method, model: Model) -> Optional[str]:
     if params is None:
         return None
     signature = ", ".join(["self"] + params)
-    ret = "None" if method.return_value is None else pyi_type(method.return_value.type, model)
+    out = method.optional_out_parameter
+    if out is not None:
+        ret = f"Optional[{pyi_type(out.type, model)}]"
+    elif method.return_value is None:
+        ret = "None"
+    else:
+        ret = pyi_type(method.return_value.type, model)
     return f"    def {method.name}({signature}) -> {ret}: ..."
 
 
@@ -1371,6 +1377,11 @@ def generate_method(otype: ObjectType, method: Method) -> Optional[Tuple[str, st
     marshal = synchronous_method_return_marshal(method)
     if marshal is None:
         return None
+    out = method.optional_out_parameter
+    if out is not None:
+        marshal = build_return_marshal(out.type, method.object_type.model)
+        if marshal is None:
+            return None
     params = []
     for param in method.input_parameters:
         sync_param = build_sync_param(param)
@@ -1714,14 +1725,17 @@ def generate_synchronous_method(otype: ObjectType, method: Method, marshal: str,
     indent = " " * (len(otype.c_symbol_prefix) + len(method.name) + 3)
     handle = f"({otype.c_type} *) PY_GOBJECT_HANDLE (self)"
     returns_strv = method.return_value is not None and method.return_value.type.name == "utf8[]"
+    out = method.optional_out_parameter
     call_arg_list = [handle] + [p.call_arg for p in params]
     if returns_strv:
         call_arg_list.append("&retval_length")
+    if out is not None:
+        call_arg_list.append(f"&{out.name}")
     if method.throws:
         call_arg_list.append("&error")
     call = f"{method.c_identifier} ({', '.join(call_arg_list)})"
 
-    if not params and not method.throws and not returns_strv:
+    if not params and not method.throws and not returns_strv and out is None:
         if method.return_value is None:
             body = f"  {call};\n\n  PyFrida_RETURN_NONE;"
         else:
@@ -1740,6 +1754,8 @@ static PyObject *
         decls.append("  GError * error = NULL;")
     if returns_strv:
         decls.append("  gint retval_length;")
+    if out is not None:
+        decls.append(f"  {out_parameter_storage_type(out)} {out.name};")
     for p in params:
         decls += [f"  {line}" for line in p.decl.splitlines()]
 
@@ -1754,7 +1770,15 @@ static PyObject *
 
     pre = "".join(f"\n  {p.pre}\n" for p in params if p.pre)
 
-    if method.return_value is None:
+    if out is not None:
+        invocation = f"  gboolean found = {call};"
+        success = (
+            "  if (found)\n"
+            f"    result = {marshal.format(value=out.name)};\n"
+            "  else\n"
+            "  {\n    Py_IncRef (Py_None);\n    result = Py_None;\n  }"
+        )
+    elif method.return_value is None:
         invocation = f"  {call};"
         success = "  Py_IncRef (Py_None);\n  result = Py_None;"
     elif returns_strv:
@@ -1797,6 +1821,22 @@ static PyObject *
 {tail}
 }}
 """
+
+
+def facade_return_type(method: Method, model: Model) -> str:
+    out = method.optional_out_parameter
+    if out is not None:
+        return f"Optional[{pyi_type(out.type, model)}]"
+    if method.return_value is None:
+        return "None"
+    return pyi_type(method.return_value.type, model)
+
+
+def out_parameter_storage_type(param: Parameter) -> str:
+    """What the caller declares: the out parameter's own type, less the pointer."""
+    c = param.type.c
+    assert c.endswith("*"), c
+    return c[:-1].strip()
 
 
 def synchronous_method_return_marshal(method: Method) -> Optional[str]:
@@ -2328,8 +2368,16 @@ def primary_constructor(otype: ObjectType) -> Optional[Procedure]:
     return next((c for c in otype.constructors if c.name == "new"), otype.constructors[0])
 
 
+def inline_constructor(otype: ObjectType) -> Optional[Procedure]:
+    """The constructor __init__ takes; one that throws is reached as a factory instead."""
+    ctor = primary_constructor(otype)
+    if ctor is None or ctor.throws:
+        return None
+    return ctor
+
+
 def factory_constructors(otype: ObjectType) -> List[Procedure]:
-    primary = primary_constructor(otype)
+    primary = inline_constructor(otype)
     return [
         ctor
         for ctor in otype.constructors
