@@ -910,6 +910,9 @@ propagate_error:
 static PyObject *
 PyGObject_marshal_variant (GVariant * variant)
 {
+  if (variant == NULL)
+    PyFrida_RETURN_NONE;
+
   switch (g_variant_classify (variant))
   {
     case G_VARIANT_CLASS_STRING:
