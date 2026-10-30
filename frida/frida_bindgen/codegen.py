@@ -964,7 +964,9 @@ def generate_extension_c(model: Model) -> str:
 
         code += generate_object_type_constructor(otype)
         for ctor in factory_constructors(otype):
-            code += generate_factory_function(otype, ctor, build_constructor_marshals(ctor))
+            marshals = build_constructor_marshals(ctor)
+            assert marshals is not None
+            code += generate_factory_function(otype, ctor, marshals)
 
     return code
 
