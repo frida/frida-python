@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "core-js": "^3.6.5",
-    "dbus-next": "frida/node-dbus-next",
+    "dbus-next": "frida-forks/node-dbus-next",
     "duplexify": "^4.1.1",
     "vue": "^2.6.11",
     "vue-class-component": "^7.2.3",
