@@ -29,8 +29,7 @@ class Application:
         session = self._device.attach(pid)
         session.on("detached", lambda reason: self._reactor.schedule(lambda: self._on_detached(pid, session, reason)))
         print("✔ create_script()")
-        script = session.create_script(
-            """\
+        script = session.create_script("""\
 const puts = new NativeFunction(Module.getGlobalExportByName('puts'), 'int', ['pointer']);
 puts(Memory.allocUtf8String('Hello from Frida agent'));
 Interceptor.attach(Module.getGlobalExportByName('open'), {
@@ -41,8 +40,7 @@ Interceptor.attach(Module.getGlobalExportByName('open'), {
     });
   }
 });
-"""
-        )
+""")
         script.on("message", lambda message, data: self._reactor.schedule(lambda: self._on_message(pid, message)))
         print("✔ load()")
         script.load()
