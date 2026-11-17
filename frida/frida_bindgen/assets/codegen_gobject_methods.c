@@ -110,7 +110,11 @@ PyGObject_new_take_handle (gpointer handle,
   object = PyGObject_try_get_from_handle (handle);
   if (object == NULL)
   {
-    object = PyObject_CallFunction (pytype->object, NULL);
+    PyTypeObject * type = (PyTypeObject *) pytype->object;
+    allocfunc alloc = PyType_GetSlot (type, Py_tp_alloc);
+
+    object = alloc (type, 0);
+    PyGObject_init (PY_GOBJECT (object));
     PyGObject_take_handle (PY_GOBJECT (object), handle, pytype);
 
     if (pytype->init_from_handle != NULL)
