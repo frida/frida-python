@@ -2362,12 +2362,11 @@ def generate_object_type_constructor(otype: ObjectType) -> str:
     if implementable_interface(otype):
         return generate_interface_init(otype)
 
-    ctor = primary_constructor(otype)
-
-    if ctor is None:
+    if not otype.constructors:
         return generate_bare_init(otype)
 
-    if ctor.throws:
+    ctor = inline_constructor(otype)
+    if ctor is None:
         return generate_unconstructable_init(otype)
 
     marshals = build_constructor_marshals(ctor)
@@ -2377,18 +2376,8 @@ def generate_object_type_constructor(otype: ObjectType) -> str:
     return generate_constructor_init(otype, ctor, marshals)
 
 
-def primary_constructor(otype: ObjectType) -> Optional[Procedure]:
-    if not otype.constructors:
-        return None
-    return next((c for c in otype.constructors if c.name == "new"), otype.constructors[0])
-
-
 def inline_constructor(otype: ObjectType) -> Optional[Procedure]:
-    """The constructor __init__ takes; one that throws is reached as a factory instead."""
-    ctor = primary_constructor(otype)
-    if ctor is None or ctor.throws:
-        return None
-    return ctor
+    return next((c for c in otype.constructors if c.name == "new"), None)
 
 
 def factory_constructors(otype: ObjectType) -> List[Procedure]:
@@ -2468,12 +2457,16 @@ static int
 def generate_constructor_init(otype: ObjectType, ctor: Procedure, marshals: List["ParamMarshal"]) -> str:
     indent = constructor_indent(otype)
 
+    needs_beach = constructor_needs_beach(marshals) or (ctor.throws and any(m.cleanup for m in marshals))
+
     decls = []
     for m in marshals:
         decls += m.decls
-    if any(m.cleanup for m in marshals) and constructor_needs_beach(marshals):
+    if any(m.cleanup for m in marshals) and needs_beach:
         decls.insert(0, "int result = -1;")
     decls.append(f"{otype.c_type} * handle;")
+    if ctor.throws:
+        decls.append("GError * error = NULL;")
     decls_block = indent_c_code("\n".join(decls), 1, prologue="\n")
 
     keyword_decl = ""
@@ -2488,8 +2481,22 @@ def generate_constructor_init(otype: ObjectType, ctor: Procedure, marshals: List
         if m.post is not None:
             post_block += indent_c_code(m.post, 1, prologue="\n") + "\n"
 
-    call_args = ", ".join(m.call_arg for m in marshals)
-    constructor_call = f"handle = ({otype.c_type} *) {ctor.c_identifier} ({call_args});"
+    call_args = [m.call_arg for m in marshals]
+    if ctor.throws:
+        call_args.append("&error")
+    constructor_call = f"handle = ({otype.c_type} *) {ctor.c_identifier} ({', '.join(call_args)});"
+
+    error_block = ""
+    if ctor.throws:
+        on_error = "goto beach;" if needs_beach else "return -1;"
+        error_block = f"""
+  if (error != NULL)
+  {{
+    PyFrida_raise (error);
+    {on_error}
+  }}
+"""
+
     take_handle = (
         "PyGObject_take_handle ((PyGObject *) self, g_steal_pointer (&handle), " f"PYFRIDA_TYPE ({otype.py_name}));"
     )
@@ -2505,10 +2512,10 @@ static int
     return -1;
 {parse_block}{post_block}
   {constructor_call}
-
+{error_block}
   {take_handle}
 
-{generate_constructor_tail(marshals)}"""
+{generate_constructor_tail(marshals, needs_beach)}"""
 
 
 def factory_method_entry(otype: ObjectType, ctor: Procedure) -> str:
@@ -2614,7 +2621,7 @@ def constructor_needs_beach(marshals: List["ParamMarshal"]) -> bool:
     return any(m.post is not None and "goto beach" in m.post for m in marshals)
 
 
-def generate_constructor_tail(marshals: List["ParamMarshal"]) -> str:
+def generate_constructor_tail(marshals: List["ParamMarshal"], needs_beach: bool) -> str:
     cleanups = [m.cleanup for m in marshals if m.cleanup is not None]
     if not cleanups:
         return """  return 0;
@@ -2622,7 +2629,7 @@ def generate_constructor_tail(marshals: List["ParamMarshal"]) -> str:
 """
 
     cleanup_block = indent_c_code("\n".join(reversed(cleanups)), 1)
-    if constructor_needs_beach(marshals):
+    if needs_beach:
         return f"""  result = 0;
 
 beach:
